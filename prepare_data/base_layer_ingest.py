@@ -117,39 +117,95 @@ def process_document(docx_path, big_t, title_t):
     active_tags = set()
 
     for para in doc.paragraphs:
-        if not para.text.strip(): continue
+        # We REMOVED the `if not para.text.strip(): continue` line here
+        # so that we do not skip empty paragraphs (which represent multiple newlines).
 
+        para_text = ""
+        run_formats = []
+        current_idx = 0
+
+        # 1. Flatten the paragraph and map formats to character indices
         for run in para.runs:
             if not run.text: continue
 
             # Resolve the formatting through the hierarchy
             f_size, f_super, f_sub = get_final_formatting(run, para, style_map, doc_defaults)
-
-            # Categorize: Super/Sub becomes SMALL, otherwise size logic
             semantic_size = categorize(f_size, f_super, f_sub, big_t, title_t)
 
-            # --- Tag Mechanism (Unchanged) ---
-            segments = re.split(r'(<[^>]+>)', run.text)
+            length = len(run.text)
+            run_formats.append((current_idx, current_idx + length, semantic_size))
+
+            para_text += run.text
+            current_idx += length
+
+        def get_format_at(idx):
+            for start, end, size in run_formats:
+                if start <= idx < end:
+                    return size
+            return "BIG"  # Safe fallback
+
+        # 2. Parse tags AND isolate soft-newlines on the unified paragraph string
+        # We only run this block if there is actual text to parse.
+        if para_text:
+            segments = re.split(r'(<[^>]+>|\n)', para_text)
+            current_char_idx = 0
+
             for segment in segments:
                 if not segment: continue
+
+                # Handle Tags
                 if segment.startswith('<') and segment.endswith('>'):
                     clean_tag = re.sub(r'\s+', '', segment)
                     if clean_tag.startswith('</'):
                         active_tags.discard(clean_tag[2:-1])
                     else:
                         active_tags.add(clean_tag[1:-1])
+
+                    current_char_idx += len(segment)
+
+                # Handle Explicit Soft Newlines (Shift+Enter)
+                elif segment == '\n':
+                    token_size = get_format_at(current_char_idx)
+                    final_syllables.append({
+                        'index': global_counter,
+                        'id': str(uuid.uuid4()),
+                        'text': '\n',
+                        'nature': 'SPACE',
+                        'size': token_size,
+                        'tags': list(active_tags)
+                    })
+                    global_counter += 1
+                    current_char_idx += len(segment)
+
+                # Handle Regular Text
                 else:
                     tokenizer = ChunkTokenizer(segment)
                     for token_nature, token_text in tokenizer.tokenize():
+                        token_size = get_format_at(current_char_idx)
+
                         final_syllables.append({
                             'index': global_counter,
                             'id': str(uuid.uuid4()),
                             'text': token_text,
                             'nature': token_nature,
-                            'size': semantic_size,
+                            'size': token_size,
                             'tags': list(active_tags)
                         })
                         global_counter += 1
+                        current_char_idx += len(token_text)
+
+        # 3. Inject the structural newline at the end of the paragraph object
+        final_syllables.append({
+            'index': global_counter,
+            'id': str(uuid.uuid4()),
+            'text': '\n',
+            'nature': 'SPACE',
+            # If the paragraph was completely empty, fallback to 'BIG', otherwise use the size of the first run
+            'size': run_formats[0][2] if run_formats else 'BIG',
+            'tags': list(active_tags)
+        })
+        global_counter += 1
+
     return final_syllables
 
 
