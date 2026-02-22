@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useMemo, useState, Suspense } from 'react';
+import { useRef, useMemo, useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Uchen } from 'next/font/google';
-import Script from 'next/script'; // Utilizing Next.js native script loader
 
 import manifest from '@/data/teachings/rpn_ngondro_recitation_manual/manifest.json';
 import sessions from '@/data/teachings/rpn_ngondro_recitation_manual/sessions_compiled.json';
@@ -13,150 +12,197 @@ const uchen = Uchen({ weight: '400', subsets: ['tibetan'], display: 'swap' });
 function PlayerContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const audioRef = useRef(null);
 
-  // Track when the external Hyperaudio scripts are fully loaded
-  const [hyperReady, setHyperReady] = useState(false);
+  const audioRef = useRef(null);
+  const transcriptRef = useRef(null);
 
   const sessionId = searchParams.get('session');
   const mediaParam = searchParams.get('media');
+  const timeParam = searchParams.get('time');
+  const sylIdParam = searchParams.get('sylId');
 
+  // --- 1. TIME PARSERS ---
   const parseToSeconds = (ts) => {
-    if (!ts || !ts.includes(':')) return 0;
+    if (!ts) return 0;
+    if (!ts.includes(':')) return parseFloat(ts) || 0;
+
     const [hms, ms] = ts.split(',');
     const parts = hms.split(':').map(Number);
     let seconds = (parts[0] * 3600) + (parts[1] * 60) + parts[2];
     return seconds + (ms ? parseInt(ms) / 1000 : 0);
   };
 
-  const parseToMs = (ts) => {
-    return Math.floor(parseToSeconds(ts) * 1000);
-  };
+  const parseToMs = (ts) => Math.floor(parseToSeconds(ts) * 1000);
 
+  // --- 2. STATE ---
+  const [currentTimeMs, setCurrentTimeMs] = useState(() => {
+    return timeParam ? parseToMs(timeParam) : 0;
+  });
+
+  const [activeSegId, setActiveSegId] = useState(null);
+  const [hasInitialSeeked, setHasInitialSeeked] = useState(false);
+
+  // --- 3. DATA GENERATION ---
   const dynamicTranscript = useMemo(() => {
     if (!sessionId) return [];
-
-    const sessionSegments = sessions.filter(
-      seg => seg.source_session === sessionId
-    );
-
+    const sessionSegments = sessions.filter(seg => seg.source_session === sessionId);
     sessionSegments.sort((a, b) => parseToMs(a.start) - parseToMs(b.start));
 
     return sessionSegments.map((segment) => {
-      const segmentSyllables = manifest.filter(syl =>
-        segment.syl_uuids.includes(syl.id)
-      );
+      const syllables = manifest
+        .filter(syl => segment.syl_uuids.includes(syl.id))
+        .map(s => ({
+            id: s.id,
+            text: s.text === '\n' ? ' ' : s.text
+        }));
 
-      const text = segmentSyllables.map(s => s.text === '\n' ? ' ' : s.text).join('') + ' ';
       const startTimeMs = parseToMs(segment.start);
       const endTimeMs = segment.end ? parseToMs(segment.end) : startTimeMs + 10000;
-      const durationMs = Math.max(0, endTimeMs - startTimeMs);
 
       return {
         id: segment.global_seg_id || segment.seg_id,
         startTimeMs,
-        durationMs,
-        text
+        endTimeMs,
+        syllables
       };
     });
   }, [sessionId]);
 
-  // Transform the transcript into a raw HTML string to act as a React "Black Box"
-  const transcriptHtml = useMemo(() => {
-    if (dynamicTranscript.length === 0) return '';
-    return dynamicTranscript.map(seg =>
-      `<a data-m="${seg.startTimeMs}" data-d="${seg.durationMs}" class="transition-colors duration-200 hover:bg-gray-100 rounded px-1 cursor-pointer">${seg.text}</a>`
-    ).join('');
-  }, [dynamicTranscript]);
-
+  // --- 4. INITIAL LOAD JUMP ---
   useEffect(() => {
-    // Only initialize once the scripts are ready, data is parsed, and HTML is generated
-    if (hyperReady && transcriptHtml && sessionId) {
-      // Clear any existing instance to avoid double-binding the timeupdate listener
-      if (window.currentHyperaudioInstance) {
-        window.currentHyperaudioInstance = null;
-      }
-
-      // A tiny 100ms timeout ensures React has finished flushing the dangerouslySetInnerHTML to the real DOM
-      const timer = setTimeout(() => {
-        if (window.HyperaudioLite) {
-          window.currentHyperaudioInstance = new window.HyperaudioLite(
-            "hypertranscript",
-            "hyperplayer",
-            false, true, false, false
-          );
-          console.log("✨ Hyperaudio Sync Active!");
-        }
-      }, 100);
-
-      return () => clearTimeout(timer);
+    if (!timeParam) {
+      setHasInitialSeeked(true);
+      return;
     }
-  }, [hyperReady, transcriptHtml, sessionId]);
+
+    const targetTimeSeconds = parseToSeconds(timeParam);
+    const targetTimeMs = parseToMs(timeParam);
+
+    setCurrentTimeMs(targetTimeMs);
+
+    const audioEl = audioRef.current;
+    if (!audioEl) return;
+
+    const performSeek = () => {
+      audioEl.currentTime = targetTimeSeconds;
+      setHasInitialSeeked(true);
+    };
+
+    if (audioEl.readyState >= 1) {
+      performSeek();
+    } else {
+      audioEl.addEventListener('loadedmetadata', performSeek, { once: true });
+      return () => audioEl.removeEventListener('loadedmetadata', performSeek);
+    }
+  }, [timeParam]);
+
+  // --- 5. NATIVE HYPERAUDIO LOGIC ---
+  const handleTimeUpdate = () => {
+    if (audioRef.current && hasInitialSeeked) {
+      setCurrentTimeMs(Math.floor(audioRef.current.currentTime * 1000));
+    }
+  };
+
+  const handleSyllableClick = (startTimeMs) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = startTimeMs / 1000;
+      audioRef.current.play();
+    }
+  };
+
+  // --- 6. AUTO-SCROLL LOGIC ---
+  useEffect(() => {
+    const currentSeg = dynamicTranscript.find(
+      (seg) => currentTimeMs >= seg.startTimeMs && currentTimeMs < seg.endTimeMs
+    );
+
+    if (currentSeg && currentSeg.id !== activeSegId) {
+      setActiveSegId(currentSeg.id);
+
+      const activeElement = document.getElementById(`segment-${currentSeg.id}`);
+      if (activeElement && transcriptRef.current) {
+        activeElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+      }
+    }
+  }, [currentTimeMs, dynamicTranscript, activeSegId]);
 
   if (!sessionId) return <div className="p-20 text-center">No session provided.</div>;
 
-  const audioSrc = mediaParam
-    ? mediaParam
-    : `https://f003.backblazeb2.com/file/rpn-ngondro/${encodeURIComponent(sessionId)}.m4a`;
+  const audioSrc = mediaParam || `https://f003.backblazeb2.com/file/rpn-ngondro/${encodeURIComponent(sessionId)}.m4a`;
+  const activeIndex = dynamicTranscript.findIndex(seg => seg.id === activeSegId);
 
   return (
     <div className="min-h-screen bg-[#F7FAFC] p-4 md:p-12">
-      {/* Let Next.js handle script loading securely and performantly.
-        We trigger our hyperReady state only when the extension (the final script) is ready.
-      */}
-      <Script src="/js/hyperaudio-lite.js" strategy="afterInteractive" />
-      <Script
-        src="/js/hyperaudio-lite-extension.js"
-        strategy="afterInteractive"
-        onReady={() => setHyperReady(true)}
-      />
-
       <div className="max-w-5xl mx-auto">
         <button
           onClick={() => router.back()}
           className="mb-8 text-2xl font-light text-gray-400 hover:text-[#8B1D1D] transition-colors"
+          aria-label="Close Media"
         >
-          ✕ Close Media
+          ✕
         </button>
 
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
           <div className="p-6 bg-gray-50 border-b border-gray-200">
             <audio
               key={sessionId}
-              id="hyperplayer"
               ref={audioRef}
               controls
               preload="auto"
               crossOrigin="anonymous"
               className="w-full"
               src={audioSrc}
-              onError={(e) => console.error("Audio failed to load from:", audioSrc)}
+              onTimeUpdate={handleTimeUpdate}
             />
           </div>
 
           <div
-            id="hypertranscript"
-            className={`${uchen.className} p-10 text-3xl leading-[1.8] text-justify hyperaudio-transcript max-h-[60vh] overflow-y-auto`}
+            ref={transcriptRef}
+            className={`${uchen.className} p-10 text-3xl leading-[1.8] text-justify max-h-[60vh] overflow-y-auto`}
           >
             <article>
               <section>
-                {/* By injecting HTML directly, React relinquishes control of the children.
-                  Hyperaudio can now mutate classes and add event listeners safely.
-                */}
-                {transcriptHtml ? (
-                  <p dangerouslySetInnerHTML={{ __html: transcriptHtml }} />
-                ) : (
-                  <span className="font-sans text-gray-400 text-lg">
-                    No transcript data found.
-                  </span>
-                )}
+                <p>
+                  {dynamicTranscript.length > 0 ? (
+                    dynamicTranscript.map((seg, index) => {
+                      const isActive = activeSegId === seg.id;
+                      const isFuture = activeIndex !== -1 && index > activeIndex;
+
+                      return (
+                        <a
+                          key={seg.id}
+                          id={`segment-${seg.id}`}
+                          onClick={() => handleSyllableClick(seg.startTimeMs)}
+                          className={`
+                            cursor-pointer rounded px-1 transition-colors duration-200
+                            ${isActive ? 'bg-[#f7f3e7]' : 'hover:bg-gray-100'}
+                            ${isFuture && !isActive ? 'text-gray-300' : 'text-[#23272f]'}
+                          `}
+                        >
+                          {seg.syllables.map((syl, i) => {
+                            const isTargetSyl = sylIdParam === syl.id;
+                            return (
+                              <span
+                                key={syl.id || i}
+                                className={isTargetSyl ? 'text-[#d48b4e]' : ''}
+                              >
+                                {syl.text}
+                              </span>
+                            );
+                          })}
+                        </a>
+                      );
+                    })
+                  ) : (
+                    <span className="font-sans text-gray-400 text-lg">No transcript data found.</span>
+                  )}
+                </p>
               </section>
             </article>
           </div>
-        </div>
-
-        <div className="mt-6 text-center text-xs text-gray-400 uppercase tracking-widest font-sans">
-          Session: {sessionId}
         </div>
       </div>
     </div>

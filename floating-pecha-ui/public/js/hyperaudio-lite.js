@@ -774,3 +774,5 @@ class HyperaudioLite {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { HyperaudioLite };
 }
+
+window.HyperaudioLite = HyperaudioLite;

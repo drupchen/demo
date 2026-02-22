@@ -25,6 +25,39 @@ const SIZES = {
   DEFAULT: { fontSize: "1.5rem", lineHeight: "1.6" }
 };
 
+// ==========================================
+// 2. TIME PARSING & FORMATTING LOGIC
+// ==========================================
+const parseToSeconds = (ts) => {
+  if (!ts) return 0;
+  if (!ts.includes(':')) return parseFloat(ts) || 0;
+
+  const [hms, ms] = ts.split(',');
+  const parts = hms.split(':').map(Number);
+  let seconds = (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+  return seconds + (ms ? parseInt(ms) / 1000 : 0);
+};
+
+const formatDuration = (startTs, endTs) => {
+  const start = parseToSeconds(startTs);
+  const end = endTs ? parseToSeconds(endTs) : start + 10; // Fallback to 10s if end is missing
+
+  const totalSeconds = Math.round(end - start);
+  if (totalSeconds <= 0) return '1s';
+
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
+  }
+
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+
+  if (secs === 0) {
+    return `${mins}mn`;
+  }
+  return `${mins}mn${secs}s`;
+};
+
 export default function Home() {
   const router = useRouter();
   const [activeId, setActiveId] = useState(null);
@@ -42,6 +75,7 @@ export default function Home() {
             map[uuid].push({
               mediaUrl: segment.media,
               startTime: segment.start,
+              endTime: segment.end, // NEW: Capture the end time to calculate duration
               segId: segment.global_seg_id || segment.seg_id,
               source: segment.source_session,
               sylUuids: segment.syl_uuids
@@ -58,18 +92,16 @@ export default function Home() {
     const savedPos = sessionStorage.getItem('ebook-scroll-pos');
     const savedActiveId = sessionStorage.getItem('ebook-active-id');
 
-    // 1. Restore the open gap if we saved one
     if (savedActiveId && syllableMediaMap[savedActiveId]) {
       setActiveId(savedActiveId);
       setContextOptions(syllableMediaMap[savedActiveId]);
-      sessionStorage.removeItem('ebook-active-id'); // Clean up
+      sessionStorage.removeItem('ebook-active-id');
     }
 
-    // 2. Restore the scroll position
     if (savedPos) {
       setTimeout(() => {
         window.scrollTo({ top: parseInt(savedPos), behavior: 'instant' });
-        sessionStorage.removeItem('ebook-scroll-pos'); // Clean up
+        sessionStorage.removeItem('ebook-scroll-pos');
       }, 150);
     }
   }, [syllableMediaMap]);
@@ -85,12 +117,10 @@ export default function Home() {
   };
 
   const navigateToPlayer = (opt) => {
-    // Save current scroll position AND the currently open syllable ID
     sessionStorage.setItem('ebook-scroll-pos', window.scrollY.toString());
     if (activeId) sessionStorage.setItem('ebook-active-id', activeId);
 
-    // NEW: Pass the exact mediaUrl from the JSON to the player
-    router.push(`/player?session=${opt.source}&time=${opt.startTime}&media=${encodeURIComponent(opt.mediaUrl)}`);
+    router.push(`/player?session=${opt.source}&time=${opt.startTime}&media=${encodeURIComponent(opt.mediaUrl)}&sylId=${activeId}`);
   };
 
   const renderSegmentText = (opt, currentActiveId) => {
@@ -146,7 +176,7 @@ export default function Home() {
 
                       <button
                         onClick={(e) => { e.stopPropagation(); setActiveId(null); }}
-                        className="absolute top-4 right-8 md:right-16 text-2xl md:text-4xl font-light text-gray-400 hover:text-[#8B1D1D] transition-colors leading-none"
+                        className="absolute top-4 left-4 md:top-6 md:left-6 text-2xl font-light text-gray-400 hover:text-[#8B1D1D] transition-colors leading-none"
                         aria-label="Close"
                       >
                         ✕
@@ -158,10 +188,17 @@ export default function Home() {
                             <li key={idx} className="py-6 first:pt-0 last:pb-0">
                               <button
                                 onClick={() => navigateToPlayer(opt)}
-                                className="w-full text-left hover:bg-white/60 p-4 rounded-xl transition-all"
+                                className="w-full text-left hover:bg-white/60 p-4 rounded-xl transition-all flex flex-col md:flex-row gap-4 items-start md:items-end justify-between"
                               >
-                                <div className={`${uchen.className}`}>
+                                <div className={`${uchen.className} flex-grow`}>
                                   {renderSegmentText(opt, activeId)}
+                                </div>
+
+                                {/* NEW: The Duration Badge */}
+                                <div className="flex-shrink-0 pt-2 md:pt-0">
+                                  <span className="inline-flex items-center justify-center px-3 py-1 text-sm font-sans font-medium text-gray-600 border border-gray-400 bg-[#f7f3e7] rounded-full shadow-sm">
+                                    {formatDuration(opt.startTime, opt.endTime)}
+                                  </span>
                                 </div>
                               </button>
                             </li>
