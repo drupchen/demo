@@ -19,7 +19,7 @@ const BIG_SIZE_REM = 2.25;
 const SMALL_RATIO = 0.70;
 
 const SIZES = {
-  TITLE: { fontSize: "3rem", lineHeight: "1.3", fontWeight: "bold" },
+  TITLE: { fontSize: "3rem", lineHeight: "1.3", fontWeight: "" },
   BIG: { fontSize: `${BIG_SIZE_REM}rem`, lineHeight: "1.6" },
   SMALL: { fontSize: `${BIG_SIZE_REM * SMALL_RATIO}rem`, lineHeight: "1.6", verticalAlign: "0.33em" },
   DEFAULT: { fontSize: "1.5rem", lineHeight: "1.6" }

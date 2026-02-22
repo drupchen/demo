@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useMemo, Suspense } from 'react';
+import { useEffect, useRef, useMemo, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Uchen } from 'next/font/google';
+import Script from 'next/script'; // Utilizing Next.js native script loader
 
 import manifest from '@/data/teachings/rpn_ngondro_recitation_manual/manifest.json';
 import sessions from '@/data/teachings/rpn_ngondro_recitation_manual/sessions_compiled.json';
-import Script from 'next/script';
 
 const uchen = Uchen({ weight: '400', subsets: ['tibetan'], display: 'swap' });
 
@@ -15,9 +15,11 @@ function PlayerContent() {
   const router = useRouter();
   const audioRef = useRef(null);
 
+  // Track when the external Hyperaudio scripts are fully loaded
+  const [hyperReady, setHyperReady] = useState(false);
+
   const sessionId = searchParams.get('session');
-  const startTimeStr = searchParams.get('time');
-  const mediaParam = searchParams.get('media'); // <-- Grab the exact media string
+  const mediaParam = searchParams.get('media');
 
   const parseToSeconds = (ts) => {
     if (!ts || !ts.includes(':')) return 0;
@@ -46,98 +48,69 @@ function PlayerContent() {
       );
 
       const text = segmentSyllables.map(s => s.text === '\n' ? ' ' : s.text).join('') + ' ';
-
       const startTimeMs = parseToMs(segment.start);
       const endTimeMs = segment.end ? parseToMs(segment.end) : startTimeMs + 10000;
-
       const durationMs = Math.max(0, endTimeMs - startTimeMs);
 
       return {
         id: segment.global_seg_id || segment.seg_id,
-        startTimeMs: startTimeMs,
-        durationMs: durationMs, // <--- This calculates the duration
-        text: text
+        startTimeMs,
+        durationMs,
+        text
       };
     });
   }, [sessionId]);
 
+  // Transform the transcript into a raw HTML string to act as a React "Black Box"
+  const transcriptHtml = useMemo(() => {
+    if (dynamicTranscript.length === 0) return '';
+    return dynamicTranscript.map(seg =>
+      `<a data-m="${seg.startTimeMs}" data-d="${seg.durationMs}" class="transition-colors duration-200 hover:bg-gray-100 rounded px-1 cursor-pointer">${seg.text}</a>`
+    ).join('');
+  }, [dynamicTranscript]);
+
   useEffect(() => {
-  if (dynamicTranscript.length === 0 || !sessionId) return;
+    // Only initialize once the scripts are ready, data is parsed, and HTML is generated
+    if (hyperReady && transcriptHtml && sessionId) {
+      // Clear any existing instance to avoid double-binding the timeupdate listener
+      if (window.currentHyperaudioInstance) {
+        window.currentHyperaudioInstance = null;
+      }
 
-  const initializeHyperaudio = async () => {
-    // 1. Helper to load script only if it doesn't exist
-    const loadScript = (src, id) => {
-      return new Promise((resolve) => {
-        if (document.getElementById(id)) {
-          resolve();
-          return;
-        }
-        const script = document.createElement('script');
-        script.src = src;
-        script.id = id;
-        script.async = false;
-        script.onload = () => {
-          console.log(`✅ Script ready: ${src}`);
-          resolve();
-        };
-        document.body.appendChild(script);
-      });
-    };
-
-    try {
-      // 2. Load the core files
-      await loadScript('/js/hyperaudio-lite.js', 'hyper-core');
-      await loadScript('/js/hyperaudio-lite-extension.js', 'hyper-ext');
-
-      // 3. Wait for the browser to register the 'class HyperaudioLite'
-      // We use a small delay and check the global scope
-      setTimeout(() => {
-        const player = document.getElementById("hyperplayer");
-        const transcript = document.getElementById("hypertranscript");
-
-        // Since it's a global class, it should be on 'window'
-        const HyperEngine = window.HyperaudioLite;
-
-        if (player && transcript && HyperEngine) {
-          console.log("🚀 Found HyperaudioLite class. Initializing...");
-
-          // Clear any existing instance to avoid double-highlighting
-          if (window.currentHyperaudioInstance) {
-            window.currentHyperaudioInstance = null;
-          }
-
-          window.currentHyperaudioInstance = new HyperEngine(
+      // A tiny 100ms timeout ensures React has finished flushing the dangerouslySetInnerHTML to the real DOM
+      const timer = setTimeout(() => {
+        if (window.HyperaudioLite) {
+          window.currentHyperaudioInstance = new window.HyperaudioLite(
             "hypertranscript",
             "hyperplayer",
             false, true, false, false
           );
-
-          console.log("✨ Sync Active!");
-        } else {
-          console.warn("⚠️ Requirements missing:", {
-            player: !!player,
-            transcript: !!transcript,
-            engine: !!HyperEngine
-          });
+          console.log("✨ Hyperaudio Sync Active!");
         }
-      }, 300); // 300ms delay to allow class registration
-    } catch (e) {
-      console.error("❌ Hyperaudio Setup Failed:", e);
-    }
-  };
+      }, 100);
 
-  initializeHyperaudio();
-}, [dynamicTranscript, sessionId]);
+      return () => clearTimeout(timer);
+    }
+  }, [hyperReady, transcriptHtml, sessionId]);
 
   if (!sessionId) return <div className="p-20 text-center">No session provided.</div>;
 
-  // Use the mediaUrl from the JSON. Fallback to guessing if it's missing.
   const audioSrc = mediaParam
     ? mediaParam
     : `https://f003.backblazeb2.com/file/rpn-ngondro/${encodeURIComponent(sessionId)}.m4a`;
 
   return (
     <div className="min-h-screen bg-[#F7FAFC] p-4 md:p-12">
+      {/* Let Next.js handle script loading securely and performantly.
+        We trigger our hyperReady state only when the extension (the final script) is ready.
+      */}
+      <Script src="/js/hyperaudio-lite.js" strategy="afterInteractive" />
+      <Script
+        src="/js/hyperaudio-lite-extension.js"
+        strategy="afterInteractive"
+        onReady={() => setHyperReady(true)}
+      />
+
       <div className="max-w-5xl mx-auto">
         <button
           onClick={() => router.back()}
@@ -148,22 +121,17 @@ function PlayerContent() {
 
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
           <div className="p-6 bg-gray-50 border-b border-gray-200">
-            {sessionId ? (
-              <audio
-                key={sessionId}
-                id="hyperplayer"
-                ref={audioRef}
-                controls
-                preload="auto"
-                // Adding crossOrigin="anonymous" is sometimes required by browsers to process external media
-                crossOrigin="anonymous"
-                className="w-full"
-                src={audioSrc}
-                onError={(e) => console.error("Audio failed to load from:", audioSrc)}
-              />
-            ) : (
-              <div className="animate-pulse h-14 bg-gray-200 rounded w-full"></div>
-            )}
+            <audio
+              key={sessionId}
+              id="hyperplayer"
+              ref={audioRef}
+              controls
+              preload="auto"
+              crossOrigin="anonymous"
+              className="w-full"
+              src={audioSrc}
+              onError={(e) => console.error("Audio failed to load from:", audioSrc)}
+            />
           </div>
 
           <div
@@ -172,24 +140,16 @@ function PlayerContent() {
           >
             <article>
               <section>
-                <p>
-                  {dynamicTranscript.length > 0 ? (
-                    dynamicTranscript.map((seg) => (
-                      <a
-                        key={seg.id}
-                        data-m={seg.startTimeMs}
-                        data-d={seg.durationMs}
-                        className="transition-colors duration-200 hover:bg-gray-100 rounded px-1 cursor-pointer"
-                      >
-                        {seg.text}
-                      </a>
-                    ))
-                  ) : (
-                    <span className="font-sans text-gray-400 text-lg">
-                      No transcript data found.
-                    </span>
-                  )}
-                </p>
+                {/* By injecting HTML directly, React relinquishes control of the children.
+                  Hyperaudio can now mutate classes and add event listeners safely.
+                */}
+                {transcriptHtml ? (
+                  <p dangerouslySetInnerHTML={{ __html: transcriptHtml }} />
+                ) : (
+                  <span className="font-sans text-gray-400 text-lg">
+                    No transcript data found.
+                  </span>
+                )}
               </section>
             </article>
           </div>
