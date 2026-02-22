@@ -9,9 +9,6 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
-        {/* Legacy Hyperaudio <Script> tags have been removed from here.
-          They are now securely injected dynamically inside the Player component.
-        */}
         {children}
       </body>
     </html>
