@@ -135,11 +135,13 @@ export default function Home() {
 
             const mediaOptions = syllableMediaMap[syl.id] || [];
             const hasMedia = mediaOptions.length > 0;
+            const hasMultipleSegments = mediaOptions.length > 1; // Check for multiple options
             const isSelected = activeId === syl.id;
+
             const fontClass = (syl.nature === 'TEXT' || syl.nature === 'PUNCT' || syl.nature === 'SYM') ? uchen.className : 'font-sans';
             const sizeStyle = SIZES[syl.size?.toUpperCase()] || SIZES.DEFAULT;
 
-            // Determine exact text color cleanly
+            // Determine exact text color
             let textColorClass = "text-black";
             if (!hasMedia) textColorClass = "text-[var(--theme-no-media)]";
             else if (isSelected) textColorClass = "text-[var(--theme-gold)] font-bold";
@@ -149,7 +151,10 @@ export default function Home() {
                 <span
                   onClick={hasMedia ? () => handleSyllableClick(syl, mediaOptions) : undefined}
                   className={`${fontClass} inline transition-all duration-300 ${textColorClass} ${
-                    hasMedia ? "cursor-pointer hover:text-[var(--theme-hover-red)] border-b border-transparent hover:border-[var(--theme-gold)]" : ""
+                    hasMedia ? "cursor-pointer hover:text-[var(--theme-hover-red)]" : ""
+                  } ${
+                    // Apply permanent gold underline if multiple segments exist, otherwise transparent to prevent layout shifting
+                    hasMultipleSegments ? "border-b border-[var(--theme-gold)]" : (hasMedia ? "border-b border-transparent" : "")
                   }`}
                   style={{ ...sizeStyle, whiteSpace: 'pre-wrap' }}
                 >
