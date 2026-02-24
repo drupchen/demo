@@ -13,6 +13,9 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
+# 1. Define a custom Namespace for your project
+# This ensures your UUIDs don't collide with other systems using uuid5
+NAMESPACE_KHYENTSE = uuid.uuid5(uuid.NAMESPACE_URL, "khyentse.website.data")
 
 def get_formatting_from_xml(element):
     """Extracts size and vertical alignment (super/sub) from a raw XML rPr element."""
@@ -22,7 +25,6 @@ def get_formatting_from_xml(element):
     is_super = False
     is_sub = False
 
-    # 1. Extract Size (Priority: Complex Script szCs -> Standard sz)
     szCs = element.find(qn('w:szCs'))
     if szCs is not None and szCs.get(qn('w:val')):
         size = int(szCs.get(qn('w:val'))) / 2
@@ -31,7 +33,6 @@ def get_formatting_from_xml(element):
         if sz is not None and sz.get(qn('w:val')):
             size = int(sz.get(qn('w:val'))) / 2
 
-    # 2. Extract Super/Sub (vertAlign)
     vertAlign = element.find(qn('w:vertAlign'))
     if vertAlign is not None:
         val = vertAlign.get(qn('w:val'))
@@ -40,16 +41,9 @@ def get_formatting_from_xml(element):
 
     return size, is_super, is_sub
 
-
 def get_final_formatting(run, para, style_map, doc_defaults):
-    """
-    Follows the exact Word Hierarchy to resolve size and super/sub flags:
-    Run -> Character Style -> Paragraph Properties -> Paragraph Style -> Doc Defaults
-    """
-    # Initialize with doc defaults
     res_size, res_super, res_sub = doc_defaults
 
-    # 1. Layer: Paragraph Style (Base)
     pStyle = para._element.pPr.find(qn('w:pStyle')) if para._element.pPr is not None else None
     if pStyle is not None:
         s_id = pStyle.get(qn('w:val'))
@@ -59,14 +53,12 @@ def get_final_formatting(run, para, style_map, doc_defaults):
             if s_sup: res_super = s_sup
             if s_sub: res_sub = s_sub
 
-    # 2. Layer: Paragraph Local Properties (pPr -> rPr)
     p_sz, p_sup, p_sub = get_formatting_from_xml(
         para._element.pPr.find(qn('w:rPr'))) if para._element.pPr is not None else (None, None, None)
     if p_sz: res_size = p_sz
     if p_sup: res_super = p_sup
     if p_sub: res_sub = p_sub
 
-    # 3. Layer: Character Style (Run Style)
     rStyle = run._element.rPr.find(qn('w:rStyle')) if run._element.rPr is not None else None
     if rStyle is not None:
         s_id = rStyle.get(qn('w:val'))
@@ -76,7 +68,6 @@ def get_final_formatting(run, para, style_map, doc_defaults):
             if s_sup: res_super = s_sup
             if s_sub: res_sub = s_sub
 
-    # 4. Layer: Local Run Properties (Strongest)
     r_sz, r_sup, r_sub = get_formatting_from_xml(run._element.rPr)
     if r_sz: res_size = r_sz
     if r_sup: res_super = r_sup
@@ -84,30 +75,23 @@ def get_final_formatting(run, para, style_map, doc_defaults):
 
     return res_size, res_super, res_sub
 
-
 def categorize(size, is_super, is_sub, big_t, title_t):
-    # Rule 1: Priority Check for Superscript or Subscript
     if is_super or is_sub:
         return "SMALL"
-
-    # Rule 2: Size Categorization
     if size:
         if size >= (title_t - 0.5): return "TITLE"
         if size >= (big_t - 0.5): return "BIG"
-
     return "BIG"
 
-
-def process_document(docx_path, big_t, title_t):
+# 2. Add instance_id to the function parameters
+def process_document(docx_path, big_t, title_t, instance_id):
     doc = docx.Document(docx_path)
 
-    # Pre-calculate Style Map (Size and Super/Sub)
     style_map = {}
     for style in doc.styles.element.xpath('//w:style'):
         s_id = style.get(qn('w:styleId'))
         style_map[s_id] = get_formatting_from_xml(style.find(qn('w:rPr')))
 
-    # Get Doc Defaults
     defaults_node = doc.styles.element.find(qn('w:docDefaults'))
     doc_defaults = get_formatting_from_xml(
         defaults_node.find(qn('w:rPrDefault')).find(qn('w:rPr'))) if defaults_node is not None else (12.0, False, False)
@@ -116,19 +100,19 @@ def process_document(docx_path, big_t, title_t):
     global_counter = 1
     active_tags = set()
 
-    for para in doc.paragraphs:
-        # We REMOVED the `if not para.text.strip(): continue` line here
-        # so that we do not skip empty paragraphs (which represent multiple newlines).
+    # Helper function to generate deterministic IDs
+    def generate_stable_id(index, text):
+        unique_string = f"{instance_id}_{index}_{text}"
+        return str(uuid.uuid5(NAMESPACE_KHYENTSE, unique_string))
 
+    for para in doc.paragraphs:
         para_text = ""
         run_formats = []
         current_idx = 0
 
-        # 1. Flatten the paragraph and map formats to character indices
         for run in para.runs:
             if not run.text: continue
 
-            # Resolve the formatting through the hierarchy
             f_size, f_super, f_sub = get_final_formatting(run, para, style_map, doc_defaults)
             semantic_size = categorize(f_size, f_super, f_sub, big_t, title_t)
 
@@ -142,10 +126,8 @@ def process_document(docx_path, big_t, title_t):
             for start, end, size in run_formats:
                 if start <= idx < end:
                     return size
-            return "BIG"  # Safe fallback
+            return "BIG"
 
-        # 2. Parse tags AND isolate soft-newlines on the unified paragraph string
-        # We only run this block if there is actual text to parse.
         if para_text:
             segments = re.split(r'(<[^>]+>|\n)', para_text)
             current_char_idx = 0
@@ -153,22 +135,19 @@ def process_document(docx_path, big_t, title_t):
             for segment in segments:
                 if not segment: continue
 
-                # Handle Tags
                 if segment.startswith('<') and segment.endswith('>'):
                     clean_tag = re.sub(r'\s+', '', segment)
                     if clean_tag.startswith('</'):
                         active_tags.discard(clean_tag[2:-1])
                     else:
                         active_tags.add(clean_tag[1:-1])
-
                     current_char_idx += len(segment)
 
-                # Handle Explicit Soft Newlines (Shift+Enter)
                 elif segment == '\n':
                     token_size = get_format_at(current_char_idx)
                     final_syllables.append({
                         'index': global_counter,
-                        'id': str(uuid.uuid4()),
+                        'id': generate_stable_id(global_counter, '\n'), # 3. Use stable ID
                         'text': '\n',
                         'nature': 'SPACE',
                         'size': token_size,
@@ -177,7 +156,6 @@ def process_document(docx_path, big_t, title_t):
                     global_counter += 1
                     current_char_idx += len(segment)
 
-                # Handle Regular Text
                 else:
                     tokenizer = ChunkTokenizer(segment)
                     for token_nature, token_text in tokenizer.tokenize():
@@ -185,7 +163,7 @@ def process_document(docx_path, big_t, title_t):
 
                         final_syllables.append({
                             'index': global_counter,
-                            'id': str(uuid.uuid4()),
+                            'id': generate_stable_id(global_counter, token_text), # 3. Use stable ID
                             'text': token_text,
                             'nature': token_nature,
                             'size': token_size,
@@ -194,13 +172,11 @@ def process_document(docx_path, big_t, title_t):
                         global_counter += 1
                         current_char_idx += len(token_text)
 
-        # 3. Inject the structural newline at the end of the paragraph object
         final_syllables.append({
             'index': global_counter,
-            'id': str(uuid.uuid4()),
+            'id': generate_stable_id(global_counter, '\n'), # 3. Use stable ID
             'text': '\n',
             'nature': 'SPACE',
-            # If the paragraph was completely empty, fallback to 'BIG', otherwise use the size of the first run
             'size': run_formats[0][2] if run_formats else 'BIG',
             'tags': list(active_tags)
         })
@@ -208,16 +184,13 @@ def process_document(docx_path, big_t, title_t):
 
     return final_syllables
 
-
 if __name__ == "__main__":
-    # 1. Updated Paths based on generate_catalog.py
     base_dir = Path("/media/drupchen/Khyentse Önang/Website/website_data")
     output_dir = Path(__file__).resolve().parent / 'output'
     catalog_path = output_dir / "catalog.json"
 
-    BIG_T, TITLE_T = 26.0, 36.0  # Your thresholds
+    BIG_T, TITLE_T = 26.0, 36.0
 
-    # 2. Check if catalog exists
     if not catalog_path.exists():
         print(f"❌ Error: catalog.json not found at {catalog_path}. Run generate_catalog.py first.")
         exit(1)
@@ -225,43 +198,70 @@ if __name__ == "__main__":
     with open(catalog_path, "r", encoding="utf-8") as f:
         catalog = json.load(f)
 
-    print("🚀 Starting dynamic base layer ingestion...")
+    print("🚀 Starting dynamic base layer ingestion (with Deterministic UUIDs)...")
 
-    # 3. Loop through catalog to find teaching instances with .docx files
     for teaching in catalog:
         for instance in teaching.get("Instances", []):
             instance_id = instance.get("Instance_ID")
+            teaching_id = instance.get("Teaching_ID")
             text_docx = instance.get("Text_Docx")
+            sessions = instance.get("Sessions", [])
 
-            # Skip if there's no docx assigned
             if not instance_id or not text_docx:
                 continue
 
-            # 4. Construct path to the docx file based on the new folder structure
-            docx_path = base_dir / "teachings" / instance_id / text_docx
+            instance_dir = base_dir / "teachings" / instance_id
+            docx_path = instance_dir / text_docx
+            srt_dir = instance_dir / "srt_files"
 
             if not docx_path.exists():
-                print(f"⚠️ Warning: Docx file not found at {docx_path}")
+                instance_id = teaching_id
+                instance_dir = base_dir / "teachings" / instance_id
+                docx_path = instance_dir / text_docx
+                srt_dir = instance_dir / "srt_files"
+
+            if not docx_path.exists():
+                print(f"⚠️ Warning: Master Docx file not found at {docx_path}")
                 continue
 
-            print(f"⏳ Ingesting: {text_docx} (Instance: {instance_id})...")
+            print(f"\n⏳ Processing Instance: {instance_id}")
+            print(f"   📄 Reading: {text_docx}")
 
             try:
-                # Process the document
-                manifest_data = process_document(docx_path, BIG_T, TITLE_T)
+                # 4. Pass the instance_id into the processing function
+                manifest_data = process_document(docx_path, BIG_T, TITLE_T, instance_id)
 
-                # 5. Create dynamic instance output folder
                 instance_output_dir = output_dir / instance_id
                 instance_output_dir.mkdir(parents=True, exist_ok=True)
 
-                # Save the generated manifest.json in the instance folder
                 output_path = instance_output_dir / 'manifest.json'
                 with open(output_path, "w", encoding="utf-8") as out_f:
                     json.dump(manifest_data, out_f, ensure_ascii=False, indent=2)
 
-                print(f"✅ Success! {len(manifest_data)} syllables saved to {output_path}")
+                print(f"   ✅ Success! {len(manifest_data)} syllables saved to manifest.json")
 
             except Exception as e:
-                print(f"❌ Error processing {text_docx} for {instance_id}: {e}")
+                print(f"   ❌ Error processing {text_docx} for {instance_id}: {e}")
+                continue
 
-    print("🎉 Base layer ingestion complete!")
+            if not sessions:
+                print(f"   ⚠️ No sessions found in catalog for {instance_id}.")
+                continue
+
+            print(f"   🎬 Verifying {len(sessions)} SRT sessions...")
+            for session in sessions:
+                session_id = session.get("Session_ID")
+                srt_filename = session.get("SRT_Text")
+
+                if not srt_filename:
+                    print(f"      ⚠️ Session {session_id} is missing an SRT filename.")
+                    continue
+
+                srt_path = srt_dir / srt_filename
+
+                if not srt_path.exists():
+                    print(f"      ❌ Missing SRT file: {srt_path}")
+                else:
+                    print(f"      ✅ Found SRT: {srt_filename} (Ready for sync)")
+
+    print("\n🎉 Base layer ingestion complete!")
