@@ -2,8 +2,6 @@
 
 import { useRef, useMemo, useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import manifest from '@/data/teachings/rpn_ngondro_recitation_manual/manifest.json';
-import sessions from '@/data/teachings/rpn_ngondro_recitation_manual/sessions_compiled.json';
 
 // Import from our single source of truth
 import { uchen, inter, getThemeCssVars } from '@/lib/theme';
@@ -15,16 +13,29 @@ function PlayerContent() {
   const audioRef = useRef(null);
   const transcriptRef = useRef(null);
 
-  const sessionId = searchParams.get('session');
+  // --- 1. URL PARAMS ---
+  const instanceId = searchParams.get('instance') || 'rpn_ngondro_1';
+  const urlSessionId = searchParams.get('session');
   const mediaParam = searchParams.get('media');
   const timeParam = searchParams.get('time');
   const sylIdParam = searchParams.get('sylId');
 
-  // --- 1. TIME PARSERS & FORMATTERS ---
+  // --- 2. STATE DECLARATIONS ---
+  const [manifest, setManifest] = useState([]);
+  const [sessions, setSessions] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const [audioType, setAudioType] = useState('original');
+  const [activeSegId, setActiveSegId] = useState(null);
+  const [isCurrentlyPlaying, setIsCurrentlyPlaying] = useState(false);
+
+  // Determine sessionId dynamically
+  const sessionId = urlSessionId || (sessions.length > 0 ? sessions[0].source_session : null);
+
+  // --- 3. TIME PARSERS ---
   const parseToSeconds = (ts) => {
     if (!ts) return 0;
     if (!ts.includes(':')) return parseFloat(ts) || 0;
-
     const [hms, ms] = ts.split(',');
     const parts = hms.split(':').map(Number);
     let seconds = (parts[0] * 3600) + (parts[1] * 60) + parts[2];
@@ -37,35 +48,50 @@ function PlayerContent() {
     const totalSeconds = Math.round(ms / 1000);
     if (totalSeconds <= 0) return '1s';
     if (totalSeconds < 60) return `${totalSeconds}s`;
-
     const mins = Math.floor(totalSeconds / 60);
     const secs = totalSeconds % 60;
-
     if (secs === 0) return `${mins}mn`;
     return `${mins}mn${secs}s`;
   };
 
-  // --- 2. STATE ---
   const [currentTimeMs, setCurrentTimeMs] = useState(() => {
     return timeParam ? parseToMs(timeParam) : 0;
   });
 
-  const [activeSegId, setActiveSegId] = useState(null);
-  const [hasInitialSeeked, setHasInitialSeeked] = useState(false);
+  // --- 4. DATA FETCHING ---
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [manifestRes, sessionsRes] = await Promise.all([
+          fetch(`/data/${instanceId}/manifest.json`),
+          fetch(`/data/${instanceId}/${instanceId}_compiled_sessions.json`)
+        ]);
 
-  // --- 3. DATA GENERATION ---
+        if (manifestRes.ok && sessionsRes.ok) {
+          const manifestData = await manifestRes.json();
+          const sessionsData = await sessionsRes.json();
+          setManifest(manifestData);
+          setSessions(sessionsData);
+        }
+      } catch (error) {
+        console.error("Error loading reader data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadData();
+  }, [instanceId]);
+
+  // --- 5. TRANSCRIPT GENERATION ---
   const dynamicTranscript = useMemo(() => {
-    if (!sessionId) return [];
+    if (!sessionId || manifest.length === 0 || sessions.length === 0) return [];
     const sessionSegments = sessions.filter(seg => seg.source_session === sessionId);
     sessionSegments.sort((a, b) => parseToMs(a.start) - parseToMs(b.start));
 
     return sessionSegments.map((segment) => {
       const syllables = manifest
         .filter(syl => segment.syl_uuids.includes(syl.id))
-        .map(s => ({
-            id: s.id,
-            text: s.text === '\n' ? ' ' : s.text
-        }));
+        .map(s => ({ id: s.id, text: s.text === '\n' ? ' ' : s.text }));
 
       const startTimeMs = parseToMs(segment.start);
       const endTimeMs = segment.end ? parseToMs(segment.end) : startTimeMs + 10000;
@@ -78,155 +104,158 @@ function PlayerContent() {
         syllables
       };
     });
-  }, [sessionId]);
+  }, [sessionId, manifest, sessions]);
 
-  // --- 4. INITIAL LOAD JUMP ---
+  // --- 6. SMART AUDIO SOURCE RESOLUTION ---
+  const currentSessionSegments = sessions.filter(seg => seg.source_session === sessionId);
+  const firstSeg = currentSessionSegments[0];
+  const hasRestored = Boolean(firstSeg?.media_restored);
+  const effectiveAudioType = (audioType === 'restored' && hasRestored) ? 'restored' : 'original';
+
+  const audioSrc = useMemo(() => {
+    const raw = effectiveAudioType === 'restored'
+      ? firstSeg?.media_restored
+      : (firstSeg?.media_original || firstSeg?.media);
+    return raw || mediaParam || null;
+  }, [effectiveAudioType, firstSeg, mediaParam]);
+
+  // --- 7. AUTO-SEEK & SYNC LOGIC (The Fix) ---
   useEffect(() => {
-    if (!timeParam) {
-      setHasInitialSeeked(true);
-      return;
-    }
+    if (!audioRef.current || !audioSrc) return;
 
-    const targetTimeSeconds = parseToSeconds(timeParam);
-    const targetTimeMs = parseToMs(timeParam);
+    const handleLoadedMetadata = () => {
+      let targetSec = 0;
 
-    setCurrentTimeMs(targetTimeMs);
+      // If we are switching tracks and already have a segment highlighted
+      if (activeSegId) {
+        const currentSeg = dynamicTranscript.find(seg => seg.id === activeSegId);
+        if (currentSeg) {
+          targetSec = currentSeg.startTimeMs / 1000;
+        }
+      } else if (timeParam) {
+        // Fallback for initial page load from URL
+        targetSec = parseToSeconds(timeParam);
+      }
 
-    const audioEl = audioRef.current;
-    if (!audioEl) return;
+      audioRef.current.currentTime = targetSec;
 
-    const performSeek = () => {
-      audioEl.currentTime = targetTimeSeconds;
-      setHasInitialSeeked(true);
+      // Resume playback if we were already playing during the toggle
+      if (isCurrentlyPlaying) {
+        audioRef.current.play().catch(e => console.log("Playback blocked:", e));
+      }
     };
 
-    if (audioEl.readyState >= 1) {
-      performSeek();
-    } else {
-      audioEl.addEventListener('loadedmetadata', performSeek, { once: true });
-      return () => audioEl.removeEventListener('loadedmetadata', performSeek);
-    }
-  }, [timeParam]);
+    const el = audioRef.current;
+    el.addEventListener('loadedmetadata', handleLoadedMetadata);
+    return () => el.removeEventListener('loadedmetadata', handleLoadedMetadata);
+  }, [audioSrc, dynamicTranscript, activeSegId, timeParam]); // Re-runs whenever audioSrc changes
 
-  // --- 5. NATIVE HYPERAUDIO LOGIC ---
   const handleTimeUpdate = () => {
-    if (audioRef.current && hasInitialSeeked) {
+    if (audioRef.current) {
       setCurrentTimeMs(Math.floor(audioRef.current.currentTime * 1000));
+      setIsCurrentlyPlaying(!audioRef.current.paused);
     }
   };
 
-  const handleSyllableClick = (startTimeMs) => {
+  const handleSyllableClick = (startTimeMs, segId) => {
     if (audioRef.current) {
       audioRef.current.currentTime = startTimeMs / 1000;
-      audioRef.current.play();
+      setCurrentTimeMs(startTimeMs);
+      setActiveSegId(segId);
+      audioRef.current.play().catch(e => console.log(e));
     }
   };
 
-  // --- 6. AUTO-SCROLL LOGIC ---
   useEffect(() => {
-    const currentSeg = dynamicTranscript.find(
+    let currentSeg = dynamicTranscript.find(
       (seg) => currentTimeMs >= seg.startTimeMs && currentTimeMs < seg.endTimeMs
     );
 
+    if (!currentSeg) {
+      const pastSegments = dynamicTranscript.filter(seg => seg.startTimeMs <= currentTimeMs);
+      if (pastSegments.length > 0) {
+        currentSeg = pastSegments[pastSegments.length - 1];
+      }
+    }
+
     if (currentSeg && currentSeg.id !== activeSegId) {
       setActiveSegId(currentSeg.id);
-
       const activeElement = document.getElementById(`segment-${currentSeg.id}`);
       if (activeElement && transcriptRef.current) {
-        activeElement.scrollIntoView({
-          behavior: 'smooth',
-          block: 'center',
-        });
+        activeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
   }, [currentTimeMs, dynamicTranscript, activeSegId]);
 
-  if (!sessionId) return <div className="p-20 text-center font-sans">No session provided.</div>;
+  const switchAudio = (type) => {
+    if (type === 'restored' && !hasRestored) return;
+    if (audioRef.current) {
+      // Capture the playing state before the component re-renders and key changes
+      setIsCurrentlyPlaying(!audioRef.current.paused);
+      setAudioType(type);
+    }
+  };
 
-  const audioSrc = mediaParam || `https://f003.backblazeb2.com/file/rpn-ngondro/${encodeURIComponent(sessionId)}.m4a`;
+  if (isLoading) return <div className="p-20 text-center font-sans text-gray-500">Loading...</div>;
+
   const activeIndex = dynamicTranscript.findIndex(seg => seg.id === activeSegId);
 
   return (
     <div className="min-h-screen bg-[#F7FAFC] p-4 md:p-12" style={getThemeCssVars()}>
       <div className="max-w-5xl mx-auto">
-        <button
-          onClick={() => router.back()}
-          className="mb-8 text-2xl font-light text-[var(--theme-gray)] hover:text-[var(--theme-hover-red)] transition-colors"
-          aria-label="Close Media"
-        >
-          ✕
-        </button>
+
+        <div className="flex justify-between items-center mb-8">
+          <button onClick={() => router.back()} className="text-2xl font-light text-[var(--theme-gray)] hover:text-[var(--theme-hover-red)]">✕</button>
+
+          <div className="flex bg-gray-200/80 p-1 rounded-lg border border-gray-300 shadow-inner">
+            <button
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${effectiveAudioType === 'original' ? 'bg-[#C19A5B] text-black shadow-md' : 'text-gray-500 hover:text-gray-800'}`}
+              onClick={() => switchAudio('original')}
+            > Original </button>
+            <button
+              disabled={!hasRestored}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${!hasRestored ? 'text-gray-400 cursor-not-allowed' : effectiveAudioType === 'restored' ? 'bg-[#C19A5B] text-black shadow-md' : 'text-gray-500 hover:text-gray-800'}`}
+              onClick={() => switchAudio('restored')}
+            > Restored </button>
+          </div>
+        </div>
 
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
           <div className="p-6 bg-gray-50 border-b border-gray-200">
             <audio
-              key={sessionId}
+              key={`${sessionId}-${effectiveAudioType}`} // Track swap force-mount
               ref={audioRef}
               controls
-              preload="auto"
-              crossOrigin="anonymous"
               className="w-full"
               src={audioSrc}
               onTimeUpdate={handleTimeUpdate}
+              onPlay={() => setIsCurrentlyPlaying(true)}
+              onPause={() => setIsCurrentlyPlaying(false)}
             />
           </div>
 
-          <div
-            ref={transcriptRef}
-            className={`${uchen.className} p-10 text-3xl leading-[1.8] text-justify max-h-[60vh] overflow-y-auto`}
-          >
-            <article>
-              <section>
-                <p>
-                  {dynamicTranscript.length > 0 ? (
-                    dynamicTranscript.map((seg, index) => {
-                      const isActive = activeSegId === seg.id;
-                      const isFuture = activeIndex !== -1 && index > activeIndex;
-
-                      return (
-                        <a
-                          key={seg.id}
-                          id={`segment-${seg.id}`}
-                          onClick={() => handleSyllableClick(seg.startTimeMs)}
-                          className={`
-                            cursor-pointer rounded px-1 transition-colors duration-200
-                            ${isActive ? 'bg-[#f7f3e7]' : 'hover:bg-gray-100'}
-                            ${isFuture && !isActive ? 'text-[var(--theme-future-text)]' : 'text-[#23272f]'}
-                          `}
-                        >
-                          {seg.syllables.map((syl, i) => {
-                            const isTargetSyl = sylIdParam === syl.id;
-                            return (
-                              <span
-                                key={syl.id || i}
-                                className={isTargetSyl ? 'text-[var(--theme-gold)] font-bold' : ''}
-                              >
-                                {syl.text}
-                              </span>
-                            );
-                          })}
-
-                          <span
-                            className={`
-                              ${inter.className}
-                              inline-flex items-center justify-center px-1.5 py-0.5 mx-2
-                              text-sm font-medium text-[var(--theme-badge-text)]
-                              bg-[var(--theme-badge-color)] rounded-full align-middle
-                              transition-opacity duration-200 tracking-wide
-                              ${isFuture && !isActive ? 'opacity-40' : 'opacity-80'}
-                            `}
-                          >
-                            {formatMsToDuration(seg.durationMs)}
-                          </span>
-                        </a>
-                      );
-                    })
-                  ) : (
-                    <span className={`text-gray-400 text-lg ${inter.className}`}>No transcript data found.</span>
-                  )}
-                </p>
-              </section>
-            </article>
+          <div ref={transcriptRef} className={`${uchen.className} p-10 text-3xl leading-[1.8] text-justify max-h-[60vh] overflow-y-auto`}>
+            <p>
+              {dynamicTranscript.map((seg, index) => {
+                const isActive = activeSegId === seg.id;
+                const isFuture = activeIndex !== -1 && index > activeIndex;
+                return (
+                  <a
+                    key={seg.id}
+                    id={`segment-${seg.id}`}
+                    onClick={() => handleSyllableClick(seg.startTimeMs, seg.id)}
+                    className={`cursor-pointer rounded px-1 transition-colors ${isActive ? 'bg-[#f7f3e7]' : 'hover:bg-gray-100'} ${isFuture && !isActive ? 'text-[var(--theme-future-text)]' : 'text-[#23272f]'}`}
+                  >
+                    {seg.syllables.map((syl, i) => (
+                      <span key={syl.id || i} className={sylIdParam === syl.id ? 'text-[var(--theme-gold)] font-bold' : ''}>{syl.text}</span>
+                    ))}
+                    <span className={`${inter.className} inline-flex items-center justify-center px-1.5 py-0.5 mx-2 text-sm font-medium text-[var(--theme-badge-text)] bg-[var(--theme-badge-color)] rounded-full align-middle transition-opacity ${isFuture && !isActive ? 'opacity-40' : 'opacity-80'}`}>
+                      {formatMsToDuration(seg.durationMs)}
+                    </span>
+                  </a>
+                );
+              })}
+            </p>
           </div>
         </div>
       </div>
@@ -236,7 +265,7 @@ function PlayerContent() {
 
 export default function PlayerPage() {
   return (
-    <Suspense fallback={<div className="p-20 text-center text-gray-400">Loading Session...</div>}>
+    <Suspense fallback={<div className="p-20 text-center text-gray-400">Loading...</div>}>
       <PlayerContent />
     </Suspense>
   );

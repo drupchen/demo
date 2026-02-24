@@ -210,14 +210,58 @@ def process_document(docx_path, big_t, title_t):
 
 
 if __name__ == "__main__":
-    INPUT_FILE = Path("input/recitation_manual_tib.docx")
+    # 1. Updated Paths based on generate_catalog.py
+    base_dir = Path("/media/drupchen/Khyentse Önang/Website/website_data")
+    output_dir = Path(__file__).resolve().parent / 'output'
+    catalog_path = output_dir / "catalog.json"
+
     BIG_T, TITLE_T = 26.0, 36.0  # Your thresholds
 
-    print(f"Ingesting: {INPUT_FILE.name}")
-    manifest_data = process_document(INPUT_FILE, BIG_T, TITLE_T)
+    # 2. Check if catalog exists
+    if not catalog_path.exists():
+        print(f"❌ Error: catalog.json not found at {catalog_path}. Run generate_catalog.py first.")
+        exit(1)
 
-    output_path = Path("output") / (INPUT_FILE.stem + '_manifest.json')
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(manifest_data, f, ensure_ascii=False, indent=2)
+    with open(catalog_path, "r", encoding="utf-8") as f:
+        catalog = json.load(f)
 
-    print(f"Success! {len(manifest_data)} syllables processed.")
+    print("🚀 Starting dynamic base layer ingestion...")
+
+    # 3. Loop through catalog to find teaching instances with .docx files
+    for teaching in catalog:
+        for instance in teaching.get("Instances", []):
+            instance_id = instance.get("Instance_ID")
+            text_docx = instance.get("Text_Docx")
+
+            # Skip if there's no docx assigned
+            if not instance_id or not text_docx:
+                continue
+
+            # 4. Construct path to the docx file based on the new folder structure
+            docx_path = base_dir / "teachings" / instance_id / text_docx
+
+            if not docx_path.exists():
+                print(f"⚠️ Warning: Docx file not found at {docx_path}")
+                continue
+
+            print(f"⏳ Ingesting: {text_docx} (Instance: {instance_id})...")
+
+            try:
+                # Process the document
+                manifest_data = process_document(docx_path, BIG_T, TITLE_T)
+
+                # 5. Create dynamic instance output folder
+                instance_output_dir = output_dir / instance_id
+                instance_output_dir.mkdir(parents=True, exist_ok=True)
+
+                # Save the generated manifest.json in the instance folder
+                output_path = instance_output_dir / 'manifest.json'
+                with open(output_path, "w", encoding="utf-8") as out_f:
+                    json.dump(manifest_data, out_f, ensure_ascii=False, indent=2)
+
+                print(f"✅ Success! {len(manifest_data)} syllables saved to {output_path}")
+
+            except Exception as e:
+                print(f"❌ Error processing {text_docx} for {instance_id}: {e}")
+
+    print("🎉 Base layer ingestion complete!")

@@ -1,207 +1,75 @@
-"use client";
+'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import manifest from '@/data/teachings/rpn_ngondro_recitation_manual/manifest.json';
-import sessions from '@/data/teachings/rpn_ngondro_recitation_manual/sessions_compiled.json';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { uchen, inter, getThemeCssVars } from '@/lib/theme';
 
-// Import our single source of truth
-import { uchen, inter, SIZES, getThemeCssVars } from '@/lib/theme';
-
-// ==========================================
-// 1. TIME PARSING & FORMATTING LOGIC
-// ==========================================
-const parseToSeconds = (ts) => {
-  if (!ts) return 0;
-  if (!ts.includes(':')) return parseFloat(ts) || 0;
-
-  const [hms, ms] = ts.split(',');
-  const parts = hms.split(':').map(Number);
-  let seconds = (parts[0] * 3600) + (parts[1] * 60) + parts[2];
-  return seconds + (ms ? parseInt(ms) / 1000 : 0);
-};
-
-const formatDuration = (startTs, endTs) => {
-  const start = parseToSeconds(startTs);
-  const end = endTs ? parseToSeconds(endTs) : start + 10;
-
-  const totalSeconds = Math.round(end - start);
-  if (totalSeconds <= 0) return '1s';
-
-  if (totalSeconds < 60) {
-    return `${totalSeconds}s`;
-  }
-
-  const mins = Math.floor(totalSeconds / 60);
-  const secs = totalSeconds % 60;
-
-  if (secs === 0) {
-    return `${mins}mn`;
-  }
-  return `${mins}mn${secs}s`;
-};
-
-export default function Home() {
-  const router = useRouter();
-  const [activeId, setActiveId] = useState(null);
-  const [contextOptions, setContextOptions] = useState([]);
-
-  const syllableMediaMap = useMemo(() => {
-    const map = {};
-    sessions.forEach(segment => {
-      if (segment.media) {
-        segment.syl_uuids.forEach(uuid => {
-          if (!map[uuid]) map[uuid] = [];
-          const exists = map[uuid].some(opt => opt.segId === (segment.global_seg_id || segment.seg_id));
-          if (!exists) {
-            map[uuid].push({
-              mediaUrl: segment.media,
-              startTime: segment.start,
-              endTime: segment.end,
-              segId: segment.global_seg_id || segment.seg_id,
-              source: segment.source_session,
-              sylUuids: segment.syl_uuids
-            });
-          }
-        });
-      }
-    });
-    return map;
-  }, []);
+export default function CatalogLandingPage() {
+  const [catalog, setCatalog] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const savedPos = sessionStorage.getItem('ebook-scroll-pos');
-    const savedActiveId = sessionStorage.getItem('ebook-active-id');
+    fetch('/data/catalog.json')
+      .then((res) => res.json())
+      .then((data) => {
+        setCatalog(data);
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load catalog:", err);
+        setIsLoading(false);
+      });
+  }, []);
 
-    if (savedActiveId && syllableMediaMap[savedActiveId]) {
-      setActiveId(savedActiveId);
-      setContextOptions(syllableMediaMap[savedActiveId]);
-      sessionStorage.removeItem('ebook-active-id');
-    }
+  if (isLoading) return null;
 
-    if (savedPos) {
-      setTimeout(() => {
-        window.scrollTo({ top: parseInt(savedPos), behavior: 'instant' });
-        sessionStorage.removeItem('ebook-scroll-pos');
-      }, 150);
-    }
-  }, [syllableMediaMap]);
+  // Grouping logic based on Instance_Type
+  const grouped = catalog.reduce((acc, teaching) => {
+    teaching.Instances.forEach(instance => {
+      // Format the label: 'oral_commentary' -> 'Oral Commentary'
+      const typeLabel = instance.Instance_Type === 'oral_commentary'
+        ? 'Oral Commentary'
+        : (instance.Instance_Type || 'Other');
 
-  const handleSyllableClick = (syllable, options) => {
-    if (activeId === syllable.id) {
-      setActiveId(null);
-      setContextOptions([]);
-    } else {
-      setActiveId(syllable.id);
-      setContextOptions(options);
-    }
-  };
-
-  const navigateToPlayer = (opt) => {
-    sessionStorage.setItem('ebook-scroll-pos', window.scrollY.toString());
-    if (activeId) sessionStorage.setItem('ebook-active-id', activeId);
-
-    router.push(`/player?session=${opt.source}&time=${opt.startTime}&media=${encodeURIComponent(opt.mediaUrl)}&sylId=${activeId}`);
-  };
-
-  const renderSegmentText = (opt, currentActiveId) => {
-    const segmentSyllables = manifest.filter(s => opt.sylUuids.includes(s.id));
-    return segmentSyllables.map(s => {
-      if (s.text === '\n') return " ";
-      const isTarget = currentActiveId === s.id;
-      const baseStyle = SIZES[s.size?.toUpperCase()] || SIZES.DEFAULT;
-      return (
-        <span
-          key={`ctx-${s.id}`}
-          className={isTarget ? "text-[var(--theme-gold)] font-bold" : "text-black"}
-          style={{
-            ...baseStyle,
-            fontSize: `${parseFloat(baseStyle.fontSize) * 0.55}rem`,
-            lineHeight: "1.55"
-          }}
-        >
-          {s.text}
-        </span>
-      );
+      if (!acc[typeLabel]) acc[typeLabel] = [];
+      acc[typeLabel].push({
+        id: instance.Instance_ID,
+        title: teaching.Title_bo
+      });
     });
-  };
+    return acc;
+  }, {});
 
   return (
-    <main className="min-h-screen bg-[#2F2F2F] p-4 md:p-12" style={getThemeCssVars()}>
-      <div className="max-w-5xl mx-auto bg-[#F9F9F7] rounded shadow-2xl">
-        <div className="p-8 md:p-16 text-justify leading-relaxed">
-          {manifest.map((syl) => {
-            if (syl.text === '\n') return <div key={syl.id} className="block h-8" />;
+    <main className="min-h-screen p-12 md:p-24 bg-[#F7FAFC]" style={getThemeCssVars()}>
+      <div className="max-w-3xl mx-auto">
 
-            const mediaOptions = syllableMediaMap[syl.id] || [];
-            const hasMedia = mediaOptions.length > 0;
-            const hasMultipleSegments = mediaOptions.length > 1; // Check for multiple options
-            const isSelected = activeId === syl.id;
+        {/* RESTORED PAGE TITLE */}
+        <header className="mb-20">
+          <h1 className="text-4xl md:text-5xl font-bold text-[#C19A5B]">
+            Khyentse Önang Digital Archive
+          </h1>
+        </header>
 
-            const fontClass = (syl.nature === 'TEXT' || syl.nature === 'PUNCT' || syl.nature === 'SYM') ? uchen.className : 'font-sans';
-            const sizeStyle = SIZES[syl.size?.toUpperCase()] || SIZES.DEFAULT;
-
-            // Determine exact text color
-            let textColorClass = "text-black";
-            if (!hasMedia) textColorClass = "text-[var(--theme-no-media)]";
-            else if (isSelected) textColorClass = "text-[var(--theme-gold)] font-bold";
-
-            return (
-              <React.Fragment key={syl.id}>
-                <span
-                  onClick={hasMedia ? () => handleSyllableClick(syl, mediaOptions) : undefined}
-                  className={`${fontClass} inline transition-all duration-300 ${textColorClass} ${
-                    hasMedia ? "cursor-pointer hover:text-[var(--theme-hover-red)]" : ""
-                  } ${
-                    // Apply permanent gold underline if multiple segments exist, otherwise transparent to prevent layout shifting
-                    hasMultipleSegments ? "border-b border-[var(--theme-gold)]" : (hasMedia ? "border-b border-transparent" : "")
-                  }`}
-                  style={{ ...sizeStyle, whiteSpace: 'pre-wrap' }}
-                >
-                  {syl.text}
-                </span>
-
-                {isSelected && (
-                  <div className="block w-full my-8 clear-both cursor-default">
-                    <div className="bg-[#EBEBEB] border-y-2 border-[var(--theme-gold-border)] py-12 px-8 md:px-16 -mx-8 md:-mx-16 relative shadow-[inner_0_2px_10px_rgba(0,0,0,0.05)] animate-in fade-in zoom-in-95 duration-300">
-
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setActiveId(null); }}
-                        className="absolute top-4 left-4 md:top-6 md:left-6 text-2xl font-light text-[var(--theme-gray)] hover:text-[var(--theme-hover-red)] transition-colors leading-none"
-                        aria-label="Close"
-                      >
-                        ✕
-                      </button>
-
-                      <div className="max-w-4xl mx-auto" style={{ textAlign: 'left' }}>
-                        <ul className="divide-y divide-[var(--theme-gold-divide)]">
-                          {contextOptions.map((opt, idx) => (
-                            <li key={idx} className="py-6 first:pt-0 last:pb-0">
-                              <button
-                                onClick={() => navigateToPlayer(opt)}
-                                className="w-full text-left hover:bg-white/60 p-4 rounded-xl transition-all flex flex-col md:flex-row gap-4 items-start md:items-end justify-between"
-                              >
-                                <div className={`${uchen.className} flex-grow`}>
-                                  {renderSegmentText(opt, activeId)}
-                                </div>
-
-                                <div className="flex-shrink-0 pt-2 md:pt-0">
-                                  {/* Using Inter for the badge */}
-                                  <span className={`${inter.className} inline-flex items-center justify-center px-1.5 py-0.5 text-sm font-medium text-[var(--theme-badge-text)] bg-[var(--theme-badge-color)] rounded-full opacity-80 tracking-wide`}>
-                                    {formatDuration(opt.startTime, opt.endTime)}
-                                  </span>
-                                </div>
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </React.Fragment>
-            );
-          })}
+        <div className="space-y-20">
+          {Object.entries(grouped).map(([type, items]) => (
+            <section key={type}>
+              <h2 className={`${inter.className} text-xs uppercase tracking-[0.4em] text-gray-400 mb-10 font-bold border-b border-gray-100 pb-4`}>
+                {type}
+              </h2>
+              <div className="space-y-8">
+                {items.map((item) => (
+                  <Link
+                    key={item.id}
+                    href={`/reader?instance=${item.id}`}
+                    className={`${uchen.className} block text-4xl md:text-5xl text-gray-800 hover:text-[var(--theme-hover-red)] transition-all duration-300 leading-relaxed`}
+                  >
+                    {item.title}
+                  </Link>
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
       </div>
     </main>

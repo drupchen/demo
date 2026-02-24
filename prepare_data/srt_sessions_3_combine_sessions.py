@@ -1,66 +1,71 @@
 import json
 from pathlib import Path
 
-# Define the root directory where all teachings live
-TEACHINGS_DIR = Path('output')
 
+def compile_all_instances():
+    print("--- Starting Session Compiler ---")
 
-def compile_all_teachings():
-    print("--- Starting Compiler ---")
+    # 1. Setup paths based on the new architecture
+    script_dir = Path(__file__).resolve().parent
+    output_dir = script_dir / "output"
 
-    # Check if the base directory exists
-    if not TEACHINGS_DIR.exists():
-        print(f"❌ ERROR: Cannot find base directory: {TEACHINGS_DIR}")
+    # Check if the output directory exists
+    if not output_dir.exists():
+        print(f"❌ ERROR: Cannot find output directory: {output_dir}")
         return
 
-    print(f"📂 Looking for teaching folders inside: {TEACHINGS_DIR}")
+    print(f"📂 Looking for instance folders inside: {output_dir}")
 
-    # iterdir() loops through the contents of the directory
-    for teaching_path in TEACHINGS_DIR.iterdir():
-
-        # Skip if it's not a directory (ignores hidden files like .DS_Store)
-        if not teaching_path.is_dir() or 'log' in teaching_path.stem:
+    # 2. Iterate through all instance folders in the output directory
+    for instance_path in output_dir.iterdir():
+        # We only care about directories (this skips catalog.json and hidden files)
+        if not instance_path.is_dir() or instance_path.name.startswith('.'):
             continue
 
-        teaching_name = teaching_path.name
-        print(f"\n📁 Processing Teaching Folder: {teaching_name}")
+        instance_id = instance_path.name
+        print(f"\n📁 Processing Instance Folder: {instance_id}")
 
-        # pathlib uses the / operator to cleanly join paths
-        sessions_dir = teaching_path
-        output_file = teaching_path.parent / f'{teaching_name}_compiled.json'
+        sessions_dir = instance_path / "sessions"
+        output_file = instance_path / f"{instance_id}_compiled_sessions.json"
 
         all_segments = []
 
+        # 3. Check if the sessions subdirectory exists
         if sessions_dir.exists() and sessions_dir.is_dir():
-            for filepath in sessions_dir.glob('*.json'):
+            # 4. Read all individual session JSONs chronologically
+            for filepath in sorted(sessions_dir.glob('*.json')):
                 with filepath.open('r', encoding='utf-8') as f:
                     try:
                         session_data = json.load(f)
 
-                        # --- THE NEW FIX: INJECT GLOBAL METADATA ---
+                        # --- INJECT GLOBAL METADATA ---
                         session_name = filepath.stem  # Gets filename without the .json
                         for segment in session_data:
                             # Create a unique Global ID
                             segment['global_seg_id'] = f"{session_name}_seg{segment['seg_id']}"
-                            # Tag the segment with its source teaching so the UI knows where it came from
+                            # Tag the segment with its source session
                             segment['source_session'] = session_name
-                            # -------------------------------------------
+
+                            # Note: media_original and media_restored are already in the segment
+                            # payload from Step 3!
 
                         all_segments.extend(session_data)
-                        print(f"      ➕ Merged: {filepath.name}")
+                        print(f"      ➕ Merged: {filepath.name} ({len(session_data)} segments)")
                     except Exception as e:
                         print(f"      ❌ Error reading {filepath.name}: {e}")
 
-            # Save the compiled file
+            # 5. Save the compiled file
             if len(all_segments) > 0:
                 with output_file.open('w', encoding='utf-8') as out:
                     json.dump(all_segments, out, ensure_ascii=False, indent=2)
-                print(f"   🎯 Success! Saved {len(all_segments)} segments to {output_file.name}")
+                print(f"   🎯 Success! Saved {len(all_segments)} total segments to {output_file.name}")
             else:
-                print(f"   ⚠️ Warning: No valid JSON files found inside {sessions_dir}")
+                print(f"   ⚠️ Warning: No valid session JSON files found inside {sessions_dir}")
         else:
-            print(f"   ⚠️ Warning: No 'sessions' sub-folder found in {teaching_path}")
+            print(f"   ⚠️ Warning: No 'sessions' sub-folder found in {instance_path}")
+
+    print("\n🎉 Compilation complete! The archive payloads are ready for Next.js.")
 
 
 if __name__ == '__main__':
-    compile_all_teachings()
+    compile_all_instances()
