@@ -7,11 +7,13 @@ export const uchen = Uchen({
   weight: '400',
   subsets: ['tibetan'],
   display: 'swap',
+  variable: '--font-uchen',
 });
 
 export const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
+  variable: '--font-inter',
 });
 
 // ==========================================

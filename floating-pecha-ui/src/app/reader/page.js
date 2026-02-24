@@ -37,7 +37,10 @@ function ReaderContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // Extract variables from the URL
   const instanceId = searchParams.get('instance') || 'rpn_ngondro_1';
+  const anchorSylId = searchParams.get('sylId'); // The segment's first syllable
+  const searchQuery = searchParams.get('q');     // The user's exact search term
 
   const [manifest, setManifest] = useState([]);
   const [sessions, setSessions] = useState([]);
@@ -46,6 +49,7 @@ function ReaderContent() {
   const [activeId, setActiveId] = useState(null);
   const [contextOptions, setContextOptions] = useState([]);
 
+  // Load manifest and session data
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -69,6 +73,7 @@ function ReaderContent() {
     loadData();
   }, [instanceId]);
 
+  // Map syllables to their media segments
   const syllableMediaMap = useMemo(() => {
     const map = {};
     sessions.forEach(segment => {
@@ -93,6 +98,91 @@ function ReaderContent() {
     return map;
   }, [sessions]);
 
+// Deep Linking Highlight Effect (Auto-scroll & Click multi-syllable phrases)
+  useEffect(() => {
+    if (!isLoading && manifest.length > 0 && anchorSylId && Object.keys(syllableMediaMap).length > 0) {
+
+      let targetUuids = [anchorSylId]; // Default to the first syllable of the segment
+
+      // If we have a specific search query, find ALL syllables it spans across
+      if (searchQuery) {
+        const mediaOptions = syllableMediaMap[anchorSylId];
+        if (mediaOptions && mediaOptions.length > 0) {
+          const segmentUuids = mediaOptions[0].sylUuids;
+
+          let concatenatedText = "";
+          let charIndexToUuid = [];
+
+          // Reconstruct the segment text and map every character index to its source syllable UUID
+          for (const uuid of segmentUuids) {
+            const syl = manifest.find(s => s.id === uuid);
+            if (syl) {
+              const startIdx = concatenatedText.length;
+              concatenatedText += syl.text;
+              const endIdx = concatenatedText.length;
+
+              // Map every character index of this syllable back to its UUID
+              for (let i = startIdx; i < endIdx; i++) {
+                charIndexToUuid[i] = uuid;
+              }
+            }
+          }
+
+          // Find the user's search term in our reconstructed text
+          const cleanQuery = searchQuery.trim();
+          const matchIndex = concatenatedText.indexOf(cleanQuery);
+
+          if (matchIndex !== -1) {
+            // Collect EVERY unique syllable UUID that the search string touches!
+            const matchedUuids = new Set();
+            for (let i = matchIndex; i < matchIndex + cleanQuery.length; i++) {
+              if (charIndexToUuid[i]) {
+                matchedUuids.add(charIndexToUuid[i]);
+              }
+            }
+            targetUuids = Array.from(matchedUuids);
+          }
+        }
+      }
+
+      // Slight delay to ensure React has painted the DOM fully
+      const timer = setTimeout(() => {
+        if (targetUuids.length > 0) {
+          // 1. Scroll to and click the FIRST syllable in the phrase to open the media player
+          const firstSyllable = document.getElementById(targetUuids[0]);
+          if (firstSyllable) {
+            firstSyllable.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            firstSyllable.click();
+          }
+
+          // 2. Highlight ALL syllables that make up the matched phrase
+          targetUuids.forEach(uuid => {
+            const targetSyllable = document.getElementById(uuid);
+            if (targetSyllable) {
+              targetSyllable.classList.add(
+                'bg-[#f7f3e7]',
+                'text-[#D4AF37]',
+                'font-bold',
+                'rounded',
+                'px-1',
+                'transition-colors',
+                'duration-700'
+              );
+
+              // Fade the highlight out gracefully after 4 seconds
+              setTimeout(() => {
+                targetSyllable.classList.remove('bg-[#f7f3e7]', 'text-[#D4AF37]', 'font-bold', 'rounded', 'px-1');
+              }, 4000);
+            }
+          });
+        }
+      }, 600);
+
+      return () => clearTimeout(timer);
+    }
+  }, [anchorSylId, searchQuery, isLoading, manifest.length, syllableMediaMap]);
+
+  // Session storage scroll restoration (for returning from the player)
   useEffect(() => {
     if (isLoading) return;
     const savedPos = sessionStorage.getItem('ebook-scroll-pos');
@@ -192,6 +282,7 @@ function ReaderContent() {
               return (
                 <React.Fragment key={syl.id}>
                   <span
+                    id={syl.id}
                     onClick={hasMedia ? () => handleSyllableClick(syl, mediaOptions) : undefined}
                     className={`${fontClass} inline transition-all duration-300 ${textColorClass} ${
                       hasMedia ? "cursor-pointer hover:text-[var(--theme-hover-red)]" : ""

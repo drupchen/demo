@@ -1,77 +1,169 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { uchen, inter, getThemeCssVars } from '@/lib/theme';
 
-export default function CatalogLandingPage() {
-  const [catalog, setCatalog] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+// We'll reuse the search logic here
+function HomeContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
+  // 1. State for View Mode and Search
+  const viewMode = searchParams.get('view') || 'browse'; // 'browse' or 'search'
+  const urlQuery = searchParams.get('q') || '';
+
+  const [catalog, setCatalog] = useState([]);
+  const [searchQuery, setSearchQuery] = useState(urlQuery);
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  // 2. Load Catalog Data
   useEffect(() => {
     fetch('/data/catalog.json')
-      .then((res) => res.json())
-      .then((data) => {
-        setCatalog(data);
-        setIsLoading(false);
-      })
-      .catch((err) => {
-        console.error("Failed to load catalog:", err);
-        setIsLoading(false);
-      });
+      .then(res => res.json())
+      .then(data => setCatalog(data))
+      .catch(err => console.error("Catalog load error:", err));
   }, []);
 
-  if (isLoading) return null;
+  // 3. Handle Search if in search mode
+  useEffect(() => {
+    if (viewMode === 'search' && urlQuery) {
+      performSearch(urlQuery);
+    }
+  }, [viewMode, urlQuery]);
 
-  // Grouping logic based on Instance_Type
-  const grouped = catalog.reduce((acc, teaching) => {
-    teaching.Instances.forEach(instance => {
-      // Format the label: 'oral_commentary' -> 'Oral Commentary'
-      const typeLabel = instance.Instance_Type === 'oral_commentary'
-        ? 'Oral Commentary'
-        : (instance.Instance_Type || 'Other');
+  const performSearch = async (q) => {
+    setIsSearching(true);
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      setSearchResults(data.results || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
-      if (!acc[typeLabel]) acc[typeLabel] = [];
-      acc[typeLabel].push({
-        id: instance.Instance_ID,
-        title: teaching.Title_bo
-      });
-    });
-    return acc;
-  }, {});
+  const toggleView = (mode) => {
+    const params = new URLSearchParams(searchParams);
+    params.set('view', mode);
+    if (mode === 'browse') params.delete('q');
+    router.push(`/?${params.toString()}`, { scroll: false });
+  };
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    router.push(`/?view=search&q=${encodeURIComponent(searchQuery)}`, { scroll: false });
+  };
 
   return (
-    <main className="min-h-screen p-12 md:p-24 bg-[#F7FAFC]" style={getThemeCssVars()}>
-      <div className="max-w-3xl mx-auto">
+    <main className="min-h-screen bg-[#F7FAFC]" style={getThemeCssVars()}>
+      <div className="max-w-5xl mx-auto px-6 py-12 md:py-24">
 
-        {/* RESTORED PAGE TITLE */}
-        <header className="mb-20">
-          <h1 className="text-4xl md:text-5xl font-bold text-[#C19A5B]">
-            Khyentse Önang Digital Archive
+        {/* Hero / Header */}
+        <header className="mb-16 text-center">
+          <h1 className={`${inter.className} text-3xl font-bold tracking-[0.3em] uppercase text-[#2F2F2F] mb-2`}>
+            Khyentse Önang
           </h1>
+          <p className={`${inter.className} text-xs font-medium tracking-[0.2em] uppercase text-[var(--theme-gray)]`}>
+            The Digital Archive of Dilgo Khyentse Rinpoche
+          </p>
         </header>
 
-        <div className="space-y-20">
-          {Object.entries(grouped).map(([type, items]) => (
-            <section key={type}>
-              <h2 className={`${inter.className} text-xs uppercase tracking-[0.4em] text-gray-400 mb-10 font-bold border-b border-gray-100 pb-4`}>
-                {type}
-              </h2>
-              <div className="space-y-8">
-                {items.map((item) => (
-                  <Link
-                    key={item.id}
-                    href={`/reader?instance=${item.id}`}
-                    className={`${uchen.className} block text-4xl md:text-5xl text-gray-800 hover:text-[var(--theme-hover-red)] transition-all duration-300 leading-relaxed`}
-                  >
-                    {item.title}
-                  </Link>
-                ))}
-              </div>
-            </section>
-          ))}
+        {/* ELEGANT TOGGLE TABS */}
+        <div className="flex justify-center gap-12 mb-16 border-b border-gray-100">
+          <button
+            onClick={() => toggleView('browse')}
+            className={`${inter.className} pb-4 text-xs font-bold uppercase tracking-[0.2em] transition-all border-b-2 ${
+              viewMode === 'browse'
+              ? "text-[var(--theme-hover-red)] border-[var(--theme-hover-red)]"
+              : "text-[var(--theme-gray)] border-transparent hover:text-black"
+            }`}
+          >
+            Browse Catalog
+          </button>
+          <button
+            onClick={() => toggleView('search')}
+            className={`${inter.className} pb-4 text-xs font-bold uppercase tracking-[0.2em] transition-all border-b-2 ${
+              viewMode === 'search'
+              ? "text-[var(--theme-hover-red)] border-[var(--theme-hover-red)]"
+              : "text-[var(--theme-gray)] border-transparent hover:text-black"
+            }`}
+          >
+            Search Text
+          </button>
         </div>
+
+        {/* VIEW: BROWSE CATALOG */}
+        {viewMode === 'browse' && (
+          <div className="grid gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {catalog.map((teaching) => (
+              <Link
+                key={teaching.Teaching_ID}
+                href={`/reader?instance=${teaching.Instances[0].Instance_ID}`}
+                className="group bg-white p-8 rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-[var(--theme-gold-border)] transition-all flex justify-between items-center"
+              >
+                <div>
+                  <h3 className={`${uchen.className} text-2xl mb-2 group-hover:text-[var(--theme-hover-red)] transition-colors`}>
+                    {teaching.Title_bo}
+                  </h3>
+                  <p className={`${inter.className} text-[10px] uppercase tracking-widest text-[var(--theme-gray)]`}>
+                    {teaching.Instances.length} Version(s) Available
+                  </p>
+                </div>
+                <span className="text-gray-300 group-hover:text-[var(--theme-gold)] transition-colors text-2xl">→</span>
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {/* VIEW: SEARCH TEXT */}
+        {viewMode === 'search' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <form onSubmit={handleSearchSubmit} className="mb-12">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Enter a Tibetan word (e.g. མི་རྟག་)..."
+                  className={`${uchen.className} w-full px-6 pt-8 pb-5 text-2xl rounded-xl shadow-sm border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[var(--theme-gold-border)] bg-white text-gray-800`}
+                />
+                <button type="submit" className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-xl">🔍</button>
+              </div>
+            </form>
+
+            <div className="space-y-6">
+              {searchResults.map((hit) => (
+                <Link
+                  key={hit.id}
+                  href={`/reader?instance=${hit.instance_id}&session=${hit.session_id}&time=${hit.start}&media=${encodeURIComponent(hit.media_url)}&sylId=${hit.first_syl_id}&q=${encodeURIComponent(urlQuery)}`}
+                  className="block bg-white p-6 rounded-xl border border-gray-100 hover:border-[var(--theme-gold-border)] transition-all"
+                >
+                   <div className={`${inter.className} text-[10px] uppercase tracking-tighter text-[var(--theme-gray)] mb-2`}>
+                    {hit.teaching_title} • {hit.start}
+                  </div>
+                  <p className={`${uchen.className} text-2xl leading-relaxed text-black`} dangerouslySetInnerHTML={{ __html: hit.highlight }} />
+                </Link>
+              ))}
+              {urlQuery && !isSearching && searchResults.length === 0 && (
+                <p className="text-center text-gray-400 py-12">No matching segments found.</p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </main>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={null}>
+      <HomeContent />
+    </Suspense>
   );
 }
