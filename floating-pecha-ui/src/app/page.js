@@ -3,21 +3,24 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useSession } from "next-auth/react";
 import { uchen, inter, getThemeCssVars } from '@/lib/theme';
 
-// We'll reuse the search logic here
 function HomeContent() {
+  const { data: session } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
 
   // 1. State for View Mode and Search
-  const viewMode = searchParams.get('view') || 'browse'; // 'browse' or 'search'
+  const viewMode = searchParams.get('view') || 'browse';
   const urlQuery = searchParams.get('q') || '';
 
+  // Consolidated State Variables
   const [catalog, setCatalog] = useState([]);
-  const [searchQuery, setSearchQuery] = useState(urlQuery);
+  const [query, setQuery] = useState(urlQuery);
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
 
   // 2. Load Catalog Data
   useEffect(() => {
@@ -34,14 +37,22 @@ function HomeContent() {
     }
   }, [viewMode, urlQuery]);
 
-  const performSearch = async (q) => {
+  const performSearch = async (searchString) => {
+    if (!searchString.trim()) return;
+
     setIsSearching(true);
+    setHasSearched(true);
+
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const userLevel = session?.user?.accessLevel || 0;
+      const res = await fetch(`/api/search?q=${encodeURIComponent(searchString)}&level=${userLevel}`);
+      if (!res.ok) throw new Error("Network response was not OK");
+
       const data = await res.json();
       setSearchResults(data.results || []);
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error("Search error:", error);
+      setSearchResults([]);
     } finally {
       setIsSearching(false);
     }
@@ -56,7 +67,9 @@ function HomeContent() {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    router.push(`/?view=search&q=${encodeURIComponent(searchQuery)}`, { scroll: false });
+    if (query.trim()) {
+      performSearch(query);
+    }
   };
 
   // 4. Group search results by teaching title
@@ -66,6 +79,20 @@ function HomeContent() {
     acc[title].push(hit);
     return acc;
   }, {});
+
+  // 5. Apply the "Access Onion" to the catalog list
+  const userLevel = session?.user?.accessLevel || 0;
+
+  const filteredCatalog = catalog.filter(teaching => {
+    // Check every possible name the JSON might be using, default to 4 if completely missing
+    const rawLevel = teaching.Access_Level ?? teaching.Practice_Level ?? teaching.access_level ?? 4;
+
+    // Force both to be integers so JavaScript doesn't accidentally compare strings (like "1" <= 0)
+    const requiredLevel = parseInt(rawLevel, 10);
+    const currentLevel = parseInt(userLevel, 10);
+
+    return requiredLevel <= currentLevel;
+  });
 
   return (
     <main className="min-h-screen bg-[#F7FAFC]" style={getThemeCssVars()}>
@@ -108,10 +135,10 @@ function HomeContent() {
         {/* VIEW: BROWSE CATALOG */}
         {viewMode === 'browse' && (
           <div className="grid gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            {catalog.map((teaching) => (
+            {filteredCatalog.map((teaching) => (
               <Link
                 key={teaching.Teaching_ID}
-                href={`/reader?instance=${teaching.Instances[0].Instance_ID}`}
+                href={`/reader?instance=${teaching.Instances[0]?.Instance_ID}`}
                 className="group bg-white p-8 rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-[var(--theme-gold-border)] transition-all flex justify-between items-center"
               >
                 <div>
@@ -119,7 +146,7 @@ function HomeContent() {
                     {teaching.Title_bo}
                   </h3>
                   <p className={`${inter.className} text-[10px] uppercase tracking-widest text-[var(--theme-gray)]`}>
-                    {teaching.Instances.length} Version(s) Available
+                    {teaching.Instances?.length || 0} Version(s) Available
                   </p>
                 </div>
                 <svg
@@ -139,6 +166,13 @@ function HomeContent() {
                 </svg>
               </Link>
             ))}
+
+            {/* Show a message if no catalog items match the user's level */}
+            {filteredCatalog.length === 0 && (
+              <div className="text-center py-20 border border-dashed border-gray-200 rounded-2xl">
+                <p className={`${inter.className} text-[var(--theme-gray)] text-lg tracking-wide`}>No teachings available for this access level.</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -148,8 +182,8 @@ function HomeContent() {
             <form onSubmit={handleSearchSubmit} className="mb-12 relative">
               <input
                 type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
                 placeholder="Enter a Tibetan word (e.g. མི་རྟག་)..."
                 className="w-full px-8 pt-10 pb-6 text-2xl md:text-3xl leading-relaxed rounded-xl shadow-sm border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[var(--theme-gold-border)] bg-white text-gray-800 transition-all"
                 style={{ fontFamily: `${inter.style.fontFamily}, ${uchen.style.fontFamily}, sans-serif` }}
@@ -196,7 +230,7 @@ function HomeContent() {
                     {hits.map((hit) => (
                       <Link
                         key={hit.id}
-                        href={`/reader?instance=${hit.instance_id}&session=${hit.session_id}&time=${hit.start}&media=${encodeURIComponent(hit.media_url)}&sylId=${hit.first_syl_id}&q=${encodeURIComponent(urlQuery)}`}
+                        href={`/reader?instance=${hit.instance_id}&sylId=${hit.first_syl_id}&q=${encodeURIComponent(urlQuery)}`}
                         className="group block bg-white p-6 md:p-8 rounded-xl border border-gray-100 hover:border-[var(--theme-gold-border)] hover:shadow-md transition-all"
                       >
                          <div className={`${inter.className} flex items-center gap-3 text-xs font-medium text-[var(--theme-gray)] uppercase tracking-wider mb-4`}>

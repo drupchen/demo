@@ -16,18 +16,18 @@ services:
       - opensearch-data:/usr/share/opensearch/data
 
   # 2. The Next.js Website
-  ui:
-    build:
-      context: ./floating-pecha-ui
-      dockerfile: Dockerfile
-    container_name: demo-ui
-    ports:
-      - "3000:3000"
-    environment:
-      # This tells Next.js exactly how to talk to the OpenSearch container!
-      - OPENSEARCH_URL=http://opensearch:9200
-    depends_on:
-      - opensearch
+#  ui:
+#    build:
+#      context: ./floating-pecha-ui
+#      dockerfile: Dockerfile
+#    container_name: demo-ui
+#    ports:
+#      - "3000:3000"
+#    environment:
+#      # This tells Next.js exactly how to talk to the OpenSearch container!
+#      - OPENSEARCH_URL=http://opensearch:9200
+#    depends_on:
+#      - opensearch
 
 volumes:
   opensearch-data:

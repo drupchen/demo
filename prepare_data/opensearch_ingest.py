@@ -22,8 +22,9 @@ def create_index():
                 "session_id": {"type": "keyword"},
                 "start": {"type": "keyword"},
                 "media_url": {"type": "keyword"},
-                "text": {"type": "text"},  # The searchable concatenated Tibetan text
-                "syl_uuids": {"type": "keyword"}
+                "text": {"type": "text"},
+                "syl_uuids": {"type": "keyword"},
+                "access_level": {"type": "integer"}  # NEW: strict numeric filter
             }
         }
     }
@@ -59,6 +60,9 @@ def generate_segment_documents():
             with sessions_path.open("r", encoding="utf-8") as sf:
                 sessions_data = json.load(sf)
 
+            # Extract access level from the parent teaching
+            access_level = teaching.get("Access_Level", 4)  # Default to max security
+
             # Build documents
             for segment in sessions_data:
                 # Reconstruct the full text for the segment from the syllable UUIDs
@@ -80,7 +84,8 @@ def generate_segment_documents():
                         "end": segment["end"],
                         "media_url": media_url,
                         "text": segment_text.strip(),
-                        "first_syl_id": anchor_syl_id
+                        "first_syl_id": anchor_syl_id,
+                        "access_level": access_level  # NEW: Attach to segment
                     }
                 }
 

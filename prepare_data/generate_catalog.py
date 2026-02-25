@@ -4,8 +4,7 @@ from pathlib import Path
 
 
 def generate_global_catalog():
-    # 1. Setup modern paths using pathlib
-    # Assuming this script is run from within the 'prepare_data' directory
+    # 1. Setup paths
     base_dir = Path("/media/drupchen/Khyentse Önang/Website/website_data")
     output_dir = Path(__file__).resolve().parent / 'output'
     db_dir = base_dir / "db"
@@ -15,7 +14,7 @@ def generate_global_catalog():
     sessions_tsv = db_dir / "Khyentse Önang Teachings Relational Database - 3 Sessions.tsv"
     output_json_path = output_dir / "catalog.json"
 
-    # Verify all files exist
+    # Verify files
     for file_path in [teachings_tsv, instances_tsv, sessions_tsv]:
         if not file_path.exists():
             print(f"❌ Error: Database file not found at {file_path}")
@@ -24,57 +23,73 @@ def generate_global_catalog():
     print("📚 Reading relational TSV database...")
 
     catalog_map = {}
-    instances_map = {}  # We keep a flat lookup dictionary for instances to easily attach sessions
+    instances_map = {}
 
-    # 1. Parse Tab 1: Teachings (The Root Texts)
+    # 1. Parse Tab 1: Teachings
     with teachings_tsv.open(mode="r", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f, delimiter='\t')
         for row in reader:
-            teaching_id = row.get("Teaching_ID")
-            if teaching_id:
-                clean_row = {k: v for k, v in row.items() if v and v.strip() != ""}
-                clean_row["Instances"] = {}  # Using a dict temporarily for easier lookup
-                catalog_map[teaching_id] = clean_row
+            # Clean keys and values (removes hidden tabs from spreadsheet)
+            clean_row = {str(k).strip(): str(v).strip() for k, v in row.items() if k is not None}
 
-    # 2. Parse Tab 2: Instances (The Teaching Events)
+            teaching_id = clean_row.get("Teaching_ID")
+            if not teaching_id:
+                continue
+
+            # Extract Level: Handles "1", "0", or empty strings gracefully
+            raw_level = clean_row.get("Practice_Level")
+            try:
+                access_level = int(raw_level) if raw_level and raw_level.isdigit() else 4
+            except ValueError:
+                access_level = 4
+
+            catalog_map[teaching_id] = {
+                "Teaching_ID": teaching_id,
+                "Title_bo": clean_row.get("Title_bo", ""),
+                "Access_Level": access_level,
+                "Instances": {}  # <--- FIXED: Initialize as dict to avoid TypeError
+            }
+
+    # 2. Parse Tab 2: Instances
     with instances_tsv.open(mode="r", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f, delimiter='\t')
         for row in reader:
-            teaching_id = row.get("Teaching_ID")
-            instance_id = row.get("Instance_ID")
+            # Clean row data
+            clean_row = {str(k).strip(): str(v).strip() for k, v in row.items() if k is not None and v}
+
+            teaching_id = clean_row.get("Teaching_ID")
+            instance_id = clean_row.get("Instance_ID")
 
             if instance_id and teaching_id in catalog_map:
-                clean_row = {k: v for k, v in row.items() if v and v.strip() != ""}
-                clean_row["Sessions"] = []  # Prepare array for Tab 3 data
+                clean_row["Sessions"] = []
 
-                # Link to Parent Teaching
+                # This now works because "Instances" is a dictionary
                 catalog_map[teaching_id]["Instances"][instance_id] = clean_row
-                # Add to flat lookup map for the next step
                 instances_map[instance_id] = clean_row
-            elif instance_id and teaching_id not in catalog_map:
+            elif instance_id:
                 print(f"⚠️ Warning: Instance '{instance_id}' missing parent Teaching '{teaching_id}'.")
 
-    # 3. Parse Tab 3: Sessions (Media & Subtitles)
+    # 3. Parse Tab 3: Sessions
     with sessions_tsv.open(mode="r", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f, delimiter='\t')
         for row in reader:
-            instance_id = row.get("Instance_ID")
-            session_id = row.get("Session_ID")
+            # Clean row data
+            clean_row = {str(k).strip(): str(v).strip() for k, v in row.items() if k is not None and v}
+
+            instance_id = clean_row.get("Instance_ID")
+            session_id = clean_row.get("Session_ID")
 
             if session_id and instance_id in instances_map:
-                clean_row = {k: v for k, v in row.items() if v and v.strip() != ""}
-                # Link to Parent Instance
                 instances_map[instance_id]["Sessions"].append(clean_row)
-            elif session_id and instance_id not in instances_map:
+            elif session_id:
                 print(f"⚠️ Warning: Session '{session_id}' missing parent Instance '{instance_id}'.")
 
     # 4. Cleanup and Convert to JSON Array
     final_catalog = []
     for teaching in catalog_map.values():
-        # Convert the Instances dict back into a list for the final JSON
+        # Convert the internal dict back into a list for the frontend
         teaching["Instances"] = list(teaching["Instances"].values())
 
-        # Only add teachings that actually have valid instances attached
         if len(teaching["Instances"]) > 0:
             final_catalog.append(teaching)
 

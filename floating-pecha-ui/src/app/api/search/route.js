@@ -1,7 +1,7 @@
 import { Client } from '@opensearch-project/opensearch';
 import { NextResponse } from 'next/server';
 
-// Initialize the OpenSearch client (Plain HTTP to match our Docker setup)
+// Initialize the OpenSearch client safely for native local development
 const client = new Client({
   node: process.env.OPENSEARCH_URL || 'http://localhost:9200',
 });
@@ -9,6 +9,10 @@ const client = new Client({
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get('q');
+
+  // Safely parse the user level. If it's undefined or invalid, lock it down to Level 0
+  const levelParam = searchParams.get('level');
+  const userLevel = levelParam && !isNaN(levelParam) ? parseInt(levelParam, 10) : 0;
 
   if (!q) {
     return NextResponse.json({ results: [] });
@@ -19,8 +23,24 @@ export async function GET(request) {
       index: 'khyentse-archive-segments',
       body: {
         query: {
-          match_phrase: {
-            text: q // match_phrase ensures syllables are found in the correct order
+          bool: {
+            must: [
+              {
+                match_phrase: {
+                  text: q
+                }
+              }
+            ],
+            // The "Access Onion" Filter
+            filter: [
+              {
+                range: {
+                  access_level: {
+                    lte: userLevel
+                  }
+                }
+              }
+            ]
           }
         },
         highlight: {
@@ -31,7 +51,7 @@ export async function GET(request) {
             }
           }
         },
-        size: 50 // limit to top 50 results
+        size: 50
       }
     });
 
@@ -39,13 +59,13 @@ export async function GET(request) {
       id: hit._id,
       score: hit._score,
       ...hit._source,
-      // Use the highlighted text if available, otherwise fallback to standard text
       highlight: hit.highlight?.text?.[0] || hit._source.text
     }));
 
     return NextResponse.json({ results: hits });
+
   } catch (error) {
-    console.error('OpenSearch Error:', error);
-    return NextResponse.json({ error: 'Search failed' }, { status: 500 });
+    console.error("OpenSearch Error:", error.meta?.body?.error || error.message || error);
+    return NextResponse.json({ error: "Failed to search the archive" }, { status: 500 });
   }
 }
