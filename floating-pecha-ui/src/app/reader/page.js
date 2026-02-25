@@ -99,78 +99,112 @@ function ReaderContent() {
   }, [sessions]);
 
 // Deep Linking Highlight Effect (Auto-scroll & Click multi-syllable phrases)
-useEffect(() => {
-  // We need manifest to render and the media map to know which syllables are clickable
-  const hasData = !isLoading && manifest.length > 0 && Object.keys(syllableMediaMap).length > 0;
+  useEffect(() => {
+    // 1. UNCONDITIONAL DEBUG LOGGING (This will always print!)
+    console.log("=== EFFECT TRIGGERED ===");
+    console.log("isLoading:", isLoading);
+    console.log("manifest.length:", manifest.length);
+    console.log("anchorSylId:", anchorSylId);
+    console.log("syllableMediaMap keys:", Object.keys(syllableMediaMap).length);
 
-  if (hasData && anchorSylId) {
-    let targetUuids = [anchorSylId];
+    // 2. Early exit (but NO LONGER requiring syllableMediaMap to be populated)
+    if (isLoading || manifest.length === 0 || !anchorSylId) {
+      console.log("⏳ Waiting for data...");
+      return;
+    }
 
-    // 1. Logic for Phrase Matching (Search term spans multiple syllables)
+    let targetUuids = [anchorSylId]; // Default to the first syllable
+
+    // 3. BULLETPROOF PHRASE MATCHER
     if (searchQuery) {
-      const mediaOptions = syllableMediaMap[anchorSylId];
-      if (mediaOptions && mediaOptions.length > 0) {
-        const segmentUuids = mediaOptions[0].sylUuids;
-        let concatenatedText = "";
+      const anchorIndex = manifest.findIndex(s => s.id === anchorSylId);
+      console.log("Anchor Index in Manifest:", anchorIndex);
+
+      if (anchorIndex !== -1) {
+        // Grab a generous window of text starting from the anchor
+        const searchWindow = manifest.slice(anchorIndex, anchorIndex + 150);
+        let compressedText = "";
         let charIndexToUuid = [];
 
-        for (const uuid of segmentUuids) {
-          const syl = manifest.find(s => s.id === uuid);
-          if (syl) {
-            const startIdx = concatenatedText.length;
-            concatenatedText += syl.text;
-            for (let i = startIdx; i < concatenatedText.length; i++) {
-              charIndexToUuid[i] = uuid;
+        for (const syl of searchWindow) {
+          if (syl && syl.text) {
+            for (let i = 0; i < syl.text.length; i++) {
+              const char = syl.text[i];
+              // Strip ALL spaces, newlines, and Tibetan punctuation
+              if (!/[ \n\r\t་།]/.test(char)) {
+                compressedText += char.toLowerCase();
+                charIndexToUuid.push(syl.id);
+              }
             }
           }
         }
 
-        const matchIndex = concatenatedText.indexOf(searchQuery.trim());
+        const cleanQuery = searchQuery.replace(/[ \n\r\t་།]/g, '').toLowerCase();
+        const matchIndex = compressedText.indexOf(cleanQuery);
+
+        console.log("--- PHRASE MATCHER ---");
+        console.log("Clean Query:", cleanQuery);
+        console.log("Compressed Text (Snippet):", compressedText.substring(0, 50));
+        console.log("Match Index:", matchIndex);
+
         if (matchIndex !== -1) {
           const matchedUuids = new Set();
-          for (let i = matchIndex; i < matchIndex + searchQuery.length; i++) {
-            if (charIndexToUuid[i]) matchedUuids.add(charIndexToUuid[i]);
+          for (let i = matchIndex; i < matchIndex + cleanQuery.length; i++) {
+            if (charIndexToUuid[i]) {
+              matchedUuids.add(charIndexToUuid[i]);
+            }
           }
           targetUuids = Array.from(matchedUuids);
+          console.log("✅ Phrase matched perfectly! UUIDs:", targetUuids);
+        } else {
+          console.log("❌ Phrase match failed. Falling back to anchor ID.");
         }
       }
     }
 
-    // 2. Execution: Scroll, Open Drawer, and Highlight
+    // 4. SCROLL & HIGHLIGHT EXECUTION
     const timer = setTimeout(() => {
       if (targetUuids.length > 0) {
         const firstSyllable = document.getElementById(targetUuids[0]);
 
         if (firstSyllable) {
-          // Scroll to the element
-          firstSyllable.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          console.log("🎯 DOM Element found! Clicking and scrolling...");
 
-          // Force click to open the "Segment List" drawer
-          firstSyllable.click();
+          // Only click if it actually has media options (prevents breaking text-only links)
+          if (syllableMediaMap[targetUuids[0]] || syllableMediaMap[anchorSylId]) {
+             firstSyllable.click();
+          }
 
-          // Apply Persistent Highlight
-          targetUuids.forEach(uuid => {
-            const el = document.getElementById(uuid);
-            if (el) {
-              // We use a stronger, persistent class first
-              el.style.backgroundColor = '#FEF3C7'; // Light yellow
-              el.style.transition = 'background-color 2s ease-in';
-              el.classList.add('ring-2', 'ring-yellow-400', 'rounded-sm');
-
-              // Optional: fade out after a longer duration (8 seconds)
-              setTimeout(() => {
-                el.style.backgroundColor = 'transparent';
-                el.classList.remove('ring-2', 'ring-yellow-400');
-              }, 8000);
-            }
-          });
+          setTimeout(() => {
+            firstSyllable.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 150);
+        } else {
+           console.log("❌ ERROR: DOM Element missing for ID:", targetUuids[0]);
         }
+
+        targetUuids.forEach(uuid => {
+          const targetSyllable = document.getElementById(uuid);
+          if (targetSyllable) {
+            targetSyllable.classList.add(
+              'bg-[#f7f3e7]',
+              'text-[#D4AF37]',
+              'font-bold',
+              'rounded',
+              'px-1',
+              'transition-colors',
+              'duration-700'
+            );
+
+            setTimeout(() => {
+              targetSyllable.classList.remove('bg-[#f7f3e7]', 'text-[#D4AF37]', 'font-bold', 'rounded', 'px-1');
+            }, 4000);
+          }
+        });
       }
-    }, 800); // Increased delay to 800ms to ensure uchen font is rendered
+    }, 600);
 
     return () => clearTimeout(timer);
-  }
-}, [anchorSylId, searchQuery, isLoading, manifest.length, syllableMediaMap]);
+  }, [anchorSylId, searchQuery, isLoading, manifest.length, syllableMediaMap]);
 
   // Session storage scroll restoration (for returning from the player)
   useEffect(() => {
@@ -243,21 +277,7 @@ useEffect(() => {
             className="group flex items-center gap-2 text-[var(--theme-gray)] hover:text-[var(--theme-hover-red)] transition-all"
             aria-label="Back to Catalog"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="transition-transform duration-300 group-hover:-translate-x-1"
-            >
-              <line x1="19" y1="12" x2="5" y2="12"></line>
-              <polyline points="12 19 5 12 12 5"></polyline>
-            </svg>
+            <span className="text-2xl transition-transform group-hover:-translate-x-1">←</span>
             <span className={`${inter.className} text-xs font-bold uppercase tracking-[0.2em]`}>
               Back to Catalog
             </span>
@@ -269,7 +289,7 @@ useEffect(() => {
         <div className="bg-[#F9F9F7] rounded-xl shadow-2xl border border-gray-100">
           <div className="p-8 md:p-16 text-justify leading-relaxed">
             {manifest.map((syl) => {
-              if (syl.text === '\n') return <div key={syl.id} className="block h-8" />;
+              if (syl.text === '\n') return <div id={syl.id} key={syl.id} className="block h-8" />;
 
               const mediaOptions = syllableMediaMap[syl.id] || [];
               const hasMedia = mediaOptions.length > 0;
