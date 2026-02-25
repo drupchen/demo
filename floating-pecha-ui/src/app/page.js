@@ -65,11 +65,11 @@ function HomeContent() {
 
         {/* Hero / Header */}
         <header className="mb-16 text-center">
-          <h1 className={`${inter.className} text-3xl font-bold tracking-[0.3em] uppercase text-[#2F2F2F] mb-2`}>
-            Khyentse Önang
+          <h1 className={`${inter.className} text-4xl md:text-5xl font-bold tracking-[0.3em] uppercase text-[var(--theme-gold)] mb-4`}>
+            Teaching Archives
           </h1>
           <p className={`${inter.className} text-xs font-medium tracking-[0.2em] uppercase text-[var(--theme-gray)]`}>
-            The Digital Archive of Dilgo Khyentse Rinpoche
+            The Digital Archives of Dilgo Khyentse Rinpoche
           </p>
         </header>
 
@@ -114,7 +114,21 @@ function HomeContent() {
                     {teaching.Instances.length} Version(s) Available
                   </p>
                 </div>
-                <span className="text-gray-300 group-hover:text-[var(--theme-gold)] transition-colors text-2xl">→</span>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-gray-300 group-hover:text-[var(--theme-gold)] transition-all duration-300 group-hover:translate-x-1"
+                >
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                  <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
               </Link>
             ))}
           </div>
@@ -132,7 +146,27 @@ function HomeContent() {
                   placeholder="Enter a Tibetan word (e.g. མི་རྟག་)..."
                   className={`${uchen.className} w-full px-6 pt-8 pb-5 text-2xl rounded-xl shadow-sm border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[var(--theme-gold-border)] bg-white text-gray-800`}
                 />
-                <button type="submit" className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-xl">🔍</button>
+                <button
+                  type="submit"
+                  aria-label="Submit search"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-3 text-gray-400 hover:text-[var(--theme-gold)] hover:bg-[var(--theme-gold)]/10 rounded-full transition-all duration-300 group"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="transition-transform duration-300 group-hover:scale-110"
+                  >
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                </button>
               </div>
             </form>
 

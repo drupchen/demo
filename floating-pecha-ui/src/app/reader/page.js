@@ -253,7 +253,21 @@ function ReaderContent() {
             className="group flex items-center gap-2 text-[var(--theme-gray)] hover:text-[var(--theme-hover-red)] transition-all"
             aria-label="Back to Catalog"
           >
-            <span className="text-2xl transition-transform group-hover:-translate-x-1">←</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="transition-transform duration-300 group-hover:-translate-x-1"
+            >
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
             <span className={`${inter.className} text-xs font-bold uppercase tracking-[0.2em]`}>
               Back to Catalog
             </span>

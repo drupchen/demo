@@ -60,7 +60,21 @@ function SearchContent() {
         {/* Header */}
         <div className="mb-12 flex items-center justify-between">
           <Link href="/" className="group flex items-center gap-2 text-[var(--theme-gray)] hover:text-[var(--theme-hover-red)] transition-all">
-            <span className="text-2xl transition-transform group-hover:-translate-x-1">←</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="transition-transform duration-300 group-hover:-translate-x-1"
+            >
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
             <span className={`${inter.className} text-xs font-bold uppercase tracking-[0.2em]`}>
               Back to Catalog
             </span>
@@ -79,7 +93,7 @@ function SearchContent() {
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Enter a Tibetan word (e.g. མི་རྟག་)..."
               // 1. Remove uchen.className from the class list
-              className={`w-full px-6 pt-8 pb-5 text-2xl rounded-xl shadow-sm border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[var(--theme-gold-border)] bg-white text-gray-800`}
+              className="w-full px-8 pt-10 pb-6 text-2xl md:text-3xl leading-relaxed rounded-xl shadow-sm border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[var(--theme-gold-border)] bg-white text-[var(--theme-gray)] transition-all"
               // 2. Add the fallback stack as an inline style!
               style={{
                 // We take Inter, remove 'sans-serif', and chain it directly to Uchen!
