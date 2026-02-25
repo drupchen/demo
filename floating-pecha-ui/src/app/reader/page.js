@@ -165,22 +165,19 @@ function ReaderContent() {
     // 4. SCROLL & HIGHLIGHT EXECUTION
     const timer = setTimeout(() => {
       if (targetUuids.length > 0) {
-        const firstSyllable = document.getElementById(targetUuids[0]);
-
-        if (firstSyllable) {
-          console.log("🎯 DOM Element found! Clicking and scrolling...");
-
-          // Only click if it actually has media options (prevents breaking text-only links)
-          if (syllableMediaMap[targetUuids[0]] || syllableMediaMap[anchorSylId]) {
-             firstSyllable.click();
-          }
-
-          setTimeout(() => {
+          // 1. Scroll to and explicitly open the FIRST syllable in the phrase
+          const firstSyllable = document.getElementById(targetUuids[0]);
+          if (firstSyllable) {
             firstSyllable.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }, 150);
-        } else {
-           console.log("❌ ERROR: DOM Element missing for ID:", targetUuids[0]);
-        }
+
+            // Open the drawer directly instead of simulating a click.
+            // This prevents it from toggling closed when returning from the player!
+            const options = syllableMediaMap[targetUuids[0]] || syllableMediaMap[anchorSylId];
+            if (options && options.length > 0) {
+              setActiveId(targetUuids[0]);
+              setContextOptions(options);
+            }
+          }
 
         targetUuids.forEach(uuid => {
           const targetSyllable = document.getElementById(uuid);

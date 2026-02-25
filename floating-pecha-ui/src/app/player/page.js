@@ -167,6 +167,9 @@ function PlayerContent() {
   };
 
   useEffect(() => {
+    // 1. Force the main browser window to stay at the top so the 'X' is always visible
+    window.scrollTo(0, 0);
+
     let currentSeg = dynamicTranscript.find(
       (seg) => currentTimeMs >= seg.startTimeMs && currentTimeMs < seg.endTimeMs
     );
@@ -181,8 +184,18 @@ function PlayerContent() {
     if (currentSeg && currentSeg.id !== activeSegId) {
       setActiveSegId(currentSeg.id);
       const activeElement = document.getElementById(`segment-${currentSeg.id}`);
+
       if (activeElement && transcriptRef.current) {
-        activeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // 2. Scroll ONLY the inner transcript box, leaving the outer page alone
+        const container = transcriptRef.current;
+
+        // Calculate the exact pixel location to center the text inside the box
+        const targetScrollTop = activeElement.offsetTop - (container.clientHeight / 2) + (activeElement.clientHeight / 2);
+
+        container.scrollTo({
+          top: Math.max(0, targetScrollTop), // Prevent negative scroll values
+          behavior: 'smooth'
+        });
       }
     }
   }, [currentTimeMs, dynamicTranscript, activeSegId]);
@@ -234,7 +247,7 @@ function PlayerContent() {
             />
           </div>
 
-          <div ref={transcriptRef} className={`${uchen.className} p-10 text-3xl leading-[1.8] text-justify max-h-[60vh] overflow-y-auto`}>
+          <div ref={transcriptRef} className={`relative ${uchen.className} p-10 text-3xl leading-[1.8] text-justify max-h-[60vh] overflow-y-auto`}>
             <p>
               {dynamicTranscript.map((seg, index) => {
                 const isActive = activeSegId === seg.id;

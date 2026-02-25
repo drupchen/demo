@@ -15,7 +15,7 @@ export default function ArchiveHeader() {
       <div className={`${inter.className} max-w-6xl mx-auto px-6 py-4 flex justify-between items-center text-sm`}>
 
         <div className="flex items-center gap-8">
-          <Link href="/" className="text-[var(--theme-gold)] font-extrabold text-lg tracking-wide hover:text-[var(--theme-hover-red)] transition-colors">
+          <Link href="/" className="text-[var(--theme-hover-red)] font-extrabold text-lg tracking-wide hover:text-[var(--theme-hover-red)] transition-colors">
             Khyentse Önang
           </Link>
         </div>
