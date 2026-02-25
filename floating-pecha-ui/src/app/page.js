@@ -59,6 +59,14 @@ function HomeContent() {
     router.push(`/?view=search&q=${encodeURIComponent(searchQuery)}`, { scroll: false });
   };
 
+  // 4. Group search results by teaching title
+  const groupedResults = searchResults.reduce((acc, hit) => {
+    const title = hit.teaching_title || hit.instance_id;
+    if (!acc[title]) acc[title] = [];
+    acc[title].push(hit);
+    return acc;
+  }, {});
+
   return (
     <main className="min-h-screen bg-[#F7FAFC]" style={getThemeCssVars()}>
       <div className="max-w-5xl mx-auto px-6 py-12 md:py-24">
@@ -137,54 +145,82 @@ function HomeContent() {
         {/* VIEW: SEARCH TEXT */}
         {viewMode === 'search' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <form onSubmit={handleSearchSubmit} className="mb-12">
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Enter a Tibetan word (e.g. མི་རྟག་)..."
-                  className={`${uchen.className} w-full px-6 pt-8 pb-5 text-2xl rounded-xl shadow-sm border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[var(--theme-gold-border)] bg-white text-gray-800`}
-                />
-                <button
-                  type="submit"
-                  aria-label="Submit search"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-3 text-gray-400 hover:text-[var(--theme-gold)] hover:bg-[var(--theme-gold)]/10 rounded-full transition-all duration-300 group"
+            <form onSubmit={handleSearchSubmit} className="mb-12 relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Enter a Tibetan word (e.g. མི་རྟག་)..."
+                className="w-full px-8 pt-10 pb-6 text-2xl md:text-3xl leading-relaxed rounded-xl shadow-sm border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[var(--theme-gold-border)] bg-white text-gray-800 transition-all"
+                style={{ fontFamily: `${inter.style.fontFamily}, ${uchen.style.fontFamily}, sans-serif` }}
+              />
+              <button
+                type="submit"
+                aria-label="Submit search"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-3 text-gray-400 hover:text-[var(--theme-gold)] hover:bg-[var(--theme-gold)]/10 rounded-full transition-all duration-300 group"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="transition-transform duration-300 group-hover:scale-110"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="22"
-                    height="22"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.75"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="transition-transform duration-300 group-hover:scale-110"
-                  >
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                  </svg>
-                </button>
-              </div>
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+              </button>
             </form>
 
-            <div className="space-y-6">
-              {searchResults.map((hit) => (
-                <Link
-                  key={hit.id}
-                  href={`/reader?instance=${hit.instance_id}&session=${hit.session_id}&time=${hit.start}&media=${encodeURIComponent(hit.media_url)}&sylId=${hit.first_syl_id}&q=${encodeURIComponent(urlQuery)}`}
-                  className="block bg-white p-6 rounded-xl border border-gray-100 hover:border-[var(--theme-gold-border)] transition-all"
-                >
-                   <div className={`${inter.className} text-[10px] uppercase tracking-tighter text-[var(--theme-gray)] mb-2`}>
-                    {hit.teaching_title} • {hit.start}
+            {/* GROUPED RESULTS */}
+            <div className="space-y-16">
+              {Object.entries(groupedResults).map(([title, hits]) => (
+                <div key={title} className="animate-in fade-in duration-500">
+                  {/* Group Header */}
+                  <div className="mb-6 pb-4 border-b border-[var(--theme-gold-divide)] flex items-end justify-between">
+                    <h2 className={`${uchen.className} text-2xl md:text-3xl text-[var(--theme-hover-red)]`}>
+                      {title}
+                    </h2>
+                    <span className={`${inter.className} text-xs font-bold text-[var(--theme-gray)] uppercase tracking-widest mb-1`}>
+                      {hits.length} {hits.length === 1 ? 'Match' : 'Matches'}
+                    </span>
                   </div>
-                  <p className={`${uchen.className} text-2xl leading-relaxed text-black`} dangerouslySetInnerHTML={{ __html: hit.highlight }} />
-                </Link>
+
+                  {/* Grouped Hits */}
+                  <div className="grid gap-4">
+                    {hits.map((hit) => (
+                      <Link
+                        key={hit.id}
+                        href={`/reader?instance=${hit.instance_id}&session=${hit.session_id}&time=${hit.start}&media=${encodeURIComponent(hit.media_url)}&sylId=${hit.first_syl_id}&q=${encodeURIComponent(urlQuery)}`}
+                        className="group block bg-white p-6 md:p-8 rounded-xl border border-gray-100 hover:border-[var(--theme-gold-border)] hover:shadow-md transition-all"
+                      >
+                         <div className={`${inter.className} flex items-center gap-3 text-xs font-medium text-[var(--theme-gray)] uppercase tracking-wider mb-4`}>
+                          <span>Session: {hit.session_id}</span>
+                          <span>•</span>
+                          <span className="text-[var(--theme-gold)]">{hit.start}</span>
+                          <span className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--theme-gold)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="translate-x-0 group-hover:translate-x-1 transition-transform">
+                              <line x1="5" y1="12" x2="19" y2="12"></line>
+                              <polyline points="12 5 19 12 12 19"></polyline>
+                            </svg>
+                          </span>
+                        </div>
+                        <p className={`${uchen.className} text-2xl md:text-3xl leading-relaxed text-black`} dangerouslySetInnerHTML={{ __html: hit.highlight }} />
+                      </Link>
+                    ))}
+                  </div>
+                </div>
               ))}
+
               {urlQuery && !isSearching && searchResults.length === 0 && (
-                <p className="text-center text-gray-400 py-12">No matching segments found.</p>
+                <div className="text-center py-20 border border-dashed border-gray-200 rounded-2xl">
+                  <p className={`${inter.className} text-[var(--theme-gray)] text-lg tracking-wide`}>No matching segments found.</p>
+                </div>
               )}
             </div>
           </div>
