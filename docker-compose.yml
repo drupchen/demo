@@ -1,13 +1,33 @@
-version: '3'
+version: '3.8'
+
 services:
-  opensearch-node:
+  # 1. The OpenSearch Database
+  opensearch:
     image: opensearchproject/opensearch:latest
-    container_name: opensearch-node
+    container_name: demo-opensearch
     environment:
       - discovery.type=single-node
-      - plugins.security.disabled=true
+      - plugins.security.disabled=true # Keeps it simple for local demos
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
-      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=Khyentse@123456789!
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=KhyentseDemo123!
     ports:
       - "9200:9200"
-      - "9600:9600"
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+
+  # 2. The Next.js Website
+  ui:
+    build:
+      context: ./floating-pecha-ui
+      dockerfile: Dockerfile
+    container_name: demo-ui
+    ports:
+      - "3000:3000"
+    environment:
+      # This tells Next.js exactly how to talk to the OpenSearch container!
+      - OPENSEARCH_URL=http://opensearch:9200
+    depends_on:
+      - opensearch
+
+volumes:
+  opensearch-data:

@@ -183,7 +183,7 @@ function HomeContent() {
                 <div key={title} className="animate-in fade-in duration-500">
                   {/* Group Header */}
                   <div className="mb-6 pb-4 border-b border-[var(--theme-gold-divide)] flex items-end justify-between">
-                    <h2 className={`${uchen.className} text-2xl md:text-3xl text-[var(--theme-hover-red)]`}>
+                    <h2 className={`${uchen.className} text-xl md:text-2xl text-[var(--theme-hover-red)]`}>
                       {title}
                     </h2>
                     <span className={`${inter.className} text-xs font-bold text-[var(--theme-gray)] uppercase tracking-widest mb-1`}>
