@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { inter, getThemeCssVars } from '@/lib/theme';
+import Footer from '@/app/components/Footer';
 
 export default function WorldPage() {
   const [mediaData, setMediaData] = useState([]);
@@ -56,7 +57,7 @@ export default function WorldPage() {
   const currentMedia = mediaData[currentIndex];
 
   return (
-    <main className="min-h-screen bg-[#F9F9F7] flex flex-col pt-20" style={getThemeCssVars()}>
+    <main className="min-h-[calc(100vh-81px)] bg-[#F7FAFC] flex flex-col overflow-x-hidden" style={getThemeCssVars()}>
       <div className="flex-grow flex flex-col items-center justify-center relative px-6 md:px-24 py-12">
 
         {/* LEFT ARROW */}
@@ -129,6 +130,8 @@ export default function WorldPage() {
         </div>
 
       </div>
+      {/* FOOTER */}
+      <Footer className="mt-8" />
     </main>
   );
 }

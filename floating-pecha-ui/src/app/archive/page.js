@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from "next-auth/react";
 import { uchen, inter, getThemeCssVars } from '@/lib/theme';
+import Footer from '@/app/components/Footer';
 
 function ArchiveContent() {
   const { data: session } = useSession();
@@ -97,8 +98,8 @@ function ArchiveContent() {
   });
 
   return (
-    <main className="min-h-screen bg-[#F7FAFC]" style={getThemeCssVars()}>
-      <div className="max-w-5xl mx-auto px-6 py-12 md:py-24">
+    <main className="min-h-[calc(100vh-81px)] bg-[#F7FAFC] flex flex-col overflow-x-hidden" style={getThemeCssVars()}>
+      <div className="w-full max-w-5xl mx-auto px-6 py-12 md:py-24 flex-grow">
 
         {/* Hero / Header */}
         <header className="mb-16 text-center">
@@ -259,6 +260,8 @@ function ArchiveContent() {
           </div>
         )}
       </div>
+      {/* FOOTER */}
+      <Footer className="mt-auto" />
     </main>
   );
 }

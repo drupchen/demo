@@ -2,6 +2,7 @@
 
 import { useRef, useMemo, useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import Footer from '@/app/components/Footer';
 
 // Import from our single source of truth
 import { uchen, inter, getThemeCssVars } from '@/lib/theme';
@@ -214,7 +215,7 @@ function PlayerContent() {
   const activeIndex = dynamicTranscript.findIndex(seg => seg.id === activeSegId);
 
   return (
-    <main className="min-h-screen bg-[#F7FAFC]" style={getThemeCssVars()}>
+    <main className="min-h-[calc(100vh-81px)] bg-[#F7FAFC] flex flex-col overflow-x-hidden" style={getThemeCssVars()}>
 
       {/* FLOATING STICKY BAR */}
       <nav
@@ -309,6 +310,8 @@ function PlayerContent() {
           </div>
         </div>
       </div>
+      {/* FOOTER */}
+      <Footer className="mt-8" />
     </main>
   );
 }

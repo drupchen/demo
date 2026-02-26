@@ -8,6 +8,7 @@ import { useSession, signIn, signOut } from "next-auth/react";
 
 // Import the design system variables and fonts
 import { uchen, inter, getThemeCssVars } from '@/lib/theme';
+import Footer from '@/app/components/Footer';
 
 function SearchContent() {
   const router = useRouter();
@@ -64,7 +65,7 @@ function SearchContent() {
   };
 
   return (
-    <main className="min-h-screen bg-[#F7FAFC] px-6 pb-20" style={getThemeCssVars()}>
+    <main className="min-h-[calc(100vh-81px)] bg-[#F7FAFC] flex flex-col overflow-x-hidden" style={getThemeCssVars()}>
 
       <div className="max-w-4xl mx-auto pt-10">
 
@@ -131,6 +132,8 @@ function SearchContent() {
         </div>
 
       </div>
+      {/* FOOTER */}
+      <Footer className="mt-8" />
     </main>
   );
 }

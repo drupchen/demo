@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 // Import our single source of truth
 import { uchen, inter, SIZES, getThemeCssVars } from '@/lib/theme';
+import Footer from '@/app/components/Footer';
 
 // ==========================================
 // 1. TIME PARSING & FORMATTING LOGIC
@@ -264,7 +265,7 @@ function ReaderContent() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F7FAFC]" style={getThemeCssVars()}>
+    <main className="min-h-[calc(100vh-81px)] bg-[#F7FAFC] flex flex-col overflow-x-hidden" style={getThemeCssVars()}>
 
     {/* FLOATING STICKY BAR (Now sits on top of the main header) */}
     <nav
@@ -373,6 +374,8 @@ function ReaderContent() {
           </div>
         </div>
       </div>
+      {/* FOOTER */}
+      <Footer className="mt-8" />
     </main>
   );
 }

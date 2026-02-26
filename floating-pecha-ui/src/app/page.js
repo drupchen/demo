@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { uchen, inter, getThemeCssVars } from '@/lib/theme';
+import Footer from '@/app/components/Footer';
 
 export default function LandingPage() {
   const [scrollProgress, setScrollProgress] = useState(0);
@@ -157,6 +158,10 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+      {/* 4. FOOTER (Solid background ensures it doesn't float over the video) */}
+      <div className="relative z-20 w-full bg-[#F9F9F7]">
+        <Footer />
+      </div>
     </main>
   );
 }
