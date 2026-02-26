@@ -54,8 +54,8 @@ function ReaderContent() {
     const loadData = async () => {
       try {
         const [manifestRes, sessionsRes] = await Promise.all([
-          fetch(`/data/${instanceId}/manifest.json`),
-          fetch(`/data/${instanceId}/${instanceId}_compiled_sessions.json`)
+          fetch(`/data/archive/${instanceId}/manifest.json`),
+          fetch(`/data/archive/${instanceId}/${instanceId}_compiled_sessions.json`)
         ]);
 
         if (manifestRes.ok && sessionsRes.ok) {
@@ -266,21 +266,38 @@ function ReaderContent() {
   return (
     <main className="min-h-screen bg-[#F7FAFC]" style={getThemeCssVars()}>
 
-      {/* FLOATING STICKY BAR */}
-      <nav className="sticky top-0 z-50 w-full bg-[#F7FAFC]/80 backdrop-blur-md border-b border-gray-200 py-4 px-8 md:px-12">
-        <div className="max-w-5xl mx-auto flex items-center">
-          <button
-            onClick={() => router.push('/')}
-            className="group flex items-center gap-2 text-[var(--theme-gray)] hover:text-[var(--theme-hover-red)] transition-all"
-            aria-label="Back to Catalog"
+    {/* FLOATING STICKY BAR (Now sits on top of the main header) */}
+    <nav
+      className="fixed top-0 z-[60] w-full bg-[#F7FAFC]/95 backdrop-blur-xl border-b border-gray-200 px-8 md:px-12 h-20"
+    >
+      <div className="max-w-5xl mx-auto h-full flex items-center">
+        <button
+          onClick={() => router.push('/archive')}
+          className="group flex items-center gap-3 text-[var(--theme-gray)] hover:text-[var(--theme-hover-red)] transition-all"
+          aria-label="Back to Catalog"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="transition-transform duration-300 group-hover:-translate-x-1.5"
           >
-            <span className="text-2xl transition-transform group-hover:-translate-x-1">←</span>
-            <span className={`${inter.className} text-xs font-bold uppercase tracking-[0.2em]`}>
-              Back to Catalog
-            </span>
-          </button>
-        </div>
-      </nav>
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+
+          <span className={`${inter.className} text-[10px] md:text-xs font-bold uppercase tracking-[0.2em]`}>
+            Back to Catalog
+          </span>
+        </button>
+      </div>
+    </nav>
 
       <div className="max-w-5xl mx-auto p-4 md:p-12">
         <div className="bg-[#F9F9F7] rounded-xl shadow-2xl border border-gray-100">

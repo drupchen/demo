@@ -63,8 +63,8 @@ function PlayerContent() {
     const loadData = async () => {
       try {
         const [manifestRes, sessionsRes] = await Promise.all([
-          fetch(`/data/${instanceId}/manifest.json`),
-          fetch(`/data/${instanceId}/${instanceId}_compiled_sessions.json`)
+          fetch(`/data/archive/${instanceId}/manifest.json`),
+          fetch(`/data/archive/${instanceId}/${instanceId}_compiled_sessions.json`)
         ]);
 
         if (manifestRes.ok && sessionsRes.ok) {
@@ -214,65 +214,102 @@ function PlayerContent() {
   const activeIndex = dynamicTranscript.findIndex(seg => seg.id === activeSegId);
 
   return (
-    <div className="min-h-screen bg-[#F7FAFC] p-4 md:p-12" style={getThemeCssVars()}>
-      <div className="max-w-5xl mx-auto">
+    <main className="min-h-screen bg-[#F7FAFC]" style={getThemeCssVars()}>
 
-        <div className="flex justify-between items-center mb-8">
-          <button onClick={() => router.back()} className="text-2xl font-light text-[var(--theme-gray)] hover:text-[var(--theme-hover-red)]">✕</button>
+      {/* FLOATING STICKY BAR */}
+      <nav
+        className="fixed top-0 z-[60] w-full bg-[#F7FAFC]/95 backdrop-blur-xl border-b border-gray-200 px-8 md:px-12 h-20"
+      >
+        <div className="max-w-5xl mx-auto h-full flex items-center">
+          <button
+            onClick={() => router.push('/archive')}
+            className="group flex items-center gap-3 text-[var(--theme-gray)] hover:text-[var(--theme-hover-red)] transition-all"
+            aria-label="Back to Catalog"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="transition-transform duration-300 group-hover:-translate-x-1.5"
+            >
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
 
-          <div className="flex bg-gray-200/80 p-1 rounded-lg border border-gray-300 shadow-inner">
-            <button
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${effectiveAudioType === 'original' ? 'bg-[#C19A5B] text-black shadow-md' : 'text-gray-500 hover:text-gray-800'}`}
-              onClick={() => switchAudio('original')}
-            > Original </button>
-            <button
-              disabled={!hasRestored}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${!hasRestored ? 'text-gray-400 cursor-not-allowed' : effectiveAudioType === 'restored' ? 'bg-[#C19A5B] text-black shadow-md' : 'text-gray-500 hover:text-gray-800'}`}
-              onClick={() => switchAudio('restored')}
-            > Restored </button>
-          </div>
+            <span className={`${inter.className} text-[10px] md:text-xs font-bold uppercase tracking-[0.2em]`}>
+              Back to Catalog
+            </span>
+          </button>
         </div>
+      </nav>
 
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
-          <div className="p-6 bg-gray-50 border-b border-gray-200">
-            <audio
-              key={`${sessionId}-${effectiveAudioType}`} // Track swap force-mount
-              ref={audioRef}
-              controls
-              className="w-full"
-              src={audioSrc}
-              onTimeUpdate={handleTimeUpdate}
-              onPlay={() => setIsCurrentlyPlaying(true)}
-              onPause={() => setIsCurrentlyPlaying(false)}
-            />
+      {/* ORIGINAL PLAYER CONTENT */}
+      <div className="pt-28 pb-4 px-4 md:pt-32 md:pb-12 md:px-12">
+        <div className="max-w-5xl mx-auto">
+
+          <div className="flex justify-between items-center mb-8">
+            <button onClick={() => router.back()} className="text-2xl font-light text-[var(--theme-gray)] hover:text-[var(--theme-hover-red)]">✕</button>
+
+            <div className="flex bg-gray-200/80 p-1 rounded-lg border border-gray-300 shadow-inner">
+              <button
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${effectiveAudioType === 'original' ? 'bg-[#C19A5B] text-black shadow-md' : 'text-gray-500 hover:text-gray-800'}`}
+                onClick={() => switchAudio('original')}
+              > Original </button>
+              <button
+                disabled={!hasRestored}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${!hasRestored ? 'text-gray-400 cursor-not-allowed' : effectiveAudioType === 'restored' ? 'bg-[#C19A5B] text-black shadow-md' : 'text-gray-500 hover:text-gray-800'}`}
+                onClick={() => switchAudio('restored')}
+              > Restored </button>
+            </div>
           </div>
 
-          <div ref={transcriptRef} className={`relative ${uchen.className} p-10 text-3xl leading-[1.8] text-justify max-h-[60vh] overflow-y-auto`}>
-            <p>
-              {dynamicTranscript.map((seg, index) => {
-                const isActive = activeSegId === seg.id;
-                const isFuture = activeIndex !== -1 && index > activeIndex;
-                return (
-                  <a
-                    key={seg.id}
-                    id={`segment-${seg.id}`}
-                    onClick={() => handleSyllableClick(seg.startTimeMs, seg.id)}
-                    className={`cursor-pointer rounded px-1 transition-colors ${isActive ? 'bg-[#f7f3e7]' : 'hover:bg-gray-100'} ${isFuture && !isActive ? 'text-[var(--theme-future-text)]' : 'text-[#23272f]'}`}
-                  >
-                    {seg.syllables.map((syl, i) => (
-                      <span key={syl.id || i} className={sylIdParam === syl.id ? 'text-[var(--theme-gold)] font-bold' : ''}>{syl.text}</span>
-                    ))}
-                    <span className={`${inter.className} inline-flex items-center justify-center px-1.5 py-0.5 mx-2 text-sm font-medium text-[var(--theme-badge-text)] bg-[var(--theme-badge-color)] rounded-full align-middle transition-opacity ${isFuture && !isActive ? 'opacity-40' : 'opacity-80'}`}>
-                      {formatMsToDuration(seg.durationMs)}
-                    </span>
-                  </a>
-                );
-              })}
-            </p>
+          <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
+            <div className="p-6 bg-gray-50 border-b border-gray-200">
+              <audio
+                key={`${sessionId}-${effectiveAudioType}`} // Track swap force-mount
+                ref={audioRef}
+                controls
+                className="w-full"
+                src={audioSrc}
+                onTimeUpdate={handleTimeUpdate}
+                onPlay={() => setIsCurrentlyPlaying(true)}
+                onPause={() => setIsCurrentlyPlaying(false)}
+              />
+            </div>
+
+            <div ref={transcriptRef} className={`relative ${uchen.className} p-10 text-3xl leading-[1.8] text-justify max-h-[60vh] overflow-y-auto`}>
+              <p>
+                {dynamicTranscript.map((seg, index) => {
+                  const isActive = activeSegId === seg.id;
+                  const isFuture = activeIndex !== -1 && index > activeIndex;
+                  return (
+                    <a
+                      key={seg.id}
+                      id={`segment-${seg.id}`}
+                      onClick={() => handleSyllableClick(seg.startTimeMs, seg.id)}
+                      className={`cursor-pointer rounded px-1 transition-colors ${isActive ? 'bg-[#f7f3e7]' : 'hover:bg-gray-100'} ${isFuture && !isActive ? 'text-[var(--theme-future-text)]' : 'text-[#23272f]'}`}
+                    >
+                      {seg.syllables.map((syl, i) => (
+                        <span key={syl.id || i} className={sylIdParam === syl.id ? 'text-[var(--theme-gold)] font-bold' : ''}>{syl.text}</span>
+                      ))}
+                      <span className={`${inter.className} inline-flex items-center justify-center px-1.5 py-0.5 mx-2 text-sm font-medium text-[var(--theme-badge-text)] bg-[var(--theme-badge-color)] rounded-full align-middle transition-opacity ${isFuture && !isActive ? 'opacity-40' : 'opacity-80'}`}>
+                        {formatMsToDuration(seg.durationMs)}
+                      </span>
+                    </a>
+                  );
+                })}
+              </p>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 

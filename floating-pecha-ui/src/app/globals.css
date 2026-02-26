@@ -43,3 +43,27 @@ background-color: #ffd700 !important; /* Gold */
 .hyperaudio-transcript a:hover {
   background-color: #e3e7ee;
 }
+
+@keyframes cinematicFadeIn {
+  from { opacity: 0; filter: blur(10px) grayscale(100%); }
+  to { opacity: 1; filter: blur(0) grayscale(0%); }
+}
+
+@keyframes textReveal {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-cinematic-in {
+  animation: cinematicFadeIn 4s ease-out forwards;
+}
+
+.animate-text-reveal {
+  opacity: 0;
+  animation: textReveal 2s ease-out 2s forwards; /* Starts after 2s delay */
+}
+
+.animate-cta-reveal {
+  opacity: 0;
+  animation: textReveal 1.5s ease-out 3.5s forwards; /* Starts after text */
+}

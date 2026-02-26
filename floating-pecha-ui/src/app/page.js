@@ -1,273 +1,162 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useSession } from "next-auth/react";
 import { uchen, inter, getThemeCssVars } from '@/lib/theme';
 
-function HomeContent() {
-  const { data: session } = useSession();
-  const router = useRouter();
-  const searchParams = useSearchParams();
+export default function LandingPage() {
+  const [scrollProgress, setScrollProgress] = useState(0);
 
-  // 1. State for View Mode and Search
-  const viewMode = searchParams.get('view') || 'browse';
-  const urlQuery = searchParams.get('q') || '';
-
-  // Consolidated State Variables
-  const [catalog, setCatalog] = useState([]);
-  const [query, setQuery] = useState(urlQuery);
-  const [searchResults, setSearchResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
-
-  // 2. Load Catalog Data
   useEffect(() => {
-    fetch('/data/catalog.json')
-      .then(res => res.json())
-      .then(data => setCatalog(data))
-      .catch(err => console.error("Catalog load error:", err));
+    const handleScroll = () => {
+      const position = window.scrollY;
+      const height = window.innerHeight;
+      const progress = Math.min(position / height, 1);
+      setScrollProgress(progress);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // 3. Handle Search if in search mode
-  useEffect(() => {
-    if (viewMode === 'search' && urlQuery) {
-      performSearch(urlQuery);
-    }
-  }, [viewMode, urlQuery]);
+  // Custom Cinematic Scroll Function
+  const scrollToBottom = () => {
+    const targetPosition = window.innerHeight * 1.5; // Target scroll depth
+    const startPosition = window.scrollY;
+    const distance = targetPosition - startPosition;
+    const duration = 2500; // 2.5 seconds (2500ms) - Adjust this for slower/faster
+    let start = null;
 
-  const performSearch = async (searchString) => {
-    if (!searchString.trim()) return;
+    const animation = (currentTime) => {
+      if (start === null) start = currentTime;
+      const timeElapsed = currentTime - start;
+      const progress = Math.min(timeElapsed / duration, 1);
 
-    setIsSearching(true);
-    setHasSearched(true);
+      // Easing Function (Ease In Out Cubic) - Starts slow, accelerates, ends slow
+      const ease = progress < 0.5
+        ? 4 * progress * progress * progress
+        : 1 - Math.pow(-2 * progress + 2, 3) / 2;
 
-    try {
-      const userLevel = session?.user?.accessLevel || 0;
-      const res = await fetch(`/api/search?q=${encodeURIComponent(searchString)}&level=${userLevel}`);
-      if (!res.ok) throw new Error("Network response was not OK");
+      window.scrollTo(0, startPosition + distance * ease);
 
-      const data = await res.json();
-      setSearchResults(data.results || []);
-    } catch (error) {
-      console.error("Search error:", error);
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-    }
+      if (timeElapsed < duration) {
+        window.requestAnimationFrame(animation);
+      }
+    };
+
+    window.requestAnimationFrame(animation);
   };
 
-  const toggleView = (mode) => {
-    const params = new URLSearchParams(searchParams);
-    params.set('view', mode);
-    if (mode === 'browse') params.delete('q');
-    router.push(`/?${params.toString()}`, { scroll: false });
-  };
-
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    if (query.trim()) {
-      performSearch(query);
-    }
-  };
-
-  // 4. Group search results by teaching title
-  const groupedResults = searchResults.reduce((acc, hit) => {
-    const title = hit.teaching_title || hit.instance_id;
-    if (!acc[title]) acc[title] = [];
-    acc[title].push(hit);
-    return acc;
-  }, {});
-
-  // 5. Apply the "Access Onion" to the catalog list
-  const userLevel = session?.user?.accessLevel || 0;
-
-  const filteredCatalog = catalog.filter(teaching => {
-    // Check every possible name the JSON might be using, default to 4 if completely missing
-    const rawLevel = teaching.Access_Level ?? teaching.Practice_Level ?? teaching.access_level ?? 4;
-
-    // Force both to be integers so JavaScript doesn't accidentally compare strings (like "1" <= 0)
-    const requiredLevel = parseInt(rawLevel, 10);
-    const currentLevel = parseInt(userLevel, 10);
-
-    return requiredLevel <= currentLevel;
-  });
+  const uiOpacity = scrollProgress;
+  const videoOpacity = 1 - (scrollProgress * 0.7);
+  const arrowOpacity = Math.max(0, 1 - scrollProgress * 5);
 
   return (
-    <main className="min-h-screen bg-[#F7FAFC]" style={getThemeCssVars()}>
-      <div className="max-w-5xl mx-auto px-6 py-12 md:py-24">
+    <main className="relative min-h-[200vh] bg-transparent" style={getThemeCssVars()}>
 
-        {/* Hero / Header */}
-        <header className="mb-16 text-center">
-          <h1 className={`${inter.className} text-4xl md:text-5xl font-bold tracking-[0.3em] uppercase text-[var(--theme-gold)] mb-4`}>
-            Teaching Archives
-          </h1>
-          <p className={`${inter.className} text-xs font-medium tracking-[0.2em] uppercase text-[var(--theme-gray)]`}>
-            The Digital Archives of Dilgo Khyentse Rinpoche
-          </p>
-        </header>
+      {/* 1. FIXED BACKGROUND LAYER */}
+      <div className="fixed inset-0 z-0 bg-[#F9F9F7]">
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="w-full h-full object-cover"
+          style={{
+            opacity: videoOpacity,
+            filter: `
+              blur(${scrollProgress * 25}px)
+              grayscale(${scrollProgress * 80}%)
+              brightness(${1 + scrollProgress * 0.2})
+            `,
+          }}
+        >
+          <source src="/data/world/videos/landing-slowmo.mp4" type="video/mp4" />
+        </video>
 
-        {/* ELEGANT TOGGLE TABS */}
-        <div className="flex justify-center gap-12 mb-16 border-b border-gray-100">
-          <button
-            onClick={() => toggleView('browse')}
-            className={`${inter.className} pb-4 text-xs font-bold uppercase tracking-[0.2em] transition-all border-b-2 ${
-              viewMode === 'browse'
-              ? "text-[var(--theme-hover-red)] border-[var(--theme-hover-red)]"
-              : "text-[var(--theme-gray)] border-transparent hover:text-black"
-            }`}
-          >
-            Browse Catalog
-          </button>
-          <button
-            onClick={() => toggleView('search')}
-            className={`${inter.className} pb-4 text-xs font-bold uppercase tracking-[0.2em] transition-all border-b-2 ${
-              viewMode === 'search'
-              ? "text-[var(--theme-hover-red)] border-[var(--theme-hover-red)]"
-              : "text-[var(--theme-gray)] border-transparent hover:text-black"
-            }`}
-          >
-            Search Text
-          </button>
-        </div>
-
-        {/* VIEW: BROWSE CATALOG */}
-        {viewMode === 'browse' && (
-          <div className="grid gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            {filteredCatalog.map((teaching) => (
-              <Link
-                key={teaching.Teaching_ID}
-                href={`/reader?instance=${teaching.Instances[0]?.Instance_ID}`}
-                className="group bg-white p-8 rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-[var(--theme-gold-border)] transition-all flex justify-between items-center"
-              >
-                <div>
-                  <h3 className={`${uchen.className} text-2xl mb-2 group-hover:text-[var(--theme-hover-red)] transition-colors`}>
-                    {teaching.Title_bo}
-                  </h3>
-                  <p className={`${inter.className} text-[10px] uppercase tracking-widest text-[var(--theme-gray)]`}>
-                    {teaching.Instances?.length || 0} Version(s) Available
-                  </p>
-                </div>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.75"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-gray-300 group-hover:text-[var(--theme-gold)] transition-all duration-300 group-hover:translate-x-1"
-                >
-                  <line x1="5" y1="12" x2="19" y2="12"></line>
-                  <polyline points="12 5 19 12 12 19"></polyline>
-                </svg>
-              </Link>
-            ))}
-
-            {/* Show a message if no catalog items match the user's level */}
-            {filteredCatalog.length === 0 && (
-              <div className="text-center py-20 border border-dashed border-gray-200 rounded-2xl">
-                <p className={`${inter.className} text-[var(--theme-gray)] text-lg tracking-wide`}>No teachings available for this access level.</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* VIEW: SEARCH TEXT */}
-        {viewMode === 'search' && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <form onSubmit={handleSearchSubmit} className="mb-12 relative">
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Enter a Tibetan word (e.g. མི་རྟག་)..."
-                className="w-full px-8 pt-10 pb-6 text-2xl md:text-3xl leading-relaxed rounded-xl shadow-sm border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[var(--theme-gold-border)] bg-white text-gray-800 transition-all"
-                style={{ fontFamily: `${inter.style.fontFamily}, ${uchen.style.fontFamily}, sans-serif` }}
-              />
-              <button
-                type="submit"
-                aria-label="Submit search"
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-3 text-gray-400 hover:text-[var(--theme-gold)] hover:bg-[var(--theme-gold)]/10 rounded-full transition-all duration-300 group"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="22"
-                  height="22"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.75"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="transition-transform duration-300 group-hover:scale-110"
-                >
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
-              </button>
-            </form>
-
-            {/* GROUPED RESULTS */}
-            <div className="space-y-16">
-              {Object.entries(groupedResults).map(([title, hits]) => (
-                <div key={title} className="animate-in fade-in duration-500">
-                  {/* Group Header */}
-                  <div className="mb-6 pb-4 border-b border-[var(--theme-gold-divide)] flex items-end justify-between">
-                    <h2 className={`${uchen.className} text-xl md:text-2xl text-[var(--theme-hover-red)]`}>
-                      {title}
-                    </h2>
-                    <span className={`${inter.className} text-xs font-bold text-[var(--theme-gray)] uppercase tracking-widest mb-1`}>
-                      {hits.length} {hits.length === 1 ? 'Match' : 'Matches'}
-                    </span>
-                  </div>
-
-                  {/* Grouped Hits */}
-                  <div className="grid gap-4">
-                    {hits.map((hit) => (
-                      <Link
-                        key={hit.id}
-                        href={`/reader?instance=${hit.instance_id}&sylId=${hit.first_syl_id}&q=${encodeURIComponent(query)}`}
-                        className="group block bg-white p-6 md:p-8 rounded-xl border border-gray-100 hover:border-[var(--theme-gold-border)] hover:shadow-md transition-all"
-                      >
-                         <div className={`${inter.className} flex items-center gap-3 text-xs font-medium text-[var(--theme-gray)] uppercase tracking-wider mb-4`}>
-                          <span>Session: {hit.session_id}</span>
-                          <span>•</span>
-                          <span className="text-[var(--theme-gold)]">{hit.start}</span>
-                          <span className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--theme-gold)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="translate-x-0 group-hover:translate-x-1 transition-transform">
-                              <line x1="5" y1="12" x2="19" y2="12"></line>
-                              <polyline points="12 5 19 12 12 19"></polyline>
-                            </svg>
-                          </span>
-                        </div>
-                        <p className={`${uchen.className} text-2xl md:text-3xl leading-relaxed text-black`} dangerouslySetInnerHTML={{ __html: hit.highlight }} />
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              {urlQuery && !isSearching && searchResults.length === 0 && (
-                <div className="text-center py-20 border border-dashed border-gray-200 rounded-2xl">
-                  <p className={`${inter.className} text-[var(--theme-gray)] text-lg tracking-wide`}>No matching segments found.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        <div
+          className="absolute inset-0 bg-[#F9F9F7]"
+          style={{ opacity: scrollProgress * 0.85 }}
+        />
       </div>
-    </main>
-  );
-}
 
-export default function HomePage() {
-  return (
-    <Suspense fallback={null}>
-      <HomeContent />
-    </Suspense>
+      {/* 2. CLICKABLE GLOWING ARROW (Triggers the slow descent) */}
+      <button
+        onClick={scrollToBottom}
+        className="fixed bottom-16 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center transition-all duration-300 hover:scale-110 cursor-pointer"
+        style={{
+          opacity: arrowOpacity,
+          pointerEvents: arrowOpacity > 0.1 ? 'auto' : 'none'
+        }}
+        aria-label="Descend into the Archives"
+      >
+        <svg
+          width="80"
+          height="40"
+          viewBox="0 0 120 60"
+          fill="none"
+          stroke="white"
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="animate-bounce opacity-90"
+          style={{ filter: 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))' }}
+        >
+          <path d="M10 15 L60 45 L110 15" />
+        </svg>
+      </button>
+
+      {/* 3. THE MANDALA GATEWAY */}
+      <section className="relative z-10 h-[200vh] flex flex-col items-center pointer-events-none">
+        <div className="sticky top-0 h-screen w-full flex flex-col items-center justify-center px-6">
+
+          <div
+            className="text-center flex flex-col items-center transition-all duration-1000 mb-[10vh]"
+            style={{
+              opacity: uiOpacity,
+              transform: `scale(${0.98 + (uiOpacity * 0.02)})`,
+            }}
+          >
+            <h1 className={`${uchen.className} text-[var(--theme-gold)] text-6xl md:text-8xl mb-4 drop-shadow-sm`}>
+              མཁྱེན་བརྩེའི་འོད་སྣང་།
+            </h1>
+
+            <h2 className={`${inter.className} text-[var(--theme-gray)] text-lg md:text-xl tracking-[0.7em] uppercase font-bold opacity-90`}>
+              Khyentse&apos;s Radiance
+            </h2>
+          </div>
+
+          {/* THE DUAL GATEWAY BUTTONS */}
+          <div
+            className="absolute bottom-[20%] flex flex-col md:flex-row gap-6 items-center transition-all duration-1000"
+            style={{
+              opacity: uiOpacity,
+              pointerEvents: uiOpacity > 0.8 ? 'auto' : 'none'
+            }}
+          >
+            <Link href="/world">
+              <button className={`
+                ${inter.className} px-10 py-5 border border-[var(--theme-gold)] text-[var(--theme-gold)]
+                bg-white/10 backdrop-blur-md rounded-full uppercase tracking-[0.3em] font-bold text-[10px] md:text-[11px]
+                hover:bg-[var(--theme-gold)] hover:text-white transition-all duration-500
+                shadow-sm active:scale-95 whitespace-nowrap
+              `}>
+                Dilgo Khyentse&apos;s World
+              </button>
+            </Link>
+
+            <Link href="/archive">
+              <button className={`
+                ${inter.className} px-10 py-5 border border-[var(--theme-gold)] text-[var(--theme-gold)]
+                bg-white/10 backdrop-blur-md rounded-full uppercase tracking-[0.3em] font-bold text-[10px] md:text-[11px]
+                hover:bg-[var(--theme-gold)] hover:text-white transition-all duration-500
+                shadow-sm active:scale-95 whitespace-nowrap
+              `}>
+                The Teaching Archives
+              </button>
+            </Link>
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }

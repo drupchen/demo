@@ -15,7 +15,7 @@ export default function RootLayout({ children }) {
         <Providers>
 
           {/* 2. Insert the Global Header (which contains the Login button) */}
-          <ArchiveHeader />
+          <ArchiveHeader transparent={true} />
 
           {/* 3. The rest of your pages (like page.js) render here */}
           {children}
