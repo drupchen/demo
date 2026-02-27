@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, Suspense } from 'react';
+import React, { useState, useMemo, useEffect, Suspense, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 // Import our single source of truth
@@ -49,6 +49,11 @@ function ReaderContent() {
 
   const [activeId, setActiveId] = useState(null);
   const [contextOptions, setContextOptions] = useState([]);
+
+  // --- NEW: LOCAL SEARCH STATE ---
+  const [localQuery, setLocalQuery] = useState('');
+  const [matches, setMatches] = useState([]);
+  const [activeMatchIdx, setActiveMatchIdx] = useState(-1);
 
   // Load manifest and session data
   useEffect(() => {
@@ -99,30 +104,109 @@ function ReaderContent() {
     return map;
   }, [sessions]);
 
-// Deep Linking Highlight Effect (Auto-scroll & Click multi-syllable phrases)
-  useEffect(() => {
-    // 1. UNCONDITIONAL DEBUG LOGGING (This will always print!)
-    console.log("=== EFFECT TRIGGERED ===");
-    console.log("isLoading:", isLoading);
-    console.log("manifest.length:", manifest.length);
-    console.log("anchorSylId:", anchorSylId);
-    console.log("syllableMediaMap keys:", Object.keys(syllableMediaMap).length);
+  // --- NEW: BUILD SEARCH INDEX ---
+  const searchIndex = useMemo(() => {
+    let compressedText = "";
+    let charIndexToUuid = [];
+    manifest.forEach(syl => {
+      if (syl && syl.text) {
+        for (let i = 0; i < syl.text.length; i++) {
+          const char = syl.text[i];
+          if (!/[ \n\r\t་།]/.test(char)) {
+            compressedText += char.toLowerCase();
+            charIndexToUuid.push(syl.id);
+          }
+        }
+      }
+    });
+    return { compressedText, charIndexToUuid };
+  }, [manifest]);
 
-    // 2. Early exit (but NO LONGER requiring syllableMediaMap to be populated)
-    if (isLoading || manifest.length === 0 || !anchorSylId) {
-      console.log("⏳ Waiting for data...");
+  const scrollToMatch = useCallback((uuids) => {
+    if (!uuids || uuids.length === 0) return;
+    const el = document.getElementById(uuids[0]);
+    if (el) {
+      // 160px offset ensures it scrolls just below BOTH fixed navigation bars
+      const y = el.getBoundingClientRect().top + window.scrollY - 160;
+      window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+    }
+  }, []);
+
+  // --- NEW: LOCAL SEARCH EFFECT ---
+  useEffect(() => {
+    if (!localQuery.trim()) {
+      setMatches([]);
+      setActiveMatchIdx(-1);
       return;
     }
 
-    let targetUuids = [anchorSylId]; // Default to the first syllable
+    const cleanQuery = localQuery.replace(/[ \n\r\t་།]/g, '').toLowerCase();
+    if (!cleanQuery) {
+      setMatches([]);
+      setActiveMatchIdx(-1);
+      return;
+    }
 
-    // 3. BULLETPROOF PHRASE MATCHER
+    const { compressedText, charIndexToUuid } = searchIndex;
+    let newMatches = [];
+    let startIndex = 0;
+    let matchIdx = compressedText.indexOf(cleanQuery, startIndex);
+
+    // Limit matches to prevent browser freeze on very common single letters
+    const MAX_MATCHES = 500;
+
+    while (matchIdx !== -1 && newMatches.length < MAX_MATCHES) {
+      const matchedUuids = new Set();
+      for (let i = matchIdx; i < matchIdx + cleanQuery.length; i++) {
+        if (charIndexToUuid[i]) matchedUuids.add(charIndexToUuid[i]);
+      }
+      const uuidsArr = Array.from(matchedUuids);
+      if (uuidsArr.length > 0) {
+        newMatches.push(uuidsArr);
+      }
+      startIndex = matchIdx + cleanQuery.length; // Jump past this match
+      matchIdx = compressedText.indexOf(cleanQuery, startIndex);
+    }
+
+    setMatches(newMatches);
+    if (newMatches.length > 0) {
+      setActiveMatchIdx(0);
+      setTimeout(() => {
+         scrollToMatch(newMatches[0]);
+      }, 50);
+    } else {
+      setActiveMatchIdx(-1);
+    }
+  }, [localQuery, searchIndex, scrollToMatch]);
+
+  const handleNextMatch = () => {
+    if (matches.length === 0) return;
+    const nextIdx = (activeMatchIdx + 1) % matches.length;
+    setActiveMatchIdx(nextIdx);
+    scrollToMatch(matches[nextIdx]);
+  };
+
+  const handlePrevMatch = () => {
+    if (matches.length === 0) return;
+    const prevIdx = (activeMatchIdx - 1 + matches.length) % matches.length;
+    setActiveMatchIdx(prevIdx);
+    scrollToMatch(matches[prevIdx]);
+  };
+
+  // Memoized Sets for hyper-fast UI rendering
+  const activeMatchSet = useMemo(() => new Set(matches[activeMatchIdx] || []), [matches, activeMatchIdx]);
+  const allMatchesSet = useMemo(() => new Set(matches.flat()), [matches]);
+
+
+  // Global Deep Linking Highlight Effect (From Catalog URL)
+  useEffect(() => {
+    if (isLoading || manifest.length === 0 || !anchorSylId) return;
+
+    let targetUuids = [anchorSylId];
+
     if (searchQuery) {
       const anchorIndex = manifest.findIndex(s => s.id === anchorSylId);
-      console.log("Anchor Index in Manifest:", anchorIndex);
-
       if (anchorIndex !== -1) {
-        // Grab a generous window of text starting from the anchor
         const searchWindow = manifest.slice(anchorIndex, anchorIndex + 150);
         let compressedText = "";
         let charIndexToUuid = [];
@@ -131,7 +215,6 @@ function ReaderContent() {
           if (syl && syl.text) {
             for (let i = 0; i < syl.text.length; i++) {
               const char = syl.text[i];
-              // Strip ALL spaces, newlines, and Tibetan punctuation
               if (!/[ \n\r\t་།]/.test(char)) {
                 compressedText += char.toLowerCase();
                 charIndexToUuid.push(syl.id);
@@ -143,11 +226,6 @@ function ReaderContent() {
         const cleanQuery = searchQuery.replace(/[ \n\r\t་།]/g, '').toLowerCase();
         const matchIndex = compressedText.indexOf(cleanQuery);
 
-        console.log("--- PHRASE MATCHER ---");
-        console.log("Clean Query:", cleanQuery);
-        console.log("Compressed Text (Snippet):", compressedText.substring(0, 50));
-        console.log("Match Index:", matchIndex);
-
         if (matchIndex !== -1) {
           const matchedUuids = new Set();
           for (let i = matchIndex; i < matchIndex + cleanQuery.length; i++) {
@@ -156,23 +234,18 @@ function ReaderContent() {
             }
           }
           targetUuids = Array.from(matchedUuids);
-          console.log("✅ Phrase matched perfectly! UUIDs:", targetUuids);
-        } else {
-          console.log("❌ Phrase match failed. Falling back to anchor ID.");
         }
       }
     }
 
-    // 4. SCROLL & HIGHLIGHT EXECUTION
     const timer = setTimeout(() => {
       if (targetUuids.length > 0) {
-          // 1. Scroll to and explicitly open the FIRST syllable in the phrase
           const firstSyllable = document.getElementById(targetUuids[0]);
           if (firstSyllable) {
-            firstSyllable.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Offset scroll to account for new search header
+            const y = firstSyllable.getBoundingClientRect().top + window.scrollY - 160;
+            window.scrollTo({ top: y, behavior: 'smooth' });
 
-            // Open the drawer directly instead of simulating a click.
-            // This prevents it from toggling closed when returning from the player!
             const options = syllableMediaMap[targetUuids[0]] || syllableMediaMap[anchorSylId];
             if (options && options.length > 0) {
               setActiveId(targetUuids[0]);
@@ -204,7 +277,7 @@ function ReaderContent() {
     return () => clearTimeout(timer);
   }, [anchorSylId, searchQuery, isLoading, manifest.length, syllableMediaMap]);
 
-  // Session storage scroll restoration (for returning from the player)
+  // Session storage scroll restoration
   useEffect(() => {
     if (isLoading) return;
     const savedPos = sessionStorage.getItem('ebook-scroll-pos');
@@ -267,40 +340,89 @@ function ReaderContent() {
   return (
     <main className="min-h-[calc(100vh-81px)] bg-[#F7FAFC] flex flex-col overflow-x-hidden" style={getThemeCssVars()}>
 
-    {/* FLOATING STICKY BAR (Now sits on top of the main header) */}
-    <nav
-      className="fixed top-0 z-[60] w-full bg-[#F7FAFC]/95 backdrop-blur-xl border-b border-gray-200 px-8 md:px-12 h-20"
-    >
-      <div className="max-w-5xl mx-auto h-full flex items-center">
-        <button
-          onClick={() => router.push('/archive')}
-          className="group flex items-center gap-3 text-[var(--theme-gray)] hover:text-[var(--theme-hover-red)] transition-all"
-          aria-label="Back to Catalog"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="transition-transform duration-300 group-hover:-translate-x-1.5"
+      {/* FLOATING STICKY BAR 1: NAVIGATION */}
+      <nav
+        className="fixed top-0 z-[60] w-full bg-[#F7FAFC]/95 backdrop-blur-xl border-b border-gray-200 px-8 md:px-12 h-20"
+      >
+        <div className="max-w-5xl mx-auto h-full flex items-center">
+          <button
+            onClick={() => router.push('/archive')}
+            className="group flex items-center gap-3 text-[var(--theme-gray)] hover:text-[var(--theme-hover-red)] transition-all"
+            aria-label="Back to Catalog"
           >
-            <line x1="19" y1="12" x2="5" y2="12"></line>
-            <polyline points="12 19 5 12 12 5"></polyline>
-          </svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="transition-transform duration-300 group-hover:-translate-x-1.5"
+            >
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
 
-          <span className={`${inter.className} text-[10px] md:text-xs font-bold uppercase tracking-[0.2em]`}>
-            Back to Catalog
-          </span>
-        </button>
+            <span className={`${inter.className} text-[10px] md:text-xs font-bold uppercase tracking-[0.2em]`}>
+              Back to Catalog
+            </span>
+          </button>
+        </div>
+      </nav>
+
+      {/* FLOATING STICKY BAR 2: LOCAL SEARCH */}
+      <div className="fixed top-20 z-[55] w-full bg-[#F9F9F7]/95 backdrop-blur-md border-b border-gray-200 px-4 md:px-12 h-14 flex items-center shadow-sm">
+        <div className="max-w-5xl mx-auto w-full flex items-center gap-4">
+          <div className="relative flex-grow max-w-sm">
+            <input
+              type="text"
+              value={localQuery}
+              onChange={(e) => setLocalQuery(e.target.value)}
+              placeholder="Find in teaching..."
+              className={`${inter.className} w-full pl-10 pr-10 py-1.5 bg-white border border-gray-300 rounded-md focus:outline-none focus:border-[var(--theme-hover-red)] focus:ring-1 focus:ring-[var(--theme-hover-red)] text-sm transition-all text-gray-800`}
+            />
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {localQuery && (
+              <button
+                onClick={() => setLocalQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[var(--theme-hover-red)] transition-colors"
+                aria-label="Clear Search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {matches.length > 0 && (
+            <div className={`${inter.className} flex items-center gap-3 text-sm`}>
+              <span className="text-[var(--theme-gray)] font-bold tracking-widest uppercase text-[10px] whitespace-nowrap">
+                {activeMatchIdx + 1} / {matches.length}
+              </span>
+              <div className="flex items-center border border-gray-200 rounded-md overflow-hidden bg-white shadow-sm">
+                <button onClick={handlePrevMatch} className="p-1.5 hover:bg-gray-50 text-[var(--theme-hover-red)] transition-colors" aria-label="Previous Match">
+                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                </button>
+                <div className="w-px h-4 bg-gray-200"></div>
+                <button onClick={handleNextMatch} className="p-1.5 hover:bg-gray-50 text-[var(--theme-hover-red)] transition-colors" aria-label="Next Match">
+                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {localQuery && matches.length === 0 && (
+            <span className={`${inter.className} text-[var(--theme-gray)] text-xs tracking-wide`}>No matches</span>
+          )}
+        </div>
       </div>
-    </nav>
 
-      <div className="max-w-5xl mx-auto p-4 md:p-12">
+      {/* Increased padding (pt-40) so text is not hidden under the two fixed bars */}
+      <div className="max-w-5xl mx-auto p-4 pt-40 md:p-12 md:pt-48">
         <div className="bg-[#F9F9F7] rounded-xl shadow-2xl border border-gray-100">
           <div className="p-8 md:p-16 text-justify leading-relaxed">
             {manifest.map((syl) => {
@@ -309,7 +431,13 @@ function ReaderContent() {
               const mediaOptions = syllableMediaMap[syl.id] || [];
               const hasMedia = mediaOptions.length > 0;
               const hasMultipleSegments = mediaOptions.length > 1;
+
+              // Standard interactions
               const isSelected = activeId === syl.id;
+
+              // Local Find in Page Search States
+              const isLocalActiveMatch = activeMatchSet.has(syl.id);
+              const isAnyLocalMatch = allMatchesSet.has(syl.id);
 
               const fontClass = (syl.nature === 'TEXT' || syl.nature === 'PUNCT' || syl.nature === 'SYM') ? uchen.className : 'font-sans';
               const sizeStyle = SIZES[syl.size?.toUpperCase()] || SIZES.DEFAULT;
@@ -317,6 +445,13 @@ function ReaderContent() {
               let textColorClass = "text-black";
               if (!hasMedia) textColorClass = "text-[var(--theme-no-media)]";
               else if (isSelected) textColorClass = "text-[var(--theme-gold)] font-bold";
+
+              // Local Search UI Overrides (Wins over other colors to remain highly visible)
+              if (isLocalActiveMatch) {
+                textColorClass = "text-[var(--theme-hover-red)] font-bold bg-[#8B1D1D]/10 rounded-sm px-[1px] shadow-[0_0_0_2px_rgba(139,29,29,0.1)]";
+              } else if (isAnyLocalMatch) {
+                textColorClass = "text-[#8B1D1D]/80 bg-[#8B1D1D]/5 rounded-sm px-[1px]";
+              }
 
               return (
                 <React.Fragment key={syl.id}>
