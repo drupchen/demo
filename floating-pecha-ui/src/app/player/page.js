@@ -30,6 +30,10 @@ function PlayerContent() {
   const [activeSegId, setActiveSegId] = useState(null);
   const [isCurrentlyPlaying, setIsCurrentlyPlaying] = useState(false);
 
+  // NEW: State for the Right-Click Context Menu
+  const [contextMenu, setContextMenu] = useState(null);
+  const [copySuccess, setCopySuccess] = useState(false);
+
   // Determine sessionId dynamically
   const sessionId = urlSessionId || (sessions.length > 0 ? sessions[0].source_session : null);
 
@@ -120,27 +124,24 @@ function PlayerContent() {
     return raw || mediaParam || null;
   }, [effectiveAudioType, firstSeg, mediaParam]);
 
-  // --- 7. AUTO-SEEK & SYNC LOGIC (The Fix) ---
+  // --- 7. AUTO-SEEK & SYNC LOGIC ---
   useEffect(() => {
     if (!audioRef.current || !audioSrc) return;
 
     const handleLoadedMetadata = () => {
       let targetSec = 0;
 
-      // If we are switching tracks and already have a segment highlighted
       if (activeSegId) {
         const currentSeg = dynamicTranscript.find(seg => seg.id === activeSegId);
         if (currentSeg) {
           targetSec = currentSeg.startTimeMs / 1000;
         }
       } else if (timeParam) {
-        // Fallback for initial page load from URL
         targetSec = parseToSeconds(timeParam);
       }
 
       audioRef.current.currentTime = targetSec;
 
-      // Resume playback if we were already playing during the toggle
       if (isCurrentlyPlaying) {
         audioRef.current.play().catch(e => console.log("Playback blocked:", e));
       }
@@ -149,7 +150,7 @@ function PlayerContent() {
     const el = audioRef.current;
     el.addEventListener('loadedmetadata', handleLoadedMetadata);
     return () => el.removeEventListener('loadedmetadata', handleLoadedMetadata);
-  }, [audioSrc, dynamicTranscript, activeSegId, timeParam]); // Re-runs whenever audioSrc changes
+  }, [audioSrc, dynamicTranscript, activeSegId, timeParam]);
 
   const handleTimeUpdate = () => {
     if (audioRef.current) {
@@ -167,8 +168,43 @@ function PlayerContent() {
     }
   };
 
+  // --- NEW: CONTEXT MENU HANDLER ---
+  const handleContextMenu = (e, seg) => {
+    e.preventDefault();
+
+    const targetSec = seg.startTimeMs / 1000;
+    const targetSylId = seg.syllables.length > 0 ? seg.syllables[0].id : '';
+
+    // Construct the exact shareable URL
+    const shareUrl = `${window.location.origin}/player?instance=${instanceId}&session=${sessionId}&time=${targetSec}&sylId=${targetSylId}`;
+
+    // Prevent menu from overflowing off the right edge of the screen
+    const menuWidth = 280;
+    const mouseX = e.clientX + menuWidth > window.innerWidth ? window.innerWidth - menuWidth - 20 : e.clientX;
+
+    setContextMenu({
+      mouseX: mouseX,
+      mouseY: e.clientY,
+      url: shareUrl,
+    });
+    setCopySuccess(false);
+
+    // Try to auto-copy right away
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(shareUrl)
+        .then(() => setCopySuccess(true))
+        .catch(err => console.log("Auto-copy blocked by browser:", err));
+    }
+  };
+
+  // Global click listener to close context menu
   useEffect(() => {
-    // 1. Force the main browser window to stay at the top so the 'X' is always visible
+    const handleClick = () => setContextMenu(null);
+    window.addEventListener('click', handleClick);
+    return () => window.removeEventListener('click', handleClick);
+  }, []);
+
+  useEffect(() => {
     window.scrollTo(0, 0);
 
     let currentSeg = dynamicTranscript.find(
@@ -187,14 +223,11 @@ function PlayerContent() {
       const activeElement = document.getElementById(`segment-${currentSeg.id}`);
 
       if (activeElement && transcriptRef.current) {
-        // 2. Scroll ONLY the inner transcript box, leaving the outer page alone
         const container = transcriptRef.current;
-
-        // Calculate the exact pixel location to center the text inside the box
         const targetScrollTop = activeElement.offsetTop - (container.clientHeight / 2) + (activeElement.clientHeight / 2);
 
         container.scrollTo({
-          top: Math.max(0, targetScrollTop), // Prevent negative scroll values
+          top: Math.max(0, targetScrollTop),
           behavior: 'smooth'
         });
       }
@@ -204,7 +237,6 @@ function PlayerContent() {
   const switchAudio = (type) => {
     if (type === 'restored' && !hasRestored) return;
     if (audioRef.current) {
-      // Capture the playing state before the component re-renders and key changes
       setIsCurrentlyPlaying(!audioRef.current.paused);
       setAudioType(type);
     }
@@ -218,31 +250,17 @@ function PlayerContent() {
     <main className="min-h-[calc(100vh-81px)] bg-[#F7FAFC] flex flex-col overflow-x-hidden" style={getThemeCssVars()}>
 
       {/* FLOATING STICKY BAR */}
-      <nav
-        className="fixed top-0 z-[60] w-full bg-[#F7FAFC]/95 backdrop-blur-xl border-b border-gray-200 px-8 md:px-12 h-20"
-      >
+      <nav className="fixed top-0 z-[60] w-full bg-[#F7FAFC]/95 backdrop-blur-xl border-b border-gray-200 px-8 md:px-12 h-20">
         <div className="max-w-5xl mx-auto h-full flex items-center">
           <button
             onClick={() => router.push('/archive')}
             className="group flex items-center gap-3 text-[var(--theme-gray)] hover:text-[var(--theme-hover-red)] transition-all"
             aria-label="Back to Catalog"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="transition-transform duration-300 group-hover:-translate-x-1.5"
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-300 group-hover:-translate-x-1.5">
               <line x1="19" y1="12" x2="5" y2="12"></line>
               <polyline points="12 19 5 12 12 5"></polyline>
             </svg>
-
             <span className={`${inter.className} text-[10px] md:text-xs font-bold uppercase tracking-[0.2em]`}>
               Back to Catalog
             </span>
@@ -251,7 +269,7 @@ function PlayerContent() {
       </nav>
 
       {/* ORIGINAL PLAYER CONTENT */}
-      <div className="pt-28 pb-4 px-4 md:pt-32 md:pb-12 md:px-12">
+      <div className="pt-28 pb-4 px-4 md:pt-32 md:pb-12 md:px-12 relative">
         <div className="max-w-5xl mx-auto">
 
           <div className="flex justify-between items-center mb-8">
@@ -270,10 +288,10 @@ function PlayerContent() {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
+          <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200 relative">
             <div className="p-6 bg-gray-50 border-b border-gray-200">
               <audio
-                key={`${sessionId}-${effectiveAudioType}`} // Track swap force-mount
+                key={`${sessionId}-${effectiveAudioType}`}
                 ref={audioRef}
                 controls
                 className="w-full"
@@ -294,7 +312,9 @@ function PlayerContent() {
                       key={seg.id}
                       id={`segment-${seg.id}`}
                       onClick={() => handleSyllableClick(seg.startTimeMs, seg.id)}
+                      onContextMenu={(e) => handleContextMenu(e, seg)}
                       className={`cursor-pointer rounded px-1 transition-colors ${isActive ? 'bg-[#f7f3e7]' : 'hover:bg-gray-100'} ${isFuture && !isActive ? 'text-[var(--theme-future-text)]' : 'text-[#23272f]'}`}
+                      title="Right-click to get shareable link"
                     >
                       {seg.syllables.map((syl, i) => (
                         <span key={syl.id || i} className={sylIdParam === syl.id ? 'text-[var(--theme-gold)] font-bold' : ''}>{syl.text}</span>
@@ -310,6 +330,55 @@ function PlayerContent() {
           </div>
         </div>
       </div>
+
+      {/* CUSTOM CONTEXT MENU FOR DEEP LINKING */}
+      {contextMenu && (
+        <div
+          className="fixed z-[100] bg-white border border-[var(--theme-gold-border)] shadow-2xl rounded-xl p-4 w-72 flex flex-col gap-3 animate-in zoom-in-95 duration-200"
+          style={{ top: contextMenu.mouseY, left: contextMenu.mouseX }}
+          onClick={(e) => e.stopPropagation()} // Prevent clicks inside from closing it
+        >
+          <div className="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--theme-gold)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+            <p className={`${inter.className} text-xs font-bold text-[var(--theme-gray)] uppercase tracking-widest`}>
+              Share this Segment
+            </p>
+          </div>
+
+          <input
+            type="text"
+            readOnly
+            value={contextMenu.url}
+            className={`${inter.className} w-full text-[11px] p-2 bg-gray-50 border border-gray-200 rounded-md text-gray-600 outline-none`}
+            onClick={(e) => e.target.select()}
+          />
+
+          <button
+            onClick={() => {
+              if (navigator.clipboard) {
+                navigator.clipboard.writeText(contextMenu.url);
+                setCopySuccess(true);
+              }
+            }}
+            className={`${inter.className} w-full py-2 rounded-lg text-xs font-semibold transition-colors flex justify-center items-center gap-2 ${
+              copySuccess ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-[var(--theme-gold)] text-white hover:bg-[var(--theme-hover-red)] shadow-sm'
+            }`}
+          >
+            {copySuccess ? (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                Copied to Clipboard!
+              </>
+            ) : (
+              'Copy URL'
+            )}
+          </button>
+        </div>
+      )}
+
       {/* FOOTER */}
       <Footer className="mt-8" />
     </main>
