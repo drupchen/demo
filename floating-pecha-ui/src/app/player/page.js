@@ -30,7 +30,7 @@ function PlayerContent() {
   const [activeSegId, setActiveSegId] = useState(null);
   const [isCurrentlyPlaying, setIsCurrentlyPlaying] = useState(false);
 
-  // NEW: State for the Right-Click Context Menu
+  // State for the Right-Click Context Menu
   const [contextMenu, setContextMenu] = useState(null);
   const [copySuccess, setCopySuccess] = useState(false);
 
@@ -172,11 +172,17 @@ function PlayerContent() {
   const handleContextMenu = (e, seg) => {
     e.preventDefault();
 
+    // 1. Always use the exact start time of the clicked segment (ignoring current player time)
     const targetSec = seg.startTimeMs / 1000;
-    const targetSylId = seg.syllables.length > 0 ? seg.syllables[0].id : '';
 
-    // Construct the exact shareable URL
-    const shareUrl = `${window.location.origin}/player?instance=${instanceId}&session=${sessionId}&time=${targetSec}&sylId=${targetSylId}`;
+    // 2. Always grab the currently "gold" highlighted syllable directly from the state (URL params)
+    const targetSylId = sylIdParam || '';
+
+    // 3. Construct the exact shareable URL
+    let shareUrl = `${window.location.origin}/player?instance=${instanceId}&session=${sessionId}&time=${targetSec}`;
+    if (targetSylId) {
+      shareUrl += `&sylId=${targetSylId}`;
+    }
 
     // Prevent menu from overflowing off the right edge of the screen
     const menuWidth = 280;
