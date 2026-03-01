@@ -8,7 +8,6 @@ export default function SearchBar({ manifest, visible, onMatchSetsChange }) {
   const [matches, setMatches] = useState([]);
   const [activeMatchIdx, setActiveMatchIdx] = useState(-1);
 
-  // Build compressed-text search index
   const searchIndex = useMemo(() => {
     let compressedText = '';
     const charIndexToUuid = [];
@@ -26,16 +25,12 @@ export default function SearchBar({ manifest, visible, onMatchSetsChange }) {
     return { compressedText, charIndexToUuid };
   }, [manifest]);
 
-  // Scroll to a match
   const scrollToMatch = useCallback((uuids) => {
     if (!uuids || uuids.length === 0) return;
     const el = document.getElementById(uuids[0]);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
 
-  // Run search when query changes
   useEffect(() => {
     if (!localQuery.trim()) {
       setMatches([]);
@@ -64,9 +59,7 @@ export default function SearchBar({ manifest, visible, onMatchSetsChange }) {
         if (charIndexToUuid[i]) matchedUuids.add(charIndexToUuid[i]);
       }
       const uuidsArr = Array.from(matchedUuids);
-      if (uuidsArr.length > 0) {
-        newMatches.push(uuidsArr);
-      }
+      if (uuidsArr.length > 0) newMatches.push(uuidsArr);
       startIndex = matchIdx + cleanQuery.length;
       matchIdx = compressedText.indexOf(cleanQuery, startIndex);
     }
@@ -80,7 +73,6 @@ export default function SearchBar({ manifest, visible, onMatchSetsChange }) {
     }
   }, [localQuery, searchIndex, scrollToMatch, onMatchSetsChange]);
 
-  // Update highlight sets whenever matches or active index changes
   useEffect(() => {
     const activeSet = new Set(matches[activeMatchIdx] || []);
     const allSet = new Set(matches.flat());
@@ -101,7 +93,6 @@ export default function SearchBar({ manifest, visible, onMatchSetsChange }) {
     scrollToMatch(matches[prevIdx]);
   };
 
-  // Clear search when hidden
   useEffect(() => {
     if (!visible) {
       setLocalQuery('');
@@ -114,13 +105,7 @@ export default function SearchBar({ manifest, visible, onMatchSetsChange }) {
   if (!visible) return null;
 
   return (
-    <div
-      className="fixed top-16 z-[55] w-full border-b px-4 md:px-10 h-12 flex items-center backdrop-blur-xl"
-      style={{
-        backgroundColor: 'color-mix(in srgb, var(--reader-bg-primary, #FAFAFA) 95%, transparent)',
-        borderColor: 'var(--reader-border, #E5E7EB)',
-      }}
-    >
+    <div className="fixed top-16 z-[55] w-full border-b px-4 md:px-10 h-12 flex items-center backdrop-blur-xl r-searchbar">
       <div className="max-w-5xl mx-auto w-full flex items-center gap-4">
         <div className="relative flex-grow max-w-sm">
           <input
@@ -129,24 +114,15 @@ export default function SearchBar({ manifest, visible, onMatchSetsChange }) {
             onChange={(e) => setLocalQuery(e.target.value)}
             placeholder="Find in teaching..."
             autoFocus
-            className={`${inter.className} w-full pl-9 pr-9 py-1.5 border rounded-lg focus:outline-none text-sm transition-all`}
-            style={{
-              backgroundColor: 'var(--reader-bg-surface, #FFFFFF)',
-              borderColor: 'var(--reader-border, #E5E7EB)',
-              color: 'var(--reader-text-primary, #2D3436)',
-            }}
-            onFocus={(e) => { e.target.style.borderColor = 'var(--reader-accent, #D4AF37)'; }}
-            onBlur={(e) => { e.target.style.borderColor = 'var(--reader-border, #E5E7EB)'; }}
+            className={`${inter.className} w-full pl-9 pr-9 py-1.5 border rounded-lg focus:outline-none text-sm transition-all r-search-input`}
           />
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-               style={{ color: 'var(--reader-text-muted, #9CA3AF)' }}>
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 r-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           {localQuery && (
             <button
               onClick={() => setLocalQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
-              style={{ color: 'var(--reader-text-muted, #9CA3AF)' }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors r-text-muted"
               aria-label="Clear search"
             >
               ✕
@@ -156,26 +132,17 @@ export default function SearchBar({ manifest, visible, onMatchSetsChange }) {
 
         {matches.length > 0 && (
           <div className={`${inter.className} flex items-center gap-3 text-sm`}>
-            <span className="font-bold tracking-widest uppercase text-[10px] whitespace-nowrap"
-                  style={{ color: 'var(--reader-text-secondary, #6B7280)' }}>
+            <span className="font-bold tracking-widest uppercase text-[10px] whitespace-nowrap r-text-secondary">
               {activeMatchIdx + 1} / {matches.length}
             </span>
-            <div className="flex items-center border rounded-md overflow-hidden"
-                 style={{
-                   borderColor: 'var(--reader-border, #E5E7EB)',
-                   backgroundColor: 'var(--reader-bg-surface, #FFFFFF)',
-                 }}>
-              <button onClick={handlePrev} className="p-1.5 transition-colors"
-                      style={{ color: 'var(--reader-accent, #D4AF37)' }}
-                      aria-label="Previous match">
+            <div className="flex items-center border rounded-md overflow-hidden r-search-nav">
+              <button onClick={handlePrev} className="p-1.5 transition-colors r-text-accent" aria-label="Previous match">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="18 15 12 9 6 15" />
                 </svg>
               </button>
-              <div className="w-px h-4" style={{ backgroundColor: 'var(--reader-border, #E5E7EB)' }} />
-              <button onClick={handleNext} className="p-1.5 transition-colors"
-                      style={{ color: 'var(--reader-accent, #D4AF37)' }}
-                      aria-label="Next match">
+              <div className="w-px h-4 r-search-divider" />
+              <button onClick={handleNext} className="p-1.5 transition-colors r-text-accent" aria-label="Next match">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
@@ -185,8 +152,7 @@ export default function SearchBar({ manifest, visible, onMatchSetsChange }) {
         )}
 
         {localQuery && matches.length === 0 && (
-          <span className={`${inter.className} text-xs tracking-wide`}
-                style={{ color: 'var(--reader-text-muted, #9CA3AF)' }}>
+          <span className={`${inter.className} text-xs tracking-wide r-text-muted`}>
             No matches
           </span>
         )}

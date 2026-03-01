@@ -1,0 +1,170 @@
+/* ==========================================
+ * Reader Component Styles
+ * CSS classes using theme CSS custom properties
+ * to avoid inline style={{}} on every element.
+ * ========================================== */
+
+/* --- Text Colors --- */
+.r-text         { color: var(--reader-text-primary, #2D3436); }
+.r-text-1a      { color: var(--reader-text-primary, #1A1A1A); }
+.r-text-secondary { color: var(--reader-text-secondary, #6B7280); }
+.r-text-muted   { color: var(--reader-text-muted, #9CA3AF); }
+.r-text-disabled { color: var(--reader-text-disabled, #9CA3AF); }
+.r-text-accent  { color: var(--reader-accent, #D4AF37); }
+.r-text-white   { color: #FFFFFF; }
+
+/* --- Background Colors --- */
+.r-bg           { background-color: var(--reader-bg-primary, #FFFFFF); }
+.r-bg-surface   { background-color: var(--reader-bg-surface, #FFFFFF); }
+.r-bg-elevated  { background-color: var(--reader-bg-elevated, #F5F5F5); }
+.r-bg-accent    { background-color: var(--reader-accent, #D4AF37); }
+.r-bg-accent-subtle { background-color: var(--reader-accent-subtle, #FDF8EE); }
+.r-bg-inverted  { background-color: var(--reader-text-primary, #2D3436); }
+
+/* --- Borders --- */
+.r-border       { border-color: var(--reader-border, #E5E7EB); }
+
+/* --- Hover Patterns --- */
+.r-hover-accent:hover { color: var(--reader-accent, #D4AF37); }
+.r-hover-red:hover    { color: var(--theme-hover-red, #8B1D1D); }
+
+/* --- Sidebar Layout --- */
+.r-sidebar {
+  background-color: var(--reader-bg-surface, #F9FAFB);
+  border-color: var(--reader-border, #E5E7EB);
+}
+
+/* --- Syllable Base --- */
+.r-syl {
+  white-space: pre-wrap;
+  transition: opacity 500ms, color 300ms, background-color 300ms;
+}
+.r-syl-dimmed   { opacity: 0.55; }
+.r-syl-playing  { background-color: var(--reader-accent-subtle, #FDF8EE); }
+
+/* --- Search Match --- */
+.r-match-active {
+  background-color: rgba(139, 29, 29, 0.1);
+  color: var(--theme-hover-red, #8B1D1D);
+  font-weight: bold;
+}
+.r-match {
+  background-color: rgba(139, 29, 29, 0.05);
+  color: #8B1D1D;
+}
+
+/* --- Density Dots --- */
+.r-density-dot {
+  background-color: var(--reader-accent, #D4AF37);
+}
+
+/* --- Button Styles --- */
+.r-btn-accent {
+  background-color: var(--reader-accent, #D4AF37);
+  color: #FFFFFF;
+}
+.r-btn-active {
+  background-color: var(--reader-text-primary, #2D3436);
+  color: var(--reader-bg-surface, #FFFFFF);
+}
+.r-btn-elevated {
+  background-color: var(--reader-bg-elevated, #F5F5F5);
+  color: var(--reader-text-secondary, #6B7280);
+}
+
+/* --- Tab Bar --- */
+.r-tab {
+  color: var(--reader-text-muted, #9CA3AF);
+  border-bottom-color: transparent;
+  background-color: transparent;
+}
+.r-tab-active {
+  color: var(--reader-text-primary, #1A1A1A);
+  border-bottom-color: var(--reader-accent, #D4AF37);
+}
+
+/* --- Session Chip --- */
+.r-chip-active {
+  background-color: var(--reader-accent, #D4AF37);
+  color: #FFFFFF;
+}
+.r-chip-inactive {
+  background-color: var(--reader-bg-elevated, #F5F5F5);
+  color: var(--reader-text-secondary, #6B7280);
+}
+
+/* --- Timeline Segments --- */
+.r-timeline-active {
+  background-color: var(--reader-accent, #D4AF37);
+}
+.r-timeline-past {
+  background-color: var(--reader-accent, #D4AF37);
+  opacity: 0.4;
+}
+.r-timeline-future {
+  background-color: var(--reader-border, #E5E7EB);
+}
+
+/* --- Badge --- */
+.r-badge {
+  color: var(--reader-text-secondary, #6B7280);
+  background-color: var(--reader-bg-elevated, #F5F5F5);
+}
+
+/* --- Progress Bar --- */
+.r-progress-track { background-color: var(--reader-bg-elevated, #F5F5F5); }
+.r-progress-fill  { background-color: var(--reader-accent, #D4AF37); }
+
+/* --- MiniPlayer --- */
+.r-miniplayer {
+  background-color: color-mix(in srgb, var(--reader-bg-surface, #FFFFFF) 95%, transparent);
+  border-color: var(--reader-border, #E5E7EB);
+}
+
+/* --- SearchBar --- */
+.r-searchbar {
+  background-color: color-mix(in srgb, var(--reader-bg-primary, #FAFAFA) 95%, transparent);
+  border-color: var(--reader-border, #E5E7EB);
+}
+.r-search-input {
+  background-color: var(--reader-bg-surface, #FFFFFF);
+  border-color: var(--reader-border, #E5E7EB);
+  color: var(--reader-text-primary, #2D3436);
+}
+.r-search-input:focus {
+  border-color: var(--reader-accent, #D4AF37);
+}
+.r-search-nav {
+  border-color: var(--reader-border, #E5E7EB);
+  background-color: var(--reader-bg-surface, #FFFFFF);
+}
+.r-search-divider {
+  background-color: var(--reader-border, #E5E7EB);
+}
+
+/* --- Settings Popover --- */
+.r-settings {
+  background-color: var(--reader-bg-surface, #FFFFFF);
+  border-color: var(--reader-border, #E5E7EB);
+}
+
+/* --- Commentary Card --- */
+.r-card-hover:hover {
+  border-color: var(--reader-accent, #D4AF37);
+  background-color: var(--reader-accent-subtle, #FDF8EE);
+}
+
+/* --- Transcript Segment (player) --- */
+.r-seg-active {
+  background-color: var(--reader-accent-subtle, #FDF8EE);
+}
+.r-seg-future { opacity: 0.5; }
+
+/* --- Paragraph Blocks (virtualization + commentary borders) --- */
+.r-paragraph {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 80px;
+  margin-left: -24px;
+  padding-left: 24px;
+  margin-bottom: 1.5rem;
+}

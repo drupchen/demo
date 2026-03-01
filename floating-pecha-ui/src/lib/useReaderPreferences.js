@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 const STORAGE_KEY = 'reader-preferences';
 
 const VALID = {
-  size: ['S', 'M', 'L', 'XL'],
+  size: ['XS', 'S', 'M', 'L', 'XL'],
   theme: ['light', 'sepia', 'dark'],
   spacing: ['compact', 'normal', 'relaxed'],
 };

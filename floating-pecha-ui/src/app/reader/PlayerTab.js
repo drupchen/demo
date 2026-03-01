@@ -6,23 +6,31 @@ import { parseToMs, formatDurationMs, formatDurationBadge } from '@/lib/useAudio
 
 export default function PlayerTab({
   audio,
-  activeSession,
-  allSessionIds,
-  activeSessionSegments,
+  activeCommentary,
+  allCommentaryIds,
+  activeCommentarySegments,
   manifest,
-  onSessionSelect,
+  onCommentarySelect,
   onSegmentClick,
   activeSylId,
+  sidebarSizes,
+  preferRestored,
+  onTogglePreferRestored,
 }) {
   const transcriptRef = useRef(null);
   const [userScrolledAt, setUserScrolledAt] = useState(0);
 
+  // Check if any segment in this commentary has restored audio
+  const hasRestored = useMemo(() => {
+    return activeCommentarySegments.some(seg => Boolean(seg.media_restored));
+  }, [activeCommentarySegments]);
+
   // Build transcript from segments
   const transcript = useMemo(() => {
-    return activeSessionSegments.map(segment => {
+    return activeCommentarySegments.map(segment => {
       const syllables = manifest
         .filter(syl => segment.syl_uuids.includes(syl.id))
-        .map(s => ({ id: s.id, text: s.text === '\n' ? ' ' : s.text }));
+        .map(s => ({ id: s.id, text: s.text === '\n' ? ' ' : s.text, size: s.size }));
 
       const startTimeMs = parseToMs(segment.start);
       const endTimeMs = segment.end ? parseToMs(segment.end) : startTimeMs + 10000;
@@ -36,7 +44,7 @@ export default function PlayerTab({
         sylUuids: segment.syl_uuids,
       };
     });
-  }, [activeSessionSegments, manifest]);
+  }, [activeCommentarySegments, manifest]);
 
   // Find active segment based on current time
   const activeSegIndex = useMemo(() => {
@@ -48,7 +56,7 @@ export default function PlayerTab({
     return past.length > 0 ? transcript.indexOf(past[past.length - 1]) : -1;
   }, [audio.currentTimeMs, transcript]);
 
-  // Total session duration
+  // Total duration
   const totalDurationMs = audio.durationMs || (transcript.length > 0
     ? transcript[transcript.length - 1].endTimeMs
     : 0);
@@ -86,48 +94,41 @@ export default function PlayerTab({
     }
   }, [activeSegIndex, transcript, onSegmentClick]);
 
-  if (!activeSession) {
+  if (!activeCommentary) {
     return (
-      <div className={`${inter.className} text-sm text-center py-12`}
-           style={{ color: 'var(--reader-text-secondary, #6B7280)' }}>
-        Select a session to start listening
+      <div className={`${inter.className} text-sm text-center py-12 r-text-secondary`}>
+        Select a commentary to start listening
       </div>
     );
   }
 
   return (
     <div className="flex flex-col h-full -mx-5 -mb-5">
-      {/* Session Switcher */}
-      <div className="flex gap-1.5 px-5 py-3 overflow-x-auto border-b flex-shrink-0"
-           style={{ borderColor: 'var(--reader-border, #E5E7EB)' }}>
-        {allSessionIds.map(id => {
-          const shortId = id.split('_')[0];
-          const isActive = activeSession === id;
-          return (
-            <button
-              key={id}
-              onClick={() => onSessionSelect(id)}
-              className={`${inter.className} px-3 py-1.5 rounded-full text-[10px] font-bold tracking-wider whitespace-nowrap transition-all`}
-              style={{
-                backgroundColor: isActive ? 'var(--reader-accent, #D4AF37)' : 'var(--reader-bg-elevated, #F5F5F5)',
-                color: isActive ? '#FFFFFF' : 'var(--reader-text-secondary, #6B7280)',
-              }}
-            >
-              {shortId}
-            </button>
-          );
-        })}
-      </div>
+      {/* Commentary Switcher */}
+      {allCommentaryIds.length > 1 && (
+        <div className="flex gap-1.5 px-5 py-3 overflow-x-auto border-b flex-shrink-0 r-border">
+          {allCommentaryIds.map(id => {
+            const isActive = activeCommentary === id;
+            return (
+              <button
+                key={id}
+                onClick={() => onCommentarySelect(id)}
+                className={`${inter.className} px-3 py-1.5 rounded-full text-[10px] font-bold tracking-wider whitespace-nowrap transition-all ${isActive ? 'r-chip-active' : 'r-chip-inactive'}`}
+              >
+                Commentary {id}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Player Controls */}
-      <div className="px-5 py-4 border-b flex-shrink-0"
-           style={{ borderColor: 'var(--reader-border, #E5E7EB)' }}>
+      <div className="px-5 py-4 border-b flex-shrink-0 r-border">
         {/* Play/Pause + Time */}
         <div className="flex items-center gap-4 mb-3">
           <button
             onClick={audio.togglePlay}
-            className="w-10 h-10 rounded-full text-white flex items-center justify-center transition-colors flex-shrink-0"
-            style={{ backgroundColor: 'var(--reader-accent, #D4AF37)' }}
+            className="w-10 h-10 rounded-full text-white flex items-center justify-center transition-colors flex-shrink-0 r-bg-accent"
             aria-label={audio.isPlaying ? 'Pause' : 'Play'}
           >
             {audio.isPlaying ? (
@@ -138,15 +139,13 @@ export default function PlayerTab({
           </button>
 
           <div className="flex-1">
-            <div className={`${inter.className} flex justify-between text-[10px] font-medium mb-1`}
-                 style={{ color: 'var(--reader-text-secondary, #6B7280)' }}>
+            <div className={`${inter.className} flex justify-between text-[10px] font-medium mb-1 r-text-secondary`}>
               <span>{formatDurationMs(audio.currentTimeMs)}</span>
               <span>{formatDurationMs(totalDurationMs)}</span>
             </div>
             {/* Progress bar */}
             <div
-              className="h-1.5 rounded-full cursor-pointer relative"
-              style={{ backgroundColor: 'var(--reader-bg-elevated, #F5F5F5)' }}
+              className="h-1.5 rounded-full cursor-pointer relative r-progress-track"
               onClick={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
                 const pct = (e.clientX - rect.left) / rect.width;
@@ -154,11 +153,8 @@ export default function PlayerTab({
               }}
             >
               <div
-                className="h-full rounded-full transition-all duration-100"
-                style={{
-                  backgroundColor: 'var(--reader-accent, #D4AF37)',
-                  width: totalDurationMs > 0 ? `${(audio.currentTimeMs / totalDurationMs) * 100}%` : '0%',
-                }}
+                className="h-full rounded-full transition-all duration-100 r-progress-fill"
+                style={{ width: totalDurationMs > 0 ? `${(audio.currentTimeMs / totalDurationMs) * 100}%` : '0%' }}
               />
             </div>
           </div>
@@ -175,16 +171,10 @@ export default function PlayerTab({
                 <button
                   key={seg.id}
                   onClick={() => audio.seekTo(seg.startTimeMs)}
-                  className="h-full rounded-sm transition-all cursor-pointer"
-                  style={{
-                    width: `${Math.max(widthPct, 0.5)}%`,
-                    backgroundColor: isActive
-                      ? 'var(--reader-accent, #D4AF37)'
-                      : isPast
-                        ? 'var(--reader-accent, #D4AF37)'
-                        : 'var(--reader-bg-elevated, #F5F5F5)',
-                    opacity: isPast && !isActive ? 0.4 : 1,
-                  }}
+                  className={`h-full rounded-sm transition-all cursor-pointer ${
+                    isActive ? 'r-timeline-active' : isPast ? 'r-timeline-past' : 'r-timeline-future'
+                  }`}
+                  style={{ width: `${Math.max(widthPct, 0.5)}%` }}
                   title={`Segment ${idx + 1}`}
                 />
               );
@@ -192,21 +182,42 @@ export default function PlayerTab({
           </div>
         )}
 
-        {/* Speed selector */}
-        <div className="flex items-center gap-1 mt-3">
-          {[0.75, 1, 1.25, 1.5, 2].map(rate => (
-            <button
-              key={rate}
-              onClick={() => audio.setPlaybackRate(rate)}
-              className={`${inter.className} px-2 py-1 rounded text-[10px] font-bold transition-all`}
-              style={{
-                backgroundColor: audio.playbackRate === rate ? 'var(--reader-text-primary, #2D3436)' : 'transparent',
-                color: audio.playbackRate === rate ? 'var(--reader-bg-surface, #FFFFFF)' : 'var(--reader-text-secondary, #6B7280)',
-              }}
-            >
-              {rate}x
-            </button>
-          ))}
+        {/* Speed selector + audio version toggle */}
+        <div className="flex items-center justify-between mt-3">
+          <div className="flex items-center gap-1">
+            {[0.75, 1, 1.25, 1.5, 2].map(rate => (
+              <button
+                key={rate}
+                onClick={() => audio.setPlaybackRate(rate)}
+                className={`${inter.className} px-2 py-1 rounded text-[10px] font-bold transition-all ${
+                  audio.playbackRate === rate ? 'r-btn-active' : 'r-text-secondary'
+                }`}
+              >
+                {rate}x
+              </button>
+            ))}
+          </div>
+
+          {hasRestored && onTogglePreferRestored && (
+            <div className="flex rounded-md overflow-hidden border r-border">
+              <button
+                onClick={() => preferRestored && onTogglePreferRestored()}
+                className={`${inter.className} px-2.5 py-1 text-[10px] font-bold transition-all ${
+                  !preferRestored ? 'r-btn-active' : 'r-text-secondary'
+                }`}
+              >
+                Original
+              </button>
+              <button
+                onClick={() => !preferRestored && onTogglePreferRestored()}
+                className={`${inter.className} px-2.5 py-1 text-[10px] font-bold transition-all ${
+                  preferRestored ? 'r-btn-active' : 'r-text-secondary'
+                }`}
+              >
+                Restored
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -221,33 +232,31 @@ export default function PlayerTab({
               key={seg.id}
               id={`seg-${seg.id}`}
               onClick={() => audio.seekTo(seg.startTimeMs)}
-              className="w-full text-left p-3 rounded-lg transition-all"
-              style={{
-                backgroundColor: isActive ? 'var(--reader-accent-subtle, #FDF8EE)' : 'transparent',
-                opacity: isFuture ? 0.5 : isActive ? 1 : 0.85,
-              }}
+              className={`w-full text-left p-3 rounded-lg transition-all ${isActive ? 'r-seg-active' : ''} ${isFuture ? 'r-seg-future' : ''}`}
+              style={{ opacity: isFuture ? undefined : isActive ? 1 : 0.85 }}
             >
-              <span className={`${uchen.className} text-base leading-relaxed`}
-                    style={{ color: 'var(--reader-text-primary, #2D3436)' }}>
-                {seg.syllables.map((syl, i) => (
-                  <span key={syl.id || i}
-                        style={activeSylId === syl.id ? { color: 'var(--reader-accent, #D4AF37)', fontWeight: 'bold' } : undefined}>
-                    {syl.text}
-                  </span>
-                ))}
+              <span className={`${uchen.className} leading-relaxed r-text`}>
+                {seg.syllables.map((syl, i) => {
+                  const sylStyle = sidebarSizes?.[syl.size?.toUpperCase()] || sidebarSizes?.DEFAULT || {};
+                  const isHighlighted = activeSylId === syl.id;
+                  return (
+                    <span
+                      key={syl.id || i}
+                      className={isHighlighted ? 'r-text-accent font-bold' : ''}
+                      style={sylStyle}
+                    >
+                      {syl.text}
+                    </span>
+                  );
+                })}
               </span>
-              <span className={`${inter.className} inline-flex ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full align-middle`}
-                    style={{
-                      color: 'var(--reader-text-secondary, #6B7280)',
-                      backgroundColor: 'var(--reader-bg-elevated, #F5F5F5)',
-                    }}>
+              <span className={`${inter.className} inline-flex ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full align-middle r-badge`}>
                 {formatDurationBadge(seg.durationMs)}
               </span>
             </button>
           );
         })}
 
-        {/* Return to current button */}
         {activeSegIndex >= 0 && (
           <ReturnButton
             userScrolledAt={userScrolledAt}
@@ -261,7 +270,6 @@ export default function PlayerTab({
   );
 }
 
-// Separate component to avoid re-rendering the entire transcript on scroll
 function ReturnButton({ userScrolledAt, setUserScrolledAt, transcript, activeSegIndex }) {
   const [showButton, setShowButton] = useState(false);
 
@@ -284,11 +292,7 @@ function ReturnButton({ userScrolledAt, setUserScrolledAt, transcript, activeSeg
         const el = document.getElementById(`seg-${transcript[activeSegIndex]?.id}`);
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }}
-      className={`${inter.className} sticky bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full text-xs font-bold shadow-lg`}
-      style={{
-        backgroundColor: 'var(--reader-text-primary, #2D3436)',
-        color: 'var(--reader-bg-surface, #FFFFFF)',
-      }}
+      className={`${inter.className} sticky bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full text-xs font-bold shadow-lg r-bg-inverted r-text-white`}
     >
       ↓ Return to current
     </button>

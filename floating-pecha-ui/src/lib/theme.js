@@ -97,10 +97,11 @@ export const THEMES = {
 // 4. SIZE PRESETS
 // ==========================================
 export const SIZE_PRESETS = {
-  S:  { label: 'Small',        baseRem: 1.75 },
-  M:  { label: 'Medium',       baseRem: 2.25 },
-  L:  { label: 'Large',        baseRem: 2.75 },
-  XL: { label: 'Extra Large',  baseRem: 3.25 },
+  XS: { label: 'Extra Small',  baseRem: 1.25 },
+  S:  { label: 'Small',        baseRem: 1.5 },
+  M:  { label: 'Medium',       baseRem: 1.75 },
+  L:  { label: 'Large',        baseRem: 2.25 },
+  XL: { label: 'Extra Large',  baseRem: 2.75 },
 };
 
 // ==========================================
@@ -121,7 +122,7 @@ const SMALL_RATIO = 0.70;
  * Generate SIZES object dynamically from a base rem value and lineHeight.
  * This lets the reader scale all text proportionally from user preferences.
  */
-export function getSizes(baseRem = 2.25, lineHeight = 1.6) {
+export function getSizes(baseRem = 1.75, lineHeight = 1.6) {
   const lh = String(lineHeight);
   return {
     TITLE:   { fontSize: `${(baseRem * 1.333).toFixed(2)}rem`, lineHeight: '1.3', fontWeight: '' },
@@ -134,7 +135,7 @@ export function getSizes(baseRem = 2.25, lineHeight = 1.6) {
 // ==========================================
 // 7. STATIC SIZES (backwards compatibility)
 // ==========================================
-export const SIZES = getSizes(2.25, 1.6);
+export const SIZES = getSizes(1.75, 1.6);
 
 // ==========================================
 // 8. CSS VARIABLE GENERATOR

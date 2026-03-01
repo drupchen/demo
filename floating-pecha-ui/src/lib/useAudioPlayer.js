@@ -55,8 +55,8 @@ export function formatDurationBadge(ms) {
   if (totalSeconds < 60) return `${totalSeconds}s`;
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  if (seconds === 0) return `${minutes}mn`;
-  return `${minutes}mn${seconds}s`;
+  if (seconds === 0) return `${minutes}m`;
+  return `${minutes}m${seconds}s`;
 }
 
 // ==========================================
@@ -128,22 +128,25 @@ export function useAudioPlayer() {
     }
   }, []);
 
-  const loadSource = useCallback((src, startMs = 0) => {
+  const loadSource = useCallback((src, startMs = 0, autoPlay = true) => {
+    const el = audioRef.current;
+    if (!el) return;
+
     setAudioSrc(src);
     setCurrentTimeMs(startMs);
     setDurationMs(0);
     setIsPlaying(false);
 
-    // Wait for next tick so the <audio> element picks up the new src
-    requestAnimationFrame(() => {
-      const el = audioRef.current;
-      if (el) {
-        el.load();
-        if (startMs > 0) {
-          el.currentTime = startMs / 1000;
-        }
-      }
-    });
+    // Set src imperatively to keep user-gesture chain intact for autoplay
+    el.src = src;
+    el.load();
+
+    if (startMs > 0) {
+      el.currentTime = startMs / 1000;
+    }
+    if (autoPlay) {
+      el.play().catch(() => {});
+    }
   }, []);
 
   const setPlaybackRate = useCallback((rate) => {

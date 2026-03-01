@@ -1,1 +1,5 @@
 .DS_Store
+.serena
+.playwright-mcp
+floating-pecha-ui/public/data
+prepare_data/

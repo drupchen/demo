@@ -3,6 +3,7 @@
 import { inter } from '@/lib/theme';
 
 const SIZE_OPTIONS = [
+  { key: 'XS', label: 'XS' },
   { key: 'S', label: 'S' },
   { key: 'M', label: 'M' },
   { key: 'L', label: 'L' },
@@ -23,29 +24,16 @@ const SPACING_OPTIONS = [
 
 export default function ReadingSettings({ prefs, onUpdate, onClose }) {
   return (
-    <div
-      className={`${inter.className} absolute right-0 top-full mt-2 w-64 rounded-xl shadow-xl border p-5 z-[80]`}
-      style={{
-        backgroundColor: 'var(--reader-bg-surface, #FFFFFF)',
-        borderColor: 'var(--reader-border, #E5E7EB)',
-      }}
-    >
+    <div className={`${inter.className} absolute right-0 top-full mt-2 w-64 rounded-xl shadow-xl border p-5 z-[80] r-settings`}>
       {/* Size */}
       <div className="mb-5">
-        <p className="text-[10px] font-bold uppercase tracking-widest mb-2"
-           style={{ color: 'var(--reader-text-secondary, #6B7280)' }}>
-          Size
-        </p>
+        <p className="text-[10px] font-bold uppercase tracking-widest mb-2 r-text-secondary">Size</p>
         <div className="flex gap-1">
           {SIZE_OPTIONS.map(opt => (
             <button
               key={opt.key}
               onClick={() => onUpdate('size', opt.key)}
-              className="flex-1 py-2 rounded-lg text-xs font-bold transition-all"
-              style={{
-                backgroundColor: prefs.size === opt.key ? 'var(--reader-accent, #D4AF37)' : 'var(--reader-bg-elevated, #F5F5F5)',
-                color: prefs.size === opt.key ? '#FFFFFF' : 'var(--reader-text-secondary, #6B7280)',
-              }}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${prefs.size === opt.key ? 'r-btn-accent' : 'r-btn-elevated'}`}
             >
               {opt.label}
             </button>
@@ -55,10 +43,7 @@ export default function ReadingSettings({ prefs, onUpdate, onClose }) {
 
       {/* Theme */}
       <div className="mb-5">
-        <p className="text-[10px] font-bold uppercase tracking-widest mb-2"
-           style={{ color: 'var(--reader-text-secondary, #6B7280)' }}>
-          Theme
-        </p>
+        <p className="text-[10px] font-bold uppercase tracking-widest mb-2 r-text-secondary">Theme</p>
         <div className="flex gap-2">
           {THEME_OPTIONS.map(opt => (
             <button
@@ -82,20 +67,13 @@ export default function ReadingSettings({ prefs, onUpdate, onClose }) {
 
       {/* Spacing */}
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-widest mb-2"
-           style={{ color: 'var(--reader-text-secondary, #6B7280)' }}>
-          Spacing
-        </p>
+        <p className="text-[10px] font-bold uppercase tracking-widest mb-2 r-text-secondary">Spacing</p>
         <div className="flex gap-1">
           {SPACING_OPTIONS.map(opt => (
             <button
               key={opt.key}
               onClick={() => onUpdate('spacing', opt.key)}
-              className="flex-1 py-2 rounded-lg text-sm font-bold transition-all"
-              style={{
-                backgroundColor: prefs.spacing === opt.key ? 'var(--reader-accent, #D4AF37)' : 'var(--reader-bg-elevated, #F5F5F5)',
-                color: prefs.spacing === opt.key ? '#FFFFFF' : 'var(--reader-text-secondary, #6B7280)',
-              }}
+              className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${prefs.spacing === opt.key ? 'r-btn-accent' : 'r-btn-elevated'}`}
             >
               {opt.label}
             </button>
