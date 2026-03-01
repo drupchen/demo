@@ -340,29 +340,37 @@ function ReaderContent() {
         <div className="p-12 max-w-4xl mx-auto">
           <div className={`${uchen.className} text-justify`}>
             {manifest.map(syl => {
-              if (syl.text === '\n') {
-                return <div key={syl.id} id={syl.id} className="h-6" />;
-              }
+              if (syl.text === '\n') return <div key={syl.id} id={syl.id} className="h-6" />;
 
               const mediaOptions = syllableMediaMap[syl.id] || [];
               const hasMedia = mediaOptions.length > 0;
+              const density = syllableDensityMap[syl.id] || 0;
+              const sizeStyle = sizes[syl.size?.toUpperCase()] || sizes.DEFAULT;
+
+              // Coverage overlay: when a session is active, dim uncovered syllables
+              const isCovered = activeSession ? coverageSet.has(syl.id) : true;
               const isSelected = activeSylId === syl.id;
+
+              // Will be wired in Task 11 (dual-scroll)
+              const isInPlayingSegment = false;
 
               const fontClass =
                 syl.nature === 'TEXT' || syl.nature === 'PUNCT' || syl.nature === 'SYM'
                   ? uchen.className
                   : 'font-sans';
 
-              const sizeStyle = sizes[syl.size?.toUpperCase()] || sizes.DEFAULT;
-
-              // Color logic
-              let colorStyle;
+              // Color classes using CSS vars
+              let textColor = 'var(--reader-text-primary, #2D3436)';
+              let fontWeight = '';
+              if (!hasMedia) {
+                textColor = 'var(--reader-text-muted, #9CA3AF)';
+              }
               if (isSelected) {
-                colorStyle = 'var(--reader-accent, #D4AF37)';
-              } else if (hasMedia) {
-                colorStyle = 'var(--reader-text-primary, #1A1A1A)';
-              } else {
-                colorStyle = 'var(--reader-text-muted, #9CA3AF)';
+                textColor = 'var(--reader-accent, #D4AF37)';
+                fontWeight = 'bold';
+              }
+              if (activeSession && !isCovered) {
+                textColor = 'var(--reader-text-disabled, #D1D5DB)';
               }
 
               return (
@@ -370,22 +378,46 @@ function ReaderContent() {
                   key={syl.id}
                   id={syl.id}
                   onClick={hasMedia ? () => handleSyllableClick(syl.id) : undefined}
-                  className={`${fontClass} inline transition-colors duration-200 ${
-                    hasMedia ? 'cursor-pointer' : ''
-                  } ${isSelected ? 'font-bold' : ''}`}
+                  className={`${fontClass} inline relative ${
+                    hasMedia && !isSelected ? 'cursor-pointer' : ''
+                  } ${isInPlayingSegment ? 'rounded-sm' : ''}`}
                   style={{
                     ...sizeStyle,
-                    color: colorStyle,
+                    color: textColor,
+                    fontWeight,
                     whiteSpace: 'pre-wrap',
+                    opacity: (activeSession && !isCovered) ? 0.35 : 1,
+                    transition: 'opacity 500ms, color 300ms, background-color 300ms',
+                    backgroundColor: isInPlayingSegment ? 'var(--reader-accent-subtle, #FDF8EE)' : 'transparent',
                   }}
-                  onMouseEnter={hasMedia ? (e) => {
-                    if (!isSelected) e.currentTarget.style.color = 'var(--theme-hover-red, #8B1D1D)';
+                  onMouseEnter={hasMedia && !isSelected ? (e) => {
+                    e.currentTarget.style.color = 'var(--theme-hover-red, #8B1D1D)';
                   } : undefined}
-                  onMouseLeave={hasMedia ? (e) => {
-                    if (!isSelected) e.currentTarget.style.color = colorStyle;
+                  onMouseLeave={hasMedia && !isSelected ? (e) => {
+                    e.currentTarget.style.color = textColor;
                   } : undefined}
                 >
                   {syl.text}
+                  {/* Density indicator dots */}
+                  {density > 0 && !activeSession && (
+                    <span
+                      className="absolute -bottom-1 left-1/2 -translate-x-1/2 flex gap-[2px] pointer-events-none"
+                      aria-hidden="true"
+                    >
+                      {density === 1 && (
+                        <span className="w-[3px] h-[3px] rounded-full opacity-40" style={{ backgroundColor: 'var(--reader-accent, #D4AF37)' }} />
+                      )}
+                      {density >= 2 && density <= 3 && (
+                        <>
+                          <span className="w-[3px] h-[3px] rounded-full opacity-40" style={{ backgroundColor: 'var(--reader-accent, #D4AF37)' }} />
+                          <span className="w-[3px] h-[3px] rounded-full opacity-40" style={{ backgroundColor: 'var(--reader-accent, #D4AF37)' }} />
+                        </>
+                      )}
+                      {density >= 4 && (
+                        <span className="w-[8px] h-[2px] rounded-full opacity-50" style={{ backgroundColor: 'var(--reader-accent, #D4AF37)' }} />
+                      )}
+                    </span>
+                  )}
                 </span>
               );
             })}
