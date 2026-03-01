@@ -1,61 +1,69 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, Suspense, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
-// Import our single source of truth
-import { uchen, inter, SIZES, getThemeCssVars } from '@/lib/theme';
+import { uchen, inter, getSizes, getThemeCssVars } from '@/lib/theme';
+import { useReaderPreferences } from '@/lib/useReaderPreferences';
+import { useAudioPlayer, parseToMs } from '@/lib/useAudioPlayer';
 import Footer from '@/app/components/Footer';
+import ReaderNavbar from './ReaderNavbar';
+import ReaderLayout from './ReaderLayout';
 
 // ==========================================
-// 1. TIME PARSING & FORMATTING LOGIC
+// SIDEBAR TAB DEFINITIONS
 // ==========================================
-const parseToSeconds = (ts) => {
-  if (!ts) return 0;
-  if (!ts.includes(':')) return parseFloat(ts) || 0;
-
-  const [hms, ms] = ts.split(',');
-  const parts = hms.split(':').map(Number);
-  let seconds = (parts[0] * 3600) + (parts[1] * 60) + parts[2];
-  return seconds + (ms ? parseInt(ms) / 1000 : 0);
-};
-
-const formatDuration = (startTs, endTs) => {
-  const start = parseToSeconds(startTs);
-  const end = endTs ? parseToSeconds(endTs) : start + 10;
-  const totalSeconds = Math.round(end - start);
-  if (totalSeconds <= 0) return '1s';
-  if (totalSeconds < 60) return `${totalSeconds}s`;
-  const mins = Math.floor(totalSeconds / 60);
-  const secs = totalSeconds % 60;
-  return secs === 0 ? `${mins}mn` : `${mins}mn${secs}s`;
-};
+const TABS = [
+  { key: 'commentary', label: 'Commentary' },
+  { key: 'player',     label: 'Player' },
+  { key: 'info',       label: 'Info' },
+];
 
 // ==========================================
-// 2. MAIN READER COMPONENT
+// MAIN READER COMPONENT
 // ==========================================
 function ReaderContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Extract variables from the URL
-  const instanceId = searchParams.get('instance') || 'rpn_ngondro_1';
-  const anchorSylId = searchParams.get('sylId'); // The segment's first syllable
-  const searchQuery = searchParams.get('q');     // The user's exact search term
+  // URL parameters
+  const instanceId     = searchParams.get('instance') || 'rpn_ngondro_1';
+  const urlSession     = searchParams.get('session');
+  const urlSylId       = searchParams.get('sylId');
+  const searchQuery    = searchParams.get('q');
 
-  const [manifest, setManifest] = useState([]);
-  const [sessions, setSessions] = useState([]);
+  // Hooks
+  const { prefs, loaded } = useReaderPreferences();
+  const audio = useAudioPlayer();
+
+  // Data state
+  const [manifest, setManifest]   = useState([]);
+  const [sessions, setSessions]   = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [activeId, setActiveId] = useState(null);
-  const [contextOptions, setContextOptions] = useState([]);
+  // UI state
+  const [sidebarOpen, setSidebarOpen]     = useState(true);
+  const [searchOpen, setSearchOpen]       = useState(false);
+  const [activeTab, setActiveTab]         = useState('commentary');
+  const [activeSylId, setActiveSylId]     = useState(null);
+  const [activeSession, setActiveSession] = useState(null);
 
-  // --- NEW: LOCAL SEARCH STATE ---
-  const [localQuery, setLocalQuery] = useState('');
-  const [matches, setMatches] = useState([]);
-  const [activeMatchIdx, setActiveMatchIdx] = useState(-1);
+  // ----------------------------------------
+  // URL-driven initial state
+  // ----------------------------------------
+  useEffect(() => {
+    if (urlSession) {
+      setActiveSession(urlSession);
+      setActiveTab('player');
+    }
+    if (urlSylId) {
+      setActiveSylId(urlSylId);
+      setActiveTab('commentary');
+    }
+  }, [urlSession, urlSylId]);
 
-  // Load manifest and session data
+  // ----------------------------------------
+  // Data loading
+  // ----------------------------------------
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -63,7 +71,6 @@ function ReaderContent() {
           fetch(`/data/archive/${instanceId}/manifest.json`),
           fetch(`/data/archive/${instanceId}/${instanceId}_compiled_sessions.json`)
         ]);
-
         if (manifestRes.ok && sessionsRes.ok) {
           const manifestData = await manifestRes.json();
           const sessionsData = await sessionsRes.json();
@@ -79,7 +86,9 @@ function ReaderContent() {
     loadData();
   }, [instanceId]);
 
-  // Map syllables to their media segments
+  // ----------------------------------------
+  // Derived data: syllableMediaMap
+  // ----------------------------------------
   const syllableMediaMap = useMemo(() => {
     const map = {};
     sessions.forEach(segment => {
@@ -87,7 +96,9 @@ function ReaderContent() {
       if (mediaSource) {
         segment.syl_uuids.forEach(uuid => {
           if (!map[uuid]) map[uuid] = [];
-          const exists = map[uuid].some(opt => opt.segId === (segment.global_seg_id || segment.seg_id));
+          const exists = map[uuid].some(
+            opt => opt.segId === (segment.global_seg_id || segment.seg_id)
+          );
           if (!exists) {
             map[uuid].push({
               mediaUrl: mediaSource,
@@ -95,7 +106,7 @@ function ReaderContent() {
               endTime: segment.end,
               segId: segment.global_seg_id || segment.seg_id,
               source: segment.source_session,
-              sylUuids: segment.syl_uuids
+              sylUuids: segment.syl_uuids,
             });
           }
         });
@@ -104,420 +115,303 @@ function ReaderContent() {
     return map;
   }, [sessions]);
 
-  // --- NEW: BUILD SEARCH INDEX ---
-  const searchIndex = useMemo(() => {
-    let compressedText = "";
-    let charIndexToUuid = [];
-    manifest.forEach(syl => {
-      if (syl && syl.text) {
-        for (let i = 0; i < syl.text.length; i++) {
-          const char = syl.text[i];
-          if (!/[ \n\r\t་།]/.test(char)) {
-            compressedText += char.toLowerCase();
-            charIndexToUuid.push(syl.id);
-          }
-        }
+  // ----------------------------------------
+  // Derived data: syllableDensityMap
+  // Count distinct source_session values per syllable UUID.
+  // ----------------------------------------
+  const syllableDensityMap = useMemo(() => {
+    const map = {};
+    sessions.forEach(segment => {
+      if (!segment.syl_uuids || !segment.source_session) return;
+      segment.syl_uuids.forEach(uuid => {
+        if (!map[uuid]) map[uuid] = new Set();
+        map[uuid].add(segment.source_session);
+      });
+    });
+    // Convert Sets to counts
+    const counts = {};
+    for (const uuid in map) {
+      counts[uuid] = map[uuid].size;
+    }
+    return counts;
+  }, [sessions]);
+
+  // ----------------------------------------
+  // Derived data: allSessionIds
+  // Sorted unique session IDs from all segments.
+  // ----------------------------------------
+  const allSessionIds = useMemo(() => {
+    const ids = new Set();
+    sessions.forEach(segment => {
+      if (segment.source_session) ids.add(segment.source_session);
+    });
+    return Array.from(ids).sort();
+  }, [sessions]);
+
+  // ----------------------------------------
+  // Derived data: activeSessionSegments
+  // Segments for the active session, sorted by start time.
+  // ----------------------------------------
+  const activeSessionSegments = useMemo(() => {
+    if (!activeSession) return [];
+    return sessions
+      .filter(seg => seg.source_session === activeSession)
+      .sort((a, b) => parseToMs(a.start) - parseToMs(b.start));
+  }, [sessions, activeSession]);
+
+  // ----------------------------------------
+  // Derived data: coverageSet
+  // Set of all syl_uuids from activeSessionSegments.
+  // ----------------------------------------
+  const coverageSet = useMemo(() => {
+    const set = new Set();
+    activeSessionSegments.forEach(seg => {
+      if (seg.syl_uuids) {
+        seg.syl_uuids.forEach(uuid => set.add(uuid));
       }
     });
-    return { compressedText, charIndexToUuid };
-  }, [manifest]);
+    return set;
+  }, [activeSessionSegments]);
 
-  const scrollToMatch = useCallback((uuids) => {
-    if (!uuids || uuids.length === 0) return;
-    const el = document.getElementById(uuids[0]);
-    if (el) {
-      // 160px offset ensures it scrolls just below BOTH fixed navigation bars
-      const y = el.getBoundingClientRect().top + window.scrollY - 160;
-      window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
-    }
+  // ----------------------------------------
+  // Derived data: dynamic sizes from preferences
+  // ----------------------------------------
+  const sizes = useMemo(() => {
+    if (!loaded) return getSizes();
+    const { size, spacing } = prefs;
+    const sizePresets = { S: 1.75, M: 2.25, L: 2.75, XL: 3.25 };
+    const spacingPresets = { compact: 1.4, normal: 1.6, relaxed: 1.9 };
+    return getSizes(
+      sizePresets[size] || 2.25,
+      spacingPresets[spacing] || 1.6
+    );
+  }, [prefs, loaded]);
+
+  // ----------------------------------------
+  // Handlers
+  // ----------------------------------------
+  const handleSyllableClick = useCallback((sylId) => {
+    setActiveSylId(prev => {
+      if (prev === sylId) return null;
+      return sylId;
+    });
+    setSidebarOpen(true);
+    setActiveTab('commentary');
   }, []);
 
-  // --- NEW: LOCAL SEARCH EFFECT ---
-  useEffect(() => {
-    if (!localQuery.trim()) {
-      setMatches([]);
-      setActiveMatchIdx(-1);
-      return;
-    }
-
-    const cleanQuery = localQuery.replace(/[ \n\r\t་།]/g, '').toLowerCase();
-    if (!cleanQuery) {
-      setMatches([]);
-      setActiveMatchIdx(-1);
-      return;
-    }
-
-    const { compressedText, charIndexToUuid } = searchIndex;
-    let newMatches = [];
-    let startIndex = 0;
-    let matchIdx = compressedText.indexOf(cleanQuery, startIndex);
-
-    // Limit matches to prevent browser freeze on very common single letters
-    const MAX_MATCHES = 500;
-
-    while (matchIdx !== -1 && newMatches.length < MAX_MATCHES) {
-      const matchedUuids = new Set();
-      for (let i = matchIdx; i < matchIdx + cleanQuery.length; i++) {
-        if (charIndexToUuid[i]) matchedUuids.add(charIndexToUuid[i]);
-      }
-      const uuidsArr = Array.from(matchedUuids);
-      if (uuidsArr.length > 0) {
-        newMatches.push(uuidsArr);
-      }
-      startIndex = matchIdx + cleanQuery.length; // Jump past this match
-      matchIdx = compressedText.indexOf(cleanQuery, startIndex);
-    }
-
-    setMatches(newMatches);
-    if (newMatches.length > 0) {
-      setActiveMatchIdx(0);
-      setTimeout(() => {
-         scrollToMatch(newMatches[0]);
-      }, 50);
-    } else {
-      setActiveMatchIdx(-1);
-    }
-  }, [localQuery, searchIndex, scrollToMatch]);
-
-  const handleNextMatch = () => {
-    if (matches.length === 0) return;
-    const nextIdx = (activeMatchIdx + 1) % matches.length;
-    setActiveMatchIdx(nextIdx);
-    scrollToMatch(matches[nextIdx]);
-  };
-
-  const handlePrevMatch = () => {
-    if (matches.length === 0) return;
-    const prevIdx = (activeMatchIdx - 1 + matches.length) % matches.length;
-    setActiveMatchIdx(prevIdx);
-    scrollToMatch(matches[prevIdx]);
-  };
-
-  // Memoized Sets for hyper-fast UI rendering
-  const activeMatchSet = useMemo(() => new Set(matches[activeMatchIdx] || []), [matches, activeMatchIdx]);
-  const allMatchesSet = useMemo(() => new Set(matches.flat()), [matches]);
-
-
-  // Global Deep Linking Highlight Effect (From Catalog URL)
-  useEffect(() => {
-    if (isLoading || manifest.length === 0 || !anchorSylId) return;
-
-    let targetUuids = [anchorSylId];
-
-    if (searchQuery) {
-      const anchorIndex = manifest.findIndex(s => s.id === anchorSylId);
-      if (anchorIndex !== -1) {
-        const searchWindow = manifest.slice(anchorIndex, anchorIndex + 150);
-        let compressedText = "";
-        let charIndexToUuid = [];
-
-        for (const syl of searchWindow) {
-          if (syl && syl.text) {
-            for (let i = 0; i < syl.text.length; i++) {
-              const char = syl.text[i];
-              if (!/[ \n\r\t་།]/.test(char)) {
-                compressedText += char.toLowerCase();
-                charIndexToUuid.push(syl.id);
-              }
-            }
-          }
-        }
-
-        const cleanQuery = searchQuery.replace(/[ \n\r\t་།]/g, '').toLowerCase();
-        const matchIndex = compressedText.indexOf(cleanQuery);
-
-        if (matchIndex !== -1) {
-          const matchedUuids = new Set();
-          for (let i = matchIndex; i < matchIndex + cleanQuery.length; i++) {
-            if (charIndexToUuid[i]) {
-              matchedUuids.add(charIndexToUuid[i]);
-            }
-          }
-          targetUuids = Array.from(matchedUuids);
-        }
+  const handleSessionSelect = useCallback((sessionId, startSegment) => {
+    setActiveSession(sessionId);
+    setActiveTab('player');
+    setSidebarOpen(true);
+    if (startSegment) {
+      const mediaSource = startSegment.media_restored || startSegment.media_original || startSegment.media;
+      if (mediaSource) {
+        audio.loadSource(mediaSource, parseToMs(startSegment.start));
       }
     }
+  }, [audio]);
 
-    const timer = setTimeout(() => {
-      if (targetUuids.length > 0) {
-          const firstSyllable = document.getElementById(targetUuids[0]);
-          if (firstSyllable) {
-            // Offset scroll to account for new search header
-            const y = firstSyllable.getBoundingClientRect().top + window.scrollY - 160;
-            window.scrollTo({ top: y, behavior: 'smooth' });
-
-            const options = syllableMediaMap[targetUuids[0]] || syllableMediaMap[anchorSylId];
-            if (options && options.length > 0) {
-              setActiveId(targetUuids[0]);
-              setContextOptions(options);
-            }
-          }
-
-        targetUuids.forEach(uuid => {
-          const targetSyllable = document.getElementById(uuid);
-          if (targetSyllable) {
-            targetSyllable.classList.add(
-              'bg-[#f7f3e7]',
-              'text-[#D4AF37]',
-              'font-bold',
-              'rounded',
-              'px-1',
-              'transition-colors',
-              'duration-700'
-            );
-
-            setTimeout(() => {
-              targetSyllable.classList.remove('bg-[#f7f3e7]', 'text-[#D4AF37]', 'font-bold', 'rounded', 'px-1');
-            }, 4000);
-          }
-        });
-      }
-    }, 600);
-
-    return () => clearTimeout(timer);
-  }, [anchorSylId, searchQuery, isLoading, manifest.length, syllableMediaMap]);
-
-  // Session storage scroll restoration
-  useEffect(() => {
-    if (isLoading) return;
-    const savedPos = sessionStorage.getItem('ebook-scroll-pos');
-    const savedActiveId = sessionStorage.getItem('ebook-active-id');
-    if (savedActiveId && syllableMediaMap[savedActiveId]) {
-      setActiveId(savedActiveId);
-      setContextOptions(syllableMediaMap[savedActiveId]);
-      sessionStorage.removeItem('ebook-active-id');
-    }
-    if (savedPos) {
-      setTimeout(() => {
-        window.scrollTo({ top: parseInt(savedPos), behavior: 'instant' });
-        sessionStorage.removeItem('ebook-scroll-pos');
-      }, 150);
-    }
-  }, [syllableMediaMap, isLoading]);
-
-  const handleSyllableClick = (syllable, options) => {
-    if (activeId === syllable.id) {
-      setActiveId(null);
-      setContextOptions([]);
-    } else {
-      setActiveId(syllable.id);
-      setContextOptions(options);
-    }
-  };
-
-  const navigateToPlayer = (opt) => {
-    sessionStorage.setItem('ebook-scroll-pos', window.scrollY.toString());
-    if (activeId) sessionStorage.setItem('ebook-active-id', activeId);
-    router.push(`/player?instance=${instanceId}&session=${opt.source}&time=${opt.startTime}&media=${encodeURIComponent(opt.mediaUrl)}&sylId=${activeId}`);
-  };
-
-  const renderSegmentText = (opt, currentActiveId) => {
-    const segmentSyllables = manifest.filter(s => opt.sylUuids.includes(s.id));
-    return segmentSyllables.map(s => {
-      if (s.text === '\n') return " ";
-      const isTarget = currentActiveId === s.id;
-      const baseStyle = SIZES[s.size?.toUpperCase()] || SIZES.DEFAULT;
-      return (
-        <span
-          key={`ctx-${s.id}`}
-          className={isTarget ? "text-[var(--theme-gold)] font-bold" : "text-black"}
-          style={{
-            ...baseStyle,
-            fontSize: `${parseFloat(baseStyle.fontSize) * 0.55}rem`,
-            lineHeight: "1.55"
-          }}
-        >
-          {s.text}
-        </span>
-      );
-    });
-  };
-
-  if (isLoading) {
-    return <div className={`min-h-screen flex items-center justify-center bg-[#F7FAFC] text-[#C19A5B] text-xl ${inter.className}`}>Loading reading room...</div>;
+  // ----------------------------------------
+  // Loading state
+  // ----------------------------------------
+  if (isLoading || !loaded) {
+    return (
+      <div
+        className={`min-h-screen flex items-center justify-center ${inter.className}`}
+        style={{ backgroundColor: 'var(--reader-bg-primary, #FFFFFF)', color: 'var(--reader-accent, #D4AF37)' }}
+      >
+        <span className="text-lg tracking-wide">Loading reading room...</span>
+      </div>
+    );
   }
 
-  return (
-    <main className="min-h-[calc(100vh-81px)] bg-[#F7FAFC] flex flex-col overflow-x-hidden" style={getThemeCssVars()}>
-
-      {/* FLOATING STICKY BAR 1: NAVIGATION */}
-      <nav
-        className="fixed top-0 z-[60] w-full bg-[#F7FAFC]/95 backdrop-blur-xl border-b border-gray-200 px-8 md:px-12 h-20"
+  // ----------------------------------------
+  // Sidebar content
+  // ----------------------------------------
+  const sidebarContent = (
+    <div className="flex flex-col h-full">
+      {/* Tab bar */}
+      <div
+        className="flex border-b"
+        style={{ borderColor: 'var(--reader-border, #E5E7EB)' }}
       >
-        <div className="max-w-5xl mx-auto h-full flex items-center">
-          <button
-            onClick={() => router.push('/archive')}
-            className="group flex items-center gap-3 text-[var(--theme-gray)] hover:text-[var(--theme-hover-red)] transition-all"
-            aria-label="Back to Catalog"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="transition-transform duration-300 group-hover:-translate-x-1.5"
+        {TABS.map(tab => {
+          const isActive = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`${inter.className} flex-1 py-3 text-[10px] font-semibold uppercase tracking-[0.15em] transition-colors duration-200 border-b-2`}
+              style={{
+                color: isActive
+                  ? 'var(--reader-text-primary, #1A1A1A)'
+                  : 'var(--reader-text-muted, #9CA3AF)',
+                borderBottomColor: isActive
+                  ? 'var(--reader-accent, #D4AF37)'
+                  : 'transparent',
+                backgroundColor: 'transparent',
+              }}
             >
-              <line x1="19" y1="12" x2="5" y2="12"></line>
-              <polyline points="12 19 5 12 12 5"></polyline>
-            </svg>
-
-            <span className={`${inter.className} text-[10px] md:text-xs font-bold uppercase tracking-[0.2em]`}>
-              Back to Catalog
-            </span>
-          </button>
-        </div>
-      </nav>
-
-      {/* FLOATING STICKY BAR 2: LOCAL SEARCH */}
-      <div className="fixed top-20 z-[55] w-full bg-[#F9F9F7]/95 backdrop-blur-md border-b border-gray-200 px-4 md:px-12 h-14 flex items-center shadow-sm">
-        <div className="max-w-5xl mx-auto w-full flex items-center gap-4">
-          <div className="relative flex-grow max-w-sm">
-            <input
-              type="text"
-              value={localQuery}
-              onChange={(e) => setLocalQuery(e.target.value)}
-              placeholder="Find in teaching..."
-              className={`${inter.className} w-full pl-10 pr-10 py-1.5 bg-white border border-gray-300 rounded-md focus:outline-none focus:border-[var(--theme-hover-red)] focus:ring-1 focus:ring-[var(--theme-hover-red)] text-sm transition-all text-gray-800`}
-            />
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            {localQuery && (
-              <button
-                onClick={() => setLocalQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[var(--theme-hover-red)] transition-colors"
-                aria-label="Clear Search"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-
-          {matches.length > 0 && (
-            <div className={`${inter.className} flex items-center gap-3 text-sm`}>
-              <span className="text-[var(--theme-gray)] font-bold tracking-widest uppercase text-[10px] whitespace-nowrap">
-                {activeMatchIdx + 1} / {matches.length}
-              </span>
-              <div className="flex items-center border border-gray-200 rounded-md overflow-hidden bg-white shadow-sm">
-                <button onClick={handlePrevMatch} className="p-1.5 hover:bg-gray-50 text-[var(--theme-hover-red)] transition-colors" aria-label="Previous Match">
-                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
-                </button>
-                <div className="w-px h-4 bg-gray-200"></div>
-                <button onClick={handleNextMatch} className="p-1.5 hover:bg-gray-50 text-[var(--theme-hover-red)] transition-colors" aria-label="Next Match">
-                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {localQuery && matches.length === 0 && (
-            <span className={`${inter.className} text-[var(--theme-gray)] text-xs tracking-wide`}>No matches</span>
-          )}
-        </div>
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Increased padding (pt-40) so text is not hidden under the two fixed bars */}
-      <div className="max-w-5xl mx-auto p-4 pt-40 md:p-12 md:pt-48">
-        <div className="bg-[#F9F9F7] rounded-xl shadow-2xl border border-gray-100">
-          <div className="p-8 md:p-16 text-justify leading-relaxed">
-            {manifest.map((syl) => {
-              if (syl.text === '\n') return <div id={syl.id} key={syl.id} className="block h-8" />;
+      {/* Tab content */}
+      <div className="flex-1 p-5 overflow-y-auto">
+        {activeTab === 'commentary' && (
+          <div>
+            <p
+              className={`${inter.className} text-xs`}
+              style={{ color: 'var(--reader-text-secondary, #4A4A4A)' }}
+            >
+              {allSessionIds.length} session{allSessionIds.length !== 1 ? 's' : ''} available
+            </p>
+            {activeSylId && (
+              <p
+                className={`${inter.className} text-xs mt-2`}
+                style={{ color: 'var(--reader-text-muted, #9CA3AF)' }}
+              >
+                Selected: {activeSylId}
+              </p>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'player' && (
+          <div>
+            <p
+              className={`${inter.className} text-xs`}
+              style={{ color: 'var(--reader-text-secondary, #4A4A4A)' }}
+            >
+              {activeSession
+                ? `Active: ${activeSession}`
+                : 'Select a session'}
+            </p>
+            {activeSession && (
+              <p
+                className={`${inter.className} text-xs mt-2`}
+                style={{ color: 'var(--reader-text-muted, #9CA3AF)' }}
+              >
+                {activeSessionSegments.length} segment{activeSessionSegments.length !== 1 ? 's' : ''} in session
+              </p>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'info' && (
+          <div>
+            <p
+              className={`${inter.className} text-xs`}
+              style={{ color: 'var(--reader-text-secondary, #4A4A4A)' }}
+            >
+              Instance: {instanceId}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ----------------------------------------
+  // Render
+  // ----------------------------------------
+  return (
+    <main
+      className="min-h-screen flex flex-col"
+      style={{
+        ...getThemeCssVars(prefs),
+        backgroundColor: 'var(--reader-bg-primary, #FFFFFF)',
+        color: 'var(--reader-text-primary, #1A1A1A)',
+      }}
+    >
+      {/* Hidden audio element */}
+      <audio {...audio.audioProps} />
+
+      <ReaderNavbar
+        onToggleSidebar={() => setSidebarOpen(prev => !prev)}
+        onToggleSearch={() => setSearchOpen(prev => !prev)}
+        sidebarOpen={sidebarOpen}
+      />
+
+      <ReaderLayout sidebarOpen={sidebarOpen} sidebar={sidebarContent}>
+        {/* Root text */}
+        <div className="p-12 max-w-4xl mx-auto">
+          <div className={`${uchen.className} text-justify`}>
+            {manifest.map(syl => {
+              if (syl.text === '\n') {
+                return <div key={syl.id} id={syl.id} className="h-6" />;
+              }
 
               const mediaOptions = syllableMediaMap[syl.id] || [];
               const hasMedia = mediaOptions.length > 0;
-              const hasMultipleSegments = mediaOptions.length > 1;
+              const isSelected = activeSylId === syl.id;
 
-              // Standard interactions
-              const isSelected = activeId === syl.id;
+              const fontClass =
+                syl.nature === 'TEXT' || syl.nature === 'PUNCT' || syl.nature === 'SYM'
+                  ? uchen.className
+                  : 'font-sans';
 
-              // Local Find in Page Search States
-              const isLocalActiveMatch = activeMatchSet.has(syl.id);
-              const isAnyLocalMatch = allMatchesSet.has(syl.id);
+              const sizeStyle = sizes[syl.size?.toUpperCase()] || sizes.DEFAULT;
 
-              const fontClass = (syl.nature === 'TEXT' || syl.nature === 'PUNCT' || syl.nature === 'SYM') ? uchen.className : 'font-sans';
-              const sizeStyle = SIZES[syl.size?.toUpperCase()] || SIZES.DEFAULT;
-
-              let textColorClass = "text-black";
-              if (!hasMedia) textColorClass = "text-[var(--theme-no-media)]";
-              else if (isSelected) textColorClass = "text-[var(--theme-gold)] font-bold";
-
-              // Local Search UI Overrides (Wins over other colors to remain highly visible)
-              if (isLocalActiveMatch) {
-                textColorClass = "text-[var(--theme-hover-red)] font-bold bg-[#8B1D1D]/10 rounded-sm px-[1px] shadow-[0_0_0_2px_rgba(139,29,29,0.1)]";
-              } else if (isAnyLocalMatch) {
-                textColorClass = "text-[#8B1D1D]/80 bg-[#8B1D1D]/5 rounded-sm px-[1px]";
+              // Color logic
+              let colorStyle;
+              if (isSelected) {
+                colorStyle = 'var(--reader-accent, #D4AF37)';
+              } else if (hasMedia) {
+                colorStyle = 'var(--reader-text-primary, #1A1A1A)';
+              } else {
+                colorStyle = 'var(--reader-text-muted, #9CA3AF)';
               }
 
               return (
-                <React.Fragment key={syl.id}>
-                  <span
-                    id={syl.id}
-                    onClick={hasMedia ? () => handleSyllableClick(syl, mediaOptions) : undefined}
-                    className={`${fontClass} inline transition-all duration-300 ${textColorClass} ${
-                      hasMedia ? "cursor-pointer hover:text-[var(--theme-hover-red)]" : ""
-                    } ${
-                      hasMultipleSegments ? "border-b border-[var(--theme-gold)]" : (hasMedia ? "border-b border-transparent" : "")
-                    }`}
-                    style={{ ...sizeStyle, whiteSpace: 'pre-wrap' }}
-                  >
-                    {syl.text}
-                  </span>
-
-                  {isSelected && (
-                    <div className="block w-full my-8 clear-both cursor-default">
-                      <div className="bg-[#EBEBEB] border-y-2 border-[var(--theme-gold-border)] py-12 px-8 md:px-16 -mx-8 md:-mx-16 relative shadow-[inner_0_2px_10px_rgba(0,0,0,0.05)] animate-in fade-in zoom-in-95 duration-300">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setActiveId(null); }}
-                          className="absolute top-4 left-4 md:top-6 md:left-6 text-2xl font-light text-[var(--theme-gray)] hover:text-[var(--theme-hover-red)] transition-colors leading-none"
-                          aria-label="Close"
-                        >
-                          ✕
-                        </button>
-
-                        <div className="max-w-4xl mx-auto" style={{ textAlign: 'left' }}>
-                          <ul className="divide-y divide-[var(--theme-gold-divide)]">
-                            {contextOptions.map((opt, idx) => (
-                              <li key={idx} className="py-6 first:pt-0 last:pb-0">
-                                <button
-                                  onClick={() => navigateToPlayer(opt)}
-                                  className="w-full text-left hover:bg-white/60 p-4 rounded-xl transition-all flex flex-col md:flex-row gap-4 items-start md:items-end justify-between"
-                                >
-                                  <div className={`${uchen.className} flex-grow`}>
-                                    {renderSegmentText(opt, activeId)}
-                                  </div>
-                                  <div className="flex-shrink-0 pt-2 md:pt-0">
-                                    <span className={`${inter.className} inline-flex items-center justify-center px-1.5 py-0.5 text-sm font-medium text-[var(--theme-badge-text)] bg-[var(--theme-badge-color)] rounded-full opacity-80 tracking-wide`}>
-                                      {formatDuration(opt.startTime, opt.endTime)}
-                                    </span>
-                                  </div>
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </React.Fragment>
+                <span
+                  key={syl.id}
+                  id={syl.id}
+                  onClick={hasMedia ? () => handleSyllableClick(syl.id) : undefined}
+                  className={`${fontClass} inline transition-colors duration-200 ${
+                    hasMedia ? 'cursor-pointer' : ''
+                  } ${isSelected ? 'font-bold' : ''}`}
+                  style={{
+                    ...sizeStyle,
+                    color: colorStyle,
+                    whiteSpace: 'pre-wrap',
+                  }}
+                  onMouseEnter={hasMedia ? (e) => {
+                    if (!isSelected) e.currentTarget.style.color = 'var(--theme-hover-red, #8B1D1D)';
+                  } : undefined}
+                  onMouseLeave={hasMedia ? (e) => {
+                    if (!isSelected) e.currentTarget.style.color = colorStyle;
+                  } : undefined}
+                >
+                  {syl.text}
+                </span>
               );
             })}
           </div>
         </div>
-      </div>
-      {/* FOOTER */}
-      <Footer className="mt-8" />
+
+        <Footer className="mt-8" />
+      </ReaderLayout>
     </main>
   );
 }
 
+// ==========================================
+// PAGE EXPORT WITH SUSPENSE BOUNDARY
+// ==========================================
 export default function ReaderPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[#F7FAFC] text-[#C19A5B] text-xl">Loading configuration...</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-white">
+          <span className={`${inter.className} text-lg tracking-wide`} style={{ color: '#D4AF37' }}>
+            Loading configuration...
+          </span>
+        </div>
+      }
+    >
       <ReaderContent />
     </Suspense>
   );
