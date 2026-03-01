@@ -10,6 +10,8 @@ import Footer from '@/app/components/Footer';
 import ReaderNavbar from './ReaderNavbar';
 import ReaderLayout from './ReaderLayout';
 import CommentaryTab from './CommentaryTab';
+import PlayerTab from './PlayerTab';
+import InfoTab from './InfoTab';
 
 // ==========================================
 // SIDEBAR TAB DEFINITIONS
@@ -272,35 +274,25 @@ function ReaderContent() {
         )}
 
         {activeTab === 'player' && (
-          <div>
-            <p
-              className={`${inter.className} text-xs`}
-              style={{ color: 'var(--reader-text-secondary, #4A4A4A)' }}
-            >
-              {activeSession
-                ? `Active: ${activeSession}`
-                : 'Select a session'}
-            </p>
-            {activeSession && (
-              <p
-                className={`${inter.className} text-xs mt-2`}
-                style={{ color: 'var(--reader-text-muted, #9CA3AF)' }}
-              >
-                {activeSessionSegments.length} segment{activeSessionSegments.length !== 1 ? 's' : ''} in session
-              </p>
-            )}
-          </div>
+          <PlayerTab
+            audio={audio}
+            activeSession={activeSession}
+            allSessionIds={allSessionIds}
+            activeSessionSegments={activeSessionSegments}
+            manifest={manifest}
+            onSessionSelect={handleSessionSelect}
+            onSegmentClick={() => {}}
+            activeSylId={activeSylId}
+          />
         )}
 
         {activeTab === 'info' && (
-          <div>
-            <p
-              className={`${inter.className} text-xs`}
-              style={{ color: 'var(--reader-text-secondary, #4A4A4A)' }}
-            >
-              Instance: {instanceId}
-            </p>
-          </div>
+          <InfoTab
+            instanceId={instanceId}
+            activeSession={activeSession}
+            activeSessionSegments={activeSessionSegments}
+            sessions={sessions}
+          />
         )}
       </div>
     </div>
