@@ -13,6 +13,7 @@ import CommentaryTab from './CommentaryTab';
 import PlayerTab from './PlayerTab';
 import InfoTab from './InfoTab';
 import MiniPlayer from './MiniPlayer';
+import SearchBar from './SearchBar';
 
 // ==========================================
 // SIDEBAR TAB DEFINITIONS
@@ -50,6 +51,10 @@ function ReaderContent() {
   const [activeTab, setActiveTab]         = useState('commentary');
   const [activeSylId, setActiveSylId]     = useState(null);
   const [activeSession, setActiveSession] = useState(null);
+
+  // Search match highlighting
+  const [activeMatchSet, setActiveMatchSet] = useState(new Set());
+  const [allMatchesSet, setAllMatchesSet] = useState(new Set());
 
   // Dual-scroll: playing segment highlight + auto-scroll
   const [playingSegSylIds, setPlayingSegSylIds] = useState(new Set());
@@ -286,6 +291,11 @@ function ReaderContent() {
     }
   }, [audio]);
 
+  const handleMatchSetsChange = useCallback((activeSet, allSet) => {
+    setActiveMatchSet(activeSet);
+    setAllMatchesSet(allSet);
+  }, []);
+
   // ----------------------------------------
   // Loading state
   // ----------------------------------------
@@ -393,9 +403,15 @@ function ReaderContent() {
         onUpdatePref={updatePref}
       />
 
+      <SearchBar
+        manifest={manifest}
+        visible={searchOpen}
+        onMatchSetsChange={handleMatchSetsChange}
+      />
+
       <ReaderLayout sidebarOpen={sidebarOpen} sidebar={sidebarContent}>
         {/* Root text */}
-        <div className="p-12 max-w-4xl mx-auto">
+        <div ref={rootTextRef} className="max-w-4xl mx-auto" style={{ padding: searchOpen ? '5rem 3rem 3rem 3rem' : '3rem' }}>
           <div className={`${uchen.className} text-justify`}>
             {manifest.map(syl => {
               if (syl.text === '\n') return <div key={syl.id} id={syl.id} className="h-6" />;
@@ -431,6 +447,16 @@ function ReaderContent() {
                 textColor = 'var(--reader-text-disabled, #D1D5DB)';
               }
 
+              // Search match highlighting (overrides other colors)
+              const isActiveMatch = activeMatchSet.has(syl.id);
+              const isAnyMatch = allMatchesSet.has(syl.id);
+              if (isActiveMatch) {
+                textColor = 'var(--theme-hover-red, #8B1D1D)';
+                fontWeight = 'bold';
+              } else if (isAnyMatch) {
+                textColor = '#8B1D1D';
+              }
+
               return (
                 <span
                   key={syl.id}
@@ -446,7 +472,13 @@ function ReaderContent() {
                     whiteSpace: 'pre-wrap',
                     opacity: (activeSession && !isCovered) ? 0.35 : 1,
                     transition: 'opacity 500ms, color 300ms, background-color 300ms',
-                    backgroundColor: isInPlayingSegment ? 'var(--reader-accent-subtle, #FDF8EE)' : 'transparent',
+                    backgroundColor: isInPlayingSegment
+                      ? 'var(--reader-accent-subtle, #FDF8EE)'
+                      : isActiveMatch
+                        ? 'rgba(139, 29, 29, 0.1)'
+                        : isAnyMatch
+                          ? 'rgba(139, 29, 29, 0.05)'
+                          : 'transparent',
                   }}
                   onMouseEnter={hasMedia && !isSelected ? (e) => {
                     e.currentTarget.style.color = 'var(--theme-hover-red, #8B1D1D)';
