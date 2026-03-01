@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, Suspense, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 import { uchen, inter, getSizes, getThemeCssVars } from '@/lib/theme';
@@ -50,6 +50,11 @@ function ReaderContent() {
   const [activeTab, setActiveTab]         = useState('commentary');
   const [activeSylId, setActiveSylId]     = useState(null);
   const [activeSession, setActiveSession] = useState(null);
+
+  // Dual-scroll: playing segment highlight + auto-scroll
+  const [playingSegSylIds, setPlayingSegSylIds] = useState(new Set());
+  const [rootTextScrolledAt, setRootTextScrolledAt] = useState(0);
+  const rootTextRef = useRef(null);
 
   // ----------------------------------------
   // URL-driven initial state
@@ -208,6 +213,54 @@ function ReaderContent() {
       .join('')
       .slice(0, 80);
   }, [activeSessionSegments, audio.currentTimeMs, manifest]);
+
+  // ----------------------------------------
+  // Track currently-playing segment for root text highlighting
+  // ----------------------------------------
+  useEffect(() => {
+    if (!activeSessionSegments.length || !audio.currentTimeMs) {
+      setPlayingSegSylIds(new Set());
+      return;
+    }
+    const currentSeg = activeSessionSegments.find(seg => {
+      const start = parseToMs(seg.start);
+      const end = seg.end ? parseToMs(seg.end) : start + 10000;
+      return audio.currentTimeMs >= start && audio.currentTimeMs < end;
+    });
+    if (currentSeg) {
+      setPlayingSegSylIds(new Set(currentSeg.syl_uuids));
+    }
+  }, [audio.currentTimeMs, activeSessionSegments]);
+
+  // ----------------------------------------
+  // Auto-scroll root text to follow playing segment
+  // ----------------------------------------
+  useEffect(() => {
+    if (playingSegSylIds.size === 0 || !rootTextRef.current) return;
+    if (Date.now() - rootTextScrolledAt < 8000) return;
+
+    // Find the first syllable element of the playing segment
+    const firstId = [...playingSegSylIds][0];
+    const el = document.getElementById(firstId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [playingSegSylIds, rootTextScrolledAt]);
+
+  // ----------------------------------------
+  // Scroll-lock detection for root text panel
+  // ----------------------------------------
+  useEffect(() => {
+    const el = rootTextRef.current;
+    if (!el) return;
+    const handleScroll = () => setRootTextScrolledAt(Date.now());
+    el.addEventListener('wheel', handleScroll, { passive: true });
+    el.addEventListener('touchmove', handleScroll, { passive: true });
+    return () => {
+      el.removeEventListener('wheel', handleScroll);
+      el.removeEventListener('touchmove', handleScroll);
+    };
+  }, []);
 
   // ----------------------------------------
   // Handlers
