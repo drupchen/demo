@@ -1,16 +1,34 @@
 'use client';
 
+import { useState, useRef, useEffect } from 'react';
 import { inter } from '@/lib/theme';
+import ReadingSettings from './ReadingSettings';
 
 /**
  * Fixed top navigation bar for the reader page.
- *
- * Props:
- *   onToggleSidebar  - callback to toggle sidebar visibility
- *   onToggleSearch   - callback to toggle search panel
- *   sidebarOpen      - boolean indicating if sidebar is open (gold tint on icon)
  */
-export default function ReaderNavbar({ onToggleSidebar, onToggleSearch, sidebarOpen }) {
+export default function ReaderNavbar({
+  onToggleSidebar,
+  onToggleSearch,
+  sidebarOpen,
+  prefs,
+  onUpdatePref,
+}) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef(null);
+
+  // Close settings popover on outside click
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const handleClick = (e) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target)) {
+        setSettingsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [settingsOpen]);
+
   return (
     <nav
       className="fixed top-0 z-[60] w-full h-16 border-b px-6 md:px-10 flex items-center justify-between"
@@ -46,7 +64,7 @@ export default function ReaderNavbar({ onToggleSidebar, onToggleSearch, sidebarO
         <span>Catalog</span>
       </a>
 
-      {/* Right: search + sidebar toggles */}
+      {/* Right: search + settings + sidebar toggles */}
       <div className="flex items-center gap-1">
         {/* Search toggle */}
         <button
@@ -57,21 +75,41 @@ export default function ReaderNavbar({ onToggleSidebar, onToggleSearch, sidebarO
           onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--reader-text-muted, #9CA3AF)'; }}
           aria-label="Toggle search"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
         </button>
+
+        {/* Reading settings toggle */}
+        <div className="relative" ref={settingsRef}>
+          <button
+            onClick={() => setSettingsOpen(prev => !prev)}
+            className={`${inter.className} p-2 rounded-md transition-colors duration-200 text-sm font-bold`}
+            style={{
+              color: settingsOpen
+                ? 'var(--reader-accent, #D4AF37)'
+                : 'var(--reader-text-muted, #9CA3AF)',
+            }}
+            onMouseEnter={(e) => {
+              if (!settingsOpen) e.currentTarget.style.color = 'var(--reader-accent, #D4AF37)';
+            }}
+            onMouseLeave={(e) => {
+              if (!settingsOpen) e.currentTarget.style.color = 'var(--reader-text-muted, #9CA3AF)';
+            }}
+            aria-label="Reading settings"
+          >
+            Aa
+          </button>
+
+          {settingsOpen && prefs && onUpdatePref && (
+            <ReadingSettings
+              prefs={prefs}
+              onUpdate={onUpdatePref}
+              onClose={() => setSettingsOpen(false)}
+            />
+          )}
+        </div>
 
         {/* Sidebar toggle */}
         <button
@@ -90,17 +128,7 @@ export default function ReaderNavbar({ onToggleSidebar, onToggleSearch, sidebarO
           }}
           aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
             <line x1="15" y1="3" x2="15" y2="21" />
           </svg>
