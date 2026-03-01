@@ -9,6 +9,7 @@ import { useAudioPlayer, parseToMs } from '@/lib/useAudioPlayer';
 import Footer from '@/app/components/Footer';
 import ReaderNavbar from './ReaderNavbar';
 import ReaderLayout from './ReaderLayout';
+import CommentaryTab from './CommentaryTab';
 
 // ==========================================
 // SIDEBAR TAB DEFINITIONS
@@ -261,22 +262,13 @@ function ReaderContent() {
       {/* Tab content */}
       <div className="flex-1 p-5 overflow-y-auto">
         {activeTab === 'commentary' && (
-          <div>
-            <p
-              className={`${inter.className} text-xs`}
-              style={{ color: 'var(--reader-text-secondary, #4A4A4A)' }}
-            >
-              {allSessionIds.length} session{allSessionIds.length !== 1 ? 's' : ''} available
-            </p>
-            {activeSylId && (
-              <p
-                className={`${inter.className} text-xs mt-2`}
-                style={{ color: 'var(--reader-text-muted, #9CA3AF)' }}
-              >
-                Selected: {activeSylId}
-              </p>
-            )}
-          </div>
+          <CommentaryTab
+            activeSylId={activeSylId}
+            syllableMediaMap={syllableMediaMap}
+            manifest={manifest}
+            allSessionIds={allSessionIds}
+            onSessionSelect={handleSessionSelect}
+          />
         )}
 
         {activeTab === 'player' && (
