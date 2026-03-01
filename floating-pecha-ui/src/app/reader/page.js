@@ -12,6 +12,7 @@ import ReaderLayout from './ReaderLayout';
 import CommentaryTab from './CommentaryTab';
 import PlayerTab from './PlayerTab';
 import InfoTab from './InfoTab';
+import MiniPlayer from './MiniPlayer';
 
 // ==========================================
 // SIDEBAR TAB DEFINITIONS
@@ -35,7 +36,7 @@ function ReaderContent() {
   const searchQuery    = searchParams.get('q');
 
   // Hooks
-  const { prefs, loaded } = useReaderPreferences();
+  const { prefs, updatePref, loaded } = useReaderPreferences();
   const audio = useAudioPlayer();
 
   // Data state
@@ -191,6 +192,24 @@ function ReaderContent() {
   }, [prefs, loaded]);
 
   // ----------------------------------------
+  // Derived data: current segment text for mini-player
+  // ----------------------------------------
+  const currentSegmentText = useMemo(() => {
+    if (!activeSessionSegments.length || !audio.currentTimeMs) return '';
+    const currentSeg = activeSessionSegments.find(seg => {
+      const start = parseToMs(seg.start);
+      const end = seg.end ? parseToMs(seg.end) : start + 10000;
+      return audio.currentTimeMs >= start && audio.currentTimeMs < end;
+    });
+    if (!currentSeg) return '';
+    return manifest
+      .filter(syl => currentSeg.syl_uuids.includes(syl.id))
+      .map(s => s.text === '\n' ? ' ' : s.text)
+      .join('')
+      .slice(0, 80);
+  }, [activeSessionSegments, audio.currentTimeMs, manifest]);
+
+  // ----------------------------------------
   // Handlers
   // ----------------------------------------
   const handleSyllableClick = useCallback((sylId) => {
@@ -317,6 +336,8 @@ function ReaderContent() {
         onToggleSidebar={() => setSidebarOpen(prev => !prev)}
         onToggleSearch={() => setSearchOpen(prev => !prev)}
         sidebarOpen={sidebarOpen}
+        prefs={prefs}
+        onUpdatePref={updatePref}
       />
 
       <ReaderLayout sidebarOpen={sidebarOpen} sidebar={sidebarContent}>
@@ -408,8 +429,18 @@ function ReaderContent() {
           </div>
         </div>
 
-        <Footer className="mt-8" />
+        <Footer className="mt-8" style={{ paddingBottom: audio.audioSrc && activeSession ? '3.5rem' : undefined }} />
       </ReaderLayout>
+
+      <MiniPlayer
+        audio={audio}
+        activeSession={activeSession}
+        currentSegmentText={currentSegmentText}
+        onExpand={() => {
+          setSidebarOpen(true);
+          setActiveTab('player');
+        }}
+      />
     </main>
   );
 }
