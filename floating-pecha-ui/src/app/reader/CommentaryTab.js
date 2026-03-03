@@ -14,17 +14,18 @@ export default function CommentaryTab({
   getCommentaryGroup,
 }) {
   // Group segments by commentary for the selected syllable
+  // Group segments by source_session (teaching instance) for the selected syllable
   const commentaryGroups = useMemo(() => {
     if (!activeSylId) return [];
     const segments = syllableMediaMap[activeSylId] || [];
     const groups = {};
     segments.forEach(seg => {
-      const group = getCommentaryGroup(seg.source_session);
+      const group = seg.source_session;
       if (!groups[group]) groups[group] = [];
       groups[group].push(seg);
     });
-    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)).map(([commentaryId, segs]) => ({
-      commentaryId,
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)).map(([sessionId, segs]) => ({
+      commentaryId: sessionId,
       segments: segs,
       previewSyllables: segs[0]?.syl_uuids
         ? manifest.filter(s => segs[0].syl_uuids.includes(s.id))
@@ -72,7 +73,7 @@ export default function CommentaryTab({
         >
           <div className="flex items-center justify-between mb-2">
             <span className={`${inter.className} text-xs font-bold uppercase tracking-wider r-text-1a`}>
-              Commentary {commentaryId}
+              Commentary {getCommentaryGroup(commentaryId)}
             </span>
             <span className={`${inter.className} text-[10px] font-medium px-2 py-0.5 rounded-full r-badge`}>
               {formatDurationBadge(totalDurationMs)}

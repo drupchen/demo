@@ -97,20 +97,20 @@ export const THEMES = {
 // 4. SIZE PRESETS
 // ==========================================
 export const SIZE_PRESETS = {
-  XS: { label: 'Extra Small',  baseRem: 1.25 },
-  S:  { label: 'Small',        baseRem: 1.5 },
-  M:  { label: 'Medium',       baseRem: 1.75 },
-  L:  { label: 'Large',        baseRem: 2.25 },
-  XL: { label: 'Extra Large',  baseRem: 2.75 },
+  XS: { label: 'Extra Small', baseRem: 1.25 },
+  S: { label: 'Small', baseRem: 1.5 },
+  M: { label: 'Medium', baseRem: 1.75 },
+  L: { label: 'Large', baseRem: 2.25 },
+  XL: { label: 'Extra Large', baseRem: 2.75 },
 };
 
 // ==========================================
 // 5. SPACING PRESETS
 // ==========================================
 export const SPACING_PRESETS = {
-  compact:  { label: 'Compact',  lineHeight: 1.4 },
-  normal:   { label: 'Normal',   lineHeight: 1.6 },
-  relaxed:  { label: 'Relaxed',  lineHeight: 1.9 },
+  compact: { label: 'Compact', lineHeight: 1.7 },
+  normal: { label: 'Normal', lineHeight: 2.0 },
+  relaxed: { label: 'Relaxed', lineHeight: 2.4 },
 };
 
 // ==========================================
@@ -125,9 +125,9 @@ const SMALL_RATIO = 0.70;
 export function getSizes(baseRem = 1.75, lineHeight = 1.6) {
   const lh = String(lineHeight);
   return {
-    TITLE:   { fontSize: `${(baseRem * 1.333).toFixed(2)}rem`, lineHeight: '1.3', fontWeight: '' },
-    BIG:     { fontSize: `${baseRem}rem`,                      lineHeight: lh },
-    SMALL:   { fontSize: `${(baseRem * SMALL_RATIO).toFixed(2)}rem`, lineHeight: lh, verticalAlign: '0.33em' },
+    TITLE: { fontSize: `${(baseRem * 1.333).toFixed(2)}rem`, lineHeight: '1.3', fontWeight: '' },
+    BIG: { fontSize: `${baseRem}rem`, lineHeight: lh },
+    SMALL: { fontSize: `${(baseRem * SMALL_RATIO).toFixed(2)}rem`, lineHeight: lh, verticalAlign: '0.33em' },
     DEFAULT: { fontSize: `${(baseRem * 0.667).toFixed(2)}rem`, lineHeight: lh },
   };
 }

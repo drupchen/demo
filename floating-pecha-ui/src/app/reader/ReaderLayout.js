@@ -1,9 +1,11 @@
 'use client';
 
-export default function ReaderLayout({ children, sidebar, sidebarOpen }) {
+import { forwardRef } from 'react';
+
+const ReaderLayout = forwardRef(function ReaderLayout({ children, sidebar, sidebarOpen }, ref) {
   return (
     <div className="flex flex-row h-[calc(100vh-64px)] mt-16">
-      <div className="flex-1 overflow-y-auto">
+      <div ref={ref} className="flex-1 overflow-y-auto">
         {children}
       </div>
 
@@ -20,4 +22,6 @@ export default function ReaderLayout({ children, sidebar, sidebarOpen }) {
       </aside>
     </div>
   );
-}
+});
+
+export default ReaderLayout;

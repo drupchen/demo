@@ -9,7 +9,7 @@ import { useAudioPlayer, parseToMs } from '@/lib/useAudioPlayer';
 import Footer from '@/app/components/Footer';
 import ReaderNavbar from './ReaderNavbar';
 import ReaderLayout from './ReaderLayout';
-import CommentaryTab from './CommentaryTab';
+import FloatingPopover from './FloatingPopover';
 import PlayerTab from './PlayerTab';
 import InfoTab from './InfoTab';
 import MiniPlayer from './MiniPlayer';
@@ -20,18 +20,190 @@ import './reader.css';
 // HELPERS
 // ==========================================
 const TABS = [
-  { key: 'commentary', label: 'Commentary' },
-  { key: 'player',     label: 'Player' },
-  { key: 'info',       label: 'Info' },
+  { key: 'player', label: 'Player' },
+  { key: 'info', label: 'Info' },
 ];
 
 const COMMENTARY_COLORS = ['#D4AF37', '#4A90D9', '#E85D75', '#50B897', '#9B6BCD'];
+
+/** 
+ * Calculate visual weight of a Tibetan string by ignoring vowels and subjoined characters.
+ * U+0F71 to U+0F87 are vowels/combining marks. U+0F8D to U+0FBC are subjoined consonants.
+ */
+function getTibetanWeight(text) {
+  if (!text || text === '\n') return 1;
+  const stripped = text.replace(/[\u0F71-\u0F87\u0F8D-\u0FBC]/g, '');
+  return Math.max(1, stripped.length);
+}
 
 /** Extract commentary group prefix from session ID (e.g. "A1_xxx" → "A") */
 function getCommentaryGroup(sessionId) {
   const match = sessionId.match(/^([A-Za-z]+)/);
   return match ? match[1] : sessionId;
 }
+
+/**
+ * Given a Y screen coordinate, find the corresponding weight fraction
+ * by locating which paragraph straddles that Y and interpolating.
+ * Uses binary search on paragraph elements — O(log P) getBoundingClientRect calls.
+ */
+function findWeightAtY(y, paragraphEls, paragraphWeightBounds) {
+  if (!paragraphEls.length || !paragraphWeightBounds.length) return 0;
+
+  const firstRect = paragraphEls[0].getBoundingClientRect();
+  if (y <= firstRect.top) return paragraphWeightBounds[0].wStart;
+
+  const lastRect = paragraphEls[paragraphEls.length - 1].getBoundingClientRect();
+  if (y >= lastRect.bottom) return paragraphWeightBounds[paragraphWeightBounds.length - 1].wEnd;
+
+  // Binary search for the paragraph whose bounding rect straddles y
+  let lo = 0, hi = paragraphEls.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    const rect = paragraphEls[mid].getBoundingClientRect();
+    if (rect.bottom <= y) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+
+  const paraEl = paragraphEls[lo];
+  const pIdx = parseInt(paraEl.getAttribute('data-pidx'), 10);
+  const bounds = paragraphWeightBounds[pIdx];
+  if (!bounds) return 0;
+
+  const paraRect = paraEl.getBoundingClientRect();
+  const paraFrac = Math.max(0, Math.min(1, (y - paraRect.top) / Math.max(1, paraRect.height)));
+  return bounds.wStart + paraFrac * (bounds.wEnd - bounds.wStart);
+}
+
+// ==========================================
+// LAZY PARAGRAPH COMPONENT
+// ==========================================
+const LazyParagraph = React.memo(function LazyParagraph({ paraSyls, pIdx, syllableMediaMap, getCommentaryGroup, commentaryColorMap, sizes, teachingCoverageSet, activeSylId, playingSegSylIds, hoveredSegSylIds, activeMatchSet, allMatchesSet, handleSyllableClick, uchen }) {
+  const ref = useRef(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const hasRendered = useRef(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          hasRendered.current = true;
+        }
+      },
+      { rootMargin: '300px 0px', threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [pIdx]);
+
+  // Estimate height for placeholder: ~3rem per ~40 syllables
+  const estimatedHeight = Math.max(60, Math.ceil(paraSyls.length / 40) * 60);
+
+  if (!isVisible && !hasRendered.current) {
+    return <div ref={ref} data-pidx={pIdx} className="r-paragraph" style={{ minHeight: estimatedHeight }} />;
+  }
+
+  // Build coverage runs: consecutive syllables with same commentary set
+  const runs = [];
+  let runKey = null;
+  let currentRun = null;
+  paraSyls.forEach(syl => {
+    const opts = syllableMediaMap[syl.id] || [];
+    const groups = [];
+    const seen = new Set();
+    opts.forEach(opt => {
+      const g = getCommentaryGroup(opt.source_session);
+      if (!seen.has(g)) { seen.add(g); groups.push(g); }
+    });
+    groups.sort();
+    const key = groups.join(',');
+    if (key !== runKey) {
+      currentRun = { groups, syls: [] };
+      runs.push(currentRun);
+      runKey = key;
+    }
+    currentRun.syls.push(syl);
+  });
+
+  return (
+    <div ref={ref} data-pidx={pIdx} className="r-paragraph">
+      {runs.map((run, rIdx) => {
+        const renderedSyls = run.syls.map(syl => {
+          const mediaOptions = syllableMediaMap[syl.id] || [];
+          const hasMedia = mediaOptions.length > 0;
+          const sizeStyle = sizes[syl.size?.toUpperCase()] || sizes.DEFAULT;
+
+          const isCoveredByFilter = teachingCoverageSet.has(syl.id);
+          const isSelected = activeSylId === syl.id;
+          const isInPlayingSegment = playingSegSylIds.has(syl.id);
+          const isHoveredSegment = hoveredSegSylIds.has(syl.id);
+          const isActiveMatch = activeMatchSet.has(syl.id);
+          const isAnyMatch = allMatchesSet.has(syl.id);
+
+          const fontClass =
+            syl.nature === 'TEXT' || syl.nature === 'PUNCT' || syl.nature === 'SYM'
+              ? uchen.className
+              : 'font-sans';
+
+          let colorClass = isCoveredByFilter ? 'r-text' : 'r-text-disabled r-syl-dimmed';
+          if (!hasMedia && isCoveredByFilter) colorClass = 'r-text-muted';
+          let bgClass = '';
+          let extraClass = '';
+
+          if (isSelected) {
+            colorClass = 'r-text-accent';
+            extraClass = 'font-bold';
+          }
+          if (isActiveMatch) {
+            colorClass = '';
+            bgClass = 'r-match-active';
+          } else if (isAnyMatch) {
+            colorClass = '';
+            bgClass = 'r-match';
+          } else if (isInPlayingSegment) {
+            bgClass = 'r-syl-playing';
+          } else if (isHoveredSegment) {
+            bgClass = 'r-syl-hovered';
+          }
+
+          return (
+            <span
+              key={syl.id}
+              id={syl.id}
+              onClick={hasMedia ? () => handleSyllableClick(syl.id) : undefined}
+              className={`${fontClass} r-syl inline relative ${colorClass} ${bgClass} ${extraClass} ${hasMedia && !isSelected ? 'cursor-pointer r-hover-red' : ''
+                } ${isInPlayingSegment || isHoveredSegment ? 'rounded-sm' : ''}`}
+              style={sizeStyle}
+            >
+              {syl.text}
+            </span>
+          );
+        });
+
+        if (run.groups.length === 0) {
+          return <React.Fragment key={`r${rIdx}`}>{renderedSyls}</React.Fragment>;
+        }
+
+        return (
+          <div key={`r${rIdx}`} className="relative">
+            <div className="absolute top-0 bottom-0 flex" style={{ right: 'calc(100% + 8px)', gap: '2px' }}>
+              {run.groups.map(g => (
+                <div key={g} className="rounded-full" style={{ width: '3px', backgroundColor: commentaryColorMap[g] }} />
+              ))}
+            </div>
+            {renderedSyls}
+          </div>
+        );
+      })}
+    </div>
+  );
+});
 
 // ==========================================
 // MAIN READER COMPONENT
@@ -40,28 +212,34 @@ function ReaderContent() {
   const searchParams = useSearchParams();
 
   // URL parameters
-  const instanceId     = searchParams.get('instance') || 'rpn_ngondro_1';
-  const urlSession     = searchParams.get('session');
-  const urlSylId       = searchParams.get('sylId');
+  const instanceId = searchParams.get('instance') || 'rpn_ngondro_1';
+  const urlSession = searchParams.get('session');
+  const urlSylId = searchParams.get('sylId');
 
   // Hooks
   const { prefs, updatePref, loaded } = useReaderPreferences();
   const audio = useAudioPlayer();
 
   // Data state
-  const [manifest, setManifest]   = useState([]);
-  const [sessions, setSessions]   = useState([]);
+  const [manifest, setManifest] = useState([]);
+  const [sessions, setSessions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // UI state
-  const [sidebarOpen, setSidebarOpen]     = useState(true);
-  const [searchOpen, setSearchOpen]       = useState(false);
-  const [activeTab, setActiveTab]         = useState('commentary');
-  const [activeSylId, setActiveSylId]     = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('player');
+  const [activeSylId, setActiveSylId] = useState(null);
   const [activeCommentary, setActiveCommentary] = useState(null);
+
+  // Teaching filter: "A", "B", etc. or null = "All Teachings"
+  const [activeTeachingFilter, setActiveTeachingFilter] = useState(null);
 
   // Audio version preference (restored = cleaned audio when available)
   const [preferRestored, setPreferRestored] = useState(true);
+
+  // "No session on current location" message for teaching chip clicks
+  const [noSessionMessage, setNoSessionMessage] = useState(null);
 
   // Search match highlighting
   const [activeMatchSet, setActiveMatchSet] = useState(new Set());
@@ -69,20 +247,29 @@ function ReaderContent() {
 
   // Dual-scroll: playing segment highlight + auto-scroll
   const [playingSegSylIds, setPlayingSegSylIds] = useState(new Set());
+  const [hoveredSegSylIds, setHoveredSegSylIds] = useState(new Set());
   const [rootTextScrolledAt, setRootTextScrolledAt] = useState(0);
   const rootTextRef = useRef(null);
+
+  // Scroll container ref (from ReaderLayout) for viewport tracking
+  const scrollContainerRef = useRef(null);
+
+  // Cached paragraph DOM elements for weight-based viewport tracking
+  const paragraphElsRef = useRef([]);
+
+  // Viewport tracking for coverage bar — computed from scroll position
+  const [viewportRange, setViewportRange] = useState({ start: 0, end: 0.1 });
 
   // ----------------------------------------
   // URL-driven initial state
   // ----------------------------------------
   useEffect(() => {
     if (urlSession) {
-      setActiveCommentary(getCommentaryGroup(urlSession));
+      setActiveCommentary(urlSession);
       setActiveTab('player');
     }
     if (urlSylId) {
       setActiveSylId(urlSylId);
-      setActiveTab('commentary');
     }
   }, [urlSession, urlSylId]);
 
@@ -159,39 +346,49 @@ function ReaderContent() {
   }, [sessions]);
 
   // ----------------------------------------
-  // Derived data: allCommentaryIds
+  // Derived data: allCommentaryIds (raw session IDs)
   // ----------------------------------------
   const allCommentaryIds = useMemo(() => {
     const ids = new Set();
     sessions.forEach(segment => {
-      if (segment.source_session) ids.add(getCommentaryGroup(segment.source_session));
+      if (segment.source_session) ids.add(segment.source_session);
     });
     return Array.from(ids).sort();
   }, [sessions]);
 
   // ----------------------------------------
+  // Derived data: allTeachingGroups (unique group prefixes: "A", "B", …)
+  // ----------------------------------------
+  const allTeachingGroups = useMemo(() => {
+    const groups = new Set();
+    allCommentaryIds.forEach(id => groups.add(getCommentaryGroup(id)));
+    return Array.from(groups).sort();
+  }, [allCommentaryIds]);
+
+  // ----------------------------------------
   // Derived data: activeCommentarySegments
-  // All segments from all sessions in the active commentary group.
   // ----------------------------------------
   const activeCommentarySegments = useMemo(() => {
     if (!activeCommentary) return [];
     return sessions
-      .filter(seg => getCommentaryGroup(seg.source_session) === activeCommentary)
+      .filter(seg => seg.source_session === activeCommentary)
       .sort((a, b) => parseToMs(a.start) - parseToMs(b.start));
   }, [sessions, activeCommentary]);
 
   // ----------------------------------------
-  // Derived data: coverageSet
+  // Derived data: teachingCoverageSet
   // ----------------------------------------
-  const coverageSet = useMemo(() => {
+  const teachingCoverageSet = useMemo(() => {
     const set = new Set();
-    activeCommentarySegments.forEach(seg => {
-      if (seg.syl_uuids) {
+    sessions.forEach(seg => {
+      if (!seg.syl_uuids) return;
+      const group = getCommentaryGroup(seg.source_session);
+      if (activeTeachingFilter === null || group === activeTeachingFilter) {
         seg.syl_uuids.forEach(uuid => set.add(uuid));
       }
     });
     return set;
-  }, [activeCommentarySegments]);
+  }, [sessions, activeTeachingFilter]);
 
   // ----------------------------------------
   // Derived data: dynamic sizes from preferences
@@ -235,15 +432,59 @@ function ReaderContent() {
   }, [manifest]);
 
   // ----------------------------------------
-  // Derived data: commentary color map
+  // Derived data: cumulative syllable visual weights
+  // ----------------------------------------
+  const syllableWeights = useMemo(() => {
+    if (!manifest.length) return [];
+    const weights = new Float64Array(manifest.length + 1);
+    let cumulative = 0;
+    for (let i = 0; i < manifest.length; i++) {
+      weights[i] = cumulative;
+      cumulative += getTibetanWeight(manifest[i].text);
+    }
+    weights[manifest.length] = cumulative; // Total weight
+    return weights;
+  }, [manifest]);
+
+  // ----------------------------------------
+  // Derived data: paragraph weight bounds (for weight-based viewport tracking)
+  // ----------------------------------------
+  const paragraphWeightBounds = useMemo(() => {
+    if (!paragraphs.length || !syllableWeights.length || !manifest.length) return [];
+    const totalWeight = syllableWeights[manifest.length];
+    if (totalWeight === 0) return [];
+
+    const bounds = [];
+    let manifestIdx = 0;
+    for (let pIdx = 0; pIdx < paragraphs.length; pIdx++) {
+      // Skip newline syllables in manifest
+      while (manifestIdx < manifest.length && manifest[manifestIdx].text === '\n') {
+        manifestIdx++;
+      }
+      const startIdx = manifestIdx;
+      manifestIdx += paragraphs[pIdx].length;
+      const endIdx = manifestIdx; // exclusive
+
+      bounds.push({
+        startIdx,
+        endIdx,
+        wStart: syllableWeights[startIdx] / totalWeight,
+        wEnd: syllableWeights[endIdx] / totalWeight,
+      });
+    }
+    return bounds;
+  }, [paragraphs, manifest, syllableWeights]);
+
+  // ----------------------------------------
+  // Derived data: commentary color map (keyed by group prefix)
   // ----------------------------------------
   const commentaryColorMap = useMemo(() => {
     const map = {};
-    allCommentaryIds.forEach((id, i) => {
-      map[id] = COMMENTARY_COLORS[i % COMMENTARY_COLORS.length];
+    allTeachingGroups.forEach((group, i) => {
+      map[group] = COMMENTARY_COLORS[i % COMMENTARY_COLORS.length];
     });
     return map;
-  }, [allCommentaryIds]);
+  }, [allTeachingGroups]);
 
   // ----------------------------------------
   // Derived data: current segment text for mini-player
@@ -283,7 +524,9 @@ function ReaderContent() {
 
   // Auto-scroll root text to follow playing segment
   useEffect(() => {
-    if (playingSegSylIds.size === 0 || !rootTextRef.current) return;
+    if (playingSegSylIds.size === 0) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
     if (Date.now() - rootTextScrolledAt < 8000) return;
     const firstId = [...playingSegSylIds][0];
     const el = document.getElementById(firstId);
@@ -294,48 +537,206 @@ function ReaderContent() {
 
   // Scroll-lock detection for root text panel
   useEffect(() => {
-    const el = rootTextRef.current;
-    if (!el) return;
-    const handleScroll = () => setRootTextScrolledAt(Date.now());
-    el.addEventListener('wheel', handleScroll, { passive: true });
-    el.addEventListener('touchmove', handleScroll, { passive: true });
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const handleUserScroll = () => setRootTextScrolledAt(Date.now());
+    container.addEventListener('wheel', handleUserScroll, { passive: true });
+    container.addEventListener('touchmove', handleUserScroll, { passive: true });
     return () => {
-      el.removeEventListener('wheel', handleScroll);
-      el.removeEventListener('touchmove', handleScroll);
+      container.removeEventListener('wheel', handleUserScroll);
+      container.removeEventListener('touchmove', handleUserScroll);
     };
   }, []);
+
+  // ----------------------------------------
+  // Viewport tracking — uses weight fractions to match the MiniPlayer gold bar
+  // ----------------------------------------
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    const textNode = rootTextRef.current;
+    if (!container || !textNode) return;
+
+    // Refresh cached paragraph elements (needed after lazy paragraphs render)
+    const refreshParagraphEls = () => {
+      paragraphElsRef.current = Array.from(container.querySelectorAll('[data-pidx]'));
+    };
+
+    const updateViewport = () => {
+      refreshParagraphEls();
+      const pEls = paragraphElsRef.current;
+
+      if (!pEls.length || !paragraphWeightBounds.length) {
+        setViewportRange({ start: 0, end: 1 });
+        return;
+      }
+
+      const containerRect = container.getBoundingClientRect();
+      const wStart = findWeightAtY(containerRect.top, pEls, paragraphWeightBounds);
+      const wEnd = findWeightAtY(containerRect.bottom, pEls, paragraphWeightBounds);
+
+      setViewportRange({
+        start: Math.max(0, Math.min(1, wStart)),
+        end: Math.max(0, Math.min(1, wEnd)),
+      });
+    };
+
+    // Initial update
+    updateViewport();
+
+    container.addEventListener('scroll', updateViewport, { passive: true });
+    // Also observe resize to catch layout changes
+    const ro = new ResizeObserver(updateViewport);
+    ro.observe(container);
+    ro.observe(textNode);
+
+    return () => {
+      container.removeEventListener('scroll', updateViewport);
+      ro.disconnect();
+    };
+  }, [manifest, paragraphWeightBounds]); // re-attach when manifest loads or weight bounds change
+
+  // ----------------------------------------
+  // Navigate to position in text (from coverage bar click)
+  // Weight fraction → syllable index → scroll to DOM element
+  // ----------------------------------------
+  const handleNavigateToPosition = useCallback((fraction) => {
+    const container = scrollContainerRef.current;
+    if (!container || !manifest.length || !syllableWeights.length) return;
+
+    const totalWeight = syllableWeights[manifest.length];
+    const targetWeight = fraction * totalWeight;
+
+    // Binary search syllableWeights for the syllable at this weight fraction
+    let lo = 0, hi = manifest.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (syllableWeights[mid + 1] <= targetWeight) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    const targetSyl = manifest[lo];
+    if (!targetSyl || !targetSyl.id) return;
+
+    // Helper to scroll a DOM element to the center of the container
+    const scrollToEl = (el) => {
+      const containerRect = container.getBoundingClientRect();
+      const elRect = el.getBoundingClientRect();
+      const scrollTarget = elRect.top - containerRect.top + container.scrollTop - containerRect.height / 2;
+      container.scrollTo({ top: scrollTarget, behavior: 'smooth' });
+    };
+
+    // Try to find the syllable's DOM element directly
+    const el = document.getElementById(targetSyl.id);
+    if (el) {
+      scrollToEl(el);
+      setRootTextScrolledAt(Date.now());
+      return;
+    }
+
+    // Syllable not rendered yet (lazy paragraph placeholder).
+    // Find the paragraph and scroll to it, then retry after render.
+    if (paragraphWeightBounds.length > 0) {
+      let pLo = 0, pHi = paragraphWeightBounds.length - 1;
+      while (pLo < pHi) {
+        const pMid = (pLo + pHi) >>> 1;
+        if (paragraphWeightBounds[pMid].endIdx <= lo) {
+          pLo = pMid + 1;
+        } else {
+          pHi = pMid;
+        }
+      }
+      const paraEl = container.querySelector(`[data-pidx="${pLo}"]`);
+      if (paraEl) {
+        scrollToEl(paraEl);
+        setRootTextScrolledAt(Date.now());
+        // After scroll + lazy render, retry finding the exact syllable
+        setTimeout(() => {
+          const retryEl = document.getElementById(targetSyl.id);
+          if (retryEl) {
+            scrollToEl(retryEl);
+          }
+        }, 500);
+      }
+    }
+  }, [manifest, syllableWeights, paragraphWeightBounds]);
+
+  // ----------------------------------------
+  // Rebuild playlist when preferRestored changes (audio toggle bug fix)
+  // ----------------------------------------
+  useEffect(() => {
+    if (!activeCommentary) return;
+    const segmentsForCommentary = sessions
+      .filter(seg => seg.source_session === activeCommentary)
+      .sort((a, b) => parseToMs(a.start) - parseToMs(b.start));
+
+    const playlist = segmentsForCommentary.map(seg => {
+      const mediaSource = preferRestored
+        ? (seg.media_restored || seg.media_original)
+        : (seg.media_original || seg.media_restored);
+      return {
+        src: mediaSource,
+        startMs: parseToMs(seg.start),
+        segment: seg,
+      };
+    });
+
+    if (playlist.length > 0) {
+      const currentMs = audio.currentTimeMs;
+      const wasPlaying = audio.isPlaying;
+      // Find segment containing currentMs and restart at its beginning
+      let currentIdx = 0;
+      for (let i = 0; i < playlist.length; i++) {
+        if (currentMs >= playlist[i].startMs) currentIdx = i;
+      }
+      audio.loadPlaylist(playlist, currentIdx, wasPlaying);
+      // No seekTo — loadPlaylist starts at the segment's startMs
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preferRestored]);
 
   // ----------------------------------------
   // Handlers
   // ----------------------------------------
   const handleSyllableClick = useCallback((sylId) => {
     setActiveSylId(prev => prev === sylId ? null : sylId);
-    setSidebarOpen(true);
-    setActiveTab('commentary');
   }, []);
 
   const handleCommentarySelect = useCallback((commentaryId, startSegment) => {
     setActiveCommentary(commentaryId);
     setActiveTab('player');
     setSidebarOpen(true);
+    setNoSessionMessage(null);
 
-    // Find segment to start from: explicit or first of commentary
-    let segment = startSegment;
-    if (!segment) {
-      segment = sessions
-        .filter(seg => getCommentaryGroup(seg.source_session) === commentaryId)
-        .sort((a, b) => parseToMs(a.start) - parseToMs(b.start))[0];
+    const group = getCommentaryGroup(commentaryId);
+    setActiveTeachingFilter(group);
+
+    const segmentsForCommentary = sessions
+      .filter(seg => seg.source_session === commentaryId)
+      .sort((a, b) => parseToMs(a.start) - parseToMs(b.start));
+
+    let startIdx = 0;
+    if (startSegment) {
+      const idx = segmentsForCommentary.findIndex(s => s.global_seg_id === startSegment.global_seg_id || s.seg_id === startSegment.seg_id);
+      if (idx !== -1) startIdx = idx;
     }
 
-    if (segment) {
+    const playlist = segmentsForCommentary.map(seg => {
       const mediaSource = preferRestored
-        ? (segment.media_restored || segment.media_original)
-        : (segment.media_original || segment.media_restored);
-      if (mediaSource) {
-        audio.loadSource(mediaSource, parseToMs(segment.start));
-      }
+        ? (seg.media_restored || seg.media_original)
+        : (seg.media_original || seg.media_restored);
+      return {
+        src: mediaSource,
+        startMs: parseToMs(seg.start),
+        segment: seg,
+      };
+    });
 
-      const firstSylId = segment.syl_uuids?.[0];
+    if (playlist.length > 0) {
+      audio.loadPlaylist(playlist, startIdx, true);
+
+      const firstSylId = segmentsForCommentary[startIdx]?.syl_uuids?.[0];
       if (firstSylId) {
         setTimeout(() => {
           const el = document.getElementById(firstSylId);
@@ -344,6 +745,34 @@ function ReaderContent() {
       }
     }
   }, [audio, sessions, preferRestored]);
+
+  const handleTeachingFilterChange = useCallback((group) => {
+    if (!group) return;
+
+    // Stop playback when switching teachings
+    if (audio.isPlaying) {
+      audio.pause();
+    }
+
+    setActiveTeachingFilter(group);
+    setNoSessionMessage(null);
+
+    // Find a session in this group that contains activeSylId
+    if (activeSylId && syllableMediaMap[activeSylId]) {
+      const matchingOpt = syllableMediaMap[activeSylId].find(
+        opt => getCommentaryGroup(opt.source_session) === group
+      );
+      if (matchingOpt) {
+        handleCommentarySelect(matchingOpt.source_session);
+        return;
+      }
+    }
+
+    // No session found for current syllable position
+    const groupSessions = allCommentaryIds.filter(id => getCommentaryGroup(id) === group);
+    setActiveCommentary(null);
+    setNoSessionMessage({ group, groupSessions });
+  }, [audio, activeSylId, syllableMediaMap, allCommentaryIds, handleCommentarySelect]);
 
   const handleSegmentClick = useCallback((segment) => {
     if (!segment?.sylUuids?.length) return;
@@ -389,31 +818,25 @@ function ReaderContent() {
       </div>
 
       <div className="flex-1 p-5 overflow-y-auto">
-        {activeTab === 'commentary' && (
-          <CommentaryTab
-            activeSylId={activeSylId}
-            syllableMediaMap={syllableMediaMap}
-            manifest={manifest}
-            allCommentaryIds={allCommentaryIds}
-            onCommentarySelect={handleCommentarySelect}
-            sidebarSizes={sidebarSizes}
-            getCommentaryGroup={getCommentaryGroup}
-          />
-        )}
-
         {activeTab === 'player' && (
           <PlayerTab
             audio={audio}
             activeCommentary={activeCommentary}
             allCommentaryIds={allCommentaryIds}
+            allTeachingGroups={allTeachingGroups}
+            activeTeachingFilter={activeTeachingFilter}
+            onTeachingFilterChange={handleTeachingFilterChange}
             activeCommentarySegments={activeCommentarySegments}
             manifest={manifest}
             onCommentarySelect={handleCommentarySelect}
             onSegmentClick={handleSegmentClick}
+            onSegmentHover={(seg) => setHoveredSegSylIds(new Set(seg ? seg.sylUuids : []))}
             activeSylId={activeSylId}
             sidebarSizes={sidebarSizes}
             preferRestored={preferRestored}
             onTogglePreferRestored={() => setPreferRestored(prev => !prev)}
+            getCommentaryGroup={getCommentaryGroup}
+            noSessionMessage={noSessionMessage}
           />
         )}
 
@@ -423,6 +846,8 @@ function ReaderContent() {
             activeCommentary={activeCommentary}
             activeCommentarySegments={activeCommentarySegments}
             sessions={sessions}
+            manifest={manifest}
+            getCommentaryGroup={getCommentaryGroup}
           />
         )}
       </div>
@@ -433,7 +858,7 @@ function ReaderContent() {
   // Render
   // ----------------------------------------
   return (
-    <main className="min-h-screen flex flex-col r-bg r-text-1a" style={getThemeCssVars(prefs)}>
+    <main className="min-h-screen flex flex-col r-bg r-text-1a overflow-x-hidden" style={getThemeCssVars(prefs)}>
       <audio {...audio.audioProps} />
 
       <ReaderNavbar
@@ -450,138 +875,56 @@ function ReaderContent() {
         onMatchSetsChange={handleMatchSetsChange}
       />
 
-      <ReaderLayout sidebarOpen={sidebarOpen} sidebar={sidebarContent}>
+      <ReaderLayout ref={scrollContainerRef} sidebarOpen={sidebarOpen} sidebar={sidebarContent}>
+        {/* Floating Context Popover */}
+        <FloatingPopover
+          activeSylId={activeSylId}
+          activeCommentary={activeCommentary}
+          syllableMediaMap={syllableMediaMap}
+          manifest={manifest}
+          onCommentarySelect={handleCommentarySelect}
+          getCommentaryGroup={getCommentaryGroup}
+          sidebarSizes={sidebarSizes}
+          onClose={() => setActiveSylId(null)}
+        />
+
         <div ref={rootTextRef} className="max-w-4xl mx-auto" style={{ padding: searchOpen ? '5rem 3rem 3rem 3rem' : '3rem' }}>
           <div className={`${uchen.className} text-justify`}>
-            {paragraphs.map((paraSyls, pIdx) => {
-              // Build coverage runs: consecutive syllables with same commentary set
-              const runs = [];
-              let runKey = null;
-              let currentRun = null;
-              paraSyls.forEach(syl => {
-                const opts = syllableMediaMap[syl.id] || [];
-                const groups = [];
-                const seen = new Set();
-                opts.forEach(opt => {
-                  const g = getCommentaryGroup(opt.source_session);
-                  if (!seen.has(g)) { seen.add(g); groups.push(g); }
-                });
-                groups.sort();
-                const key = groups.join(',');
-                if (key !== runKey) {
-                  currentRun = { groups, syls: [] };
-                  runs.push(currentRun);
-                  runKey = key;
-                }
-                currentRun.syls.push(syl);
-              });
-
-              return (
-                <div key={pIdx} className="r-paragraph">
-                  {runs.map((run, rIdx) => {
-                    const renderedSyls = run.syls.map(syl => {
-                      const mediaOptions = syllableMediaMap[syl.id] || [];
-                      const hasMedia = mediaOptions.length > 0;
-                      const density = syllableDensityMap[syl.id] || 0;
-                      const sizeStyle = sizes[syl.size?.toUpperCase()] || sizes.DEFAULT;
-
-                      const isCovered = activeCommentary ? coverageSet.has(syl.id) : true;
-                      const isSelected = activeSylId === syl.id;
-                      const isInPlayingSegment = playingSegSylIds.has(syl.id);
-                      const isActiveMatch = activeMatchSet.has(syl.id);
-                      const isAnyMatch = allMatchesSet.has(syl.id);
-
-                      const fontClass =
-                        syl.nature === 'TEXT' || syl.nature === 'PUNCT' || syl.nature === 'SYM'
-                          ? uchen.className
-                          : 'font-sans';
-
-                      let colorClass = hasMedia ? 'r-text' : 'r-text-muted';
-                      let bgClass = '';
-                      let extraClass = '';
-
-                      if (isSelected) {
-                        colorClass = 'r-text-accent';
-                        extraClass = 'font-bold';
-                      }
-                      if (activeCommentary && !isCovered) {
-                        colorClass = 'r-text-disabled r-syl-dimmed';
-                      }
-                      if (isActiveMatch) {
-                        colorClass = '';
-                        bgClass = 'r-match-active';
-                      } else if (isAnyMatch) {
-                        colorClass = '';
-                        bgClass = 'r-match';
-                      } else if (isInPlayingSegment) {
-                        bgClass = 'r-syl-playing';
-                      }
-
-                      return (
-                        <span
-                          key={syl.id}
-                          id={syl.id}
-                          onClick={hasMedia ? () => handleSyllableClick(syl.id) : undefined}
-                          className={`${fontClass} r-syl inline relative ${colorClass} ${bgClass} ${extraClass} ${
-                            hasMedia && !isSelected ? 'cursor-pointer r-hover-red' : ''
-                          } ${isInPlayingSegment ? 'rounded-sm' : ''}`}
-                          style={sizeStyle}
-                        >
-                          {syl.text}
-                          {density > 0 && !activeCommentary && (
-                            <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 flex gap-[2px] pointer-events-none" aria-hidden="true">
-                              {density === 1 && (
-                                <span className="w-[3px] h-[3px] rounded-full opacity-40 r-density-dot" />
-                              )}
-                              {density >= 2 && density <= 3 && (
-                                <>
-                                  <span className="w-[3px] h-[3px] rounded-full opacity-40 r-density-dot" />
-                                  <span className="w-[3px] h-[3px] rounded-full opacity-40 r-density-dot" />
-                                </>
-                              )}
-                              {density >= 4 && (
-                                <span className="w-[8px] h-[2px] rounded-full opacity-50 r-density-dot" />
-                              )}
-                            </span>
-                          )}
-                        </span>
-                      );
-                    });
-
-                    // Uncovered run: render syllables inline
-                    if (run.groups.length === 0) {
-                      return <React.Fragment key={`r${rIdx}`}>{renderedSyls}</React.Fragment>;
-                    }
-
-                    // Covered run: block div with side border stripes
-                    return (
-                      <div key={`r${rIdx}`} className="relative">
-                        <div className="absolute top-0 bottom-0 flex" style={{ right: 'calc(100% + 8px)', gap: '2px' }}>
-                          {run.groups.map(g => (
-                            <div key={g} className="rounded-full" style={{ width: '3px', backgroundColor: commentaryColorMap[g] }} />
-                          ))}
-                        </div>
-                        {renderedSyls}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
+            {paragraphs.map((paraSyls, pIdx) => (
+              <LazyParagraph
+                key={pIdx}
+                pIdx={pIdx}
+                paraSyls={paraSyls}
+                syllableMediaMap={syllableMediaMap}
+                getCommentaryGroup={getCommentaryGroup}
+                commentaryColorMap={commentaryColorMap}
+                sizes={sizes}
+                teachingCoverageSet={teachingCoverageSet}
+                activeSylId={activeSylId}
+                playingSegSylIds={playingSegSylIds}
+                hoveredSegSylIds={hoveredSegSylIds}
+                activeMatchSet={activeMatchSet}
+                allMatchesSet={allMatchesSet}
+                handleSyllableClick={handleSyllableClick}
+                uchen={uchen}
+              />
+            ))}
           </div>
         </div>
 
-        <Footer className="mt-8" style={{ paddingBottom: audio.audioSrc && activeCommentary ? '3.5rem' : undefined }} />
+        <Footer className="mt-8" style={{ paddingBottom: '3.5rem' }} />
       </ReaderLayout>
 
       <MiniPlayer
-        audio={audio}
-        activeCommentary={activeCommentary}
-        currentSegmentText={currentSegmentText}
-        onExpand={() => {
-          setSidebarOpen(true);
-          setActiveTab('player');
-        }}
+        manifest={manifest}
+        sessions={sessions}
+        allTeachingGroups={allTeachingGroups}
+        activeTeachingFilter={activeTeachingFilter}
+        getCommentaryGroup={getCommentaryGroup}
+        commentaryColorMap={commentaryColorMap}
+        viewportRange={viewportRange}
+        onNavigateToPosition={handleNavigateToPosition}
+        syllableWeights={syllableWeights}
       />
     </main>
   );

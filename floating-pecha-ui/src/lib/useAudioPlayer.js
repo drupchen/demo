@@ -79,6 +79,12 @@ export function useAudioPlayer() {
   const [playbackRate, setPlaybackRateState] = useState(1);
   const [audioSrc, setAudioSrc] = useState(null);
 
+  // --- Playlist State ---
+  const [playlist, setPlaylist] = useState([]);
+  const [currentPlaylistIndex, setCurrentPlaylistIndex] = useState(-1);
+  const [isContinuous, setIsContinuous] = useState(false);
+  const playStateRef = useRef({ playlist: [], currentIndex: -1, isContinuous: false });
+
   // --- Event handlers ---
 
   const handleTimeUpdate = useCallback(() => {
@@ -98,11 +104,29 @@ export function useAudioPlayer() {
   const handlePlay = useCallback(() => setIsPlaying(true), []);
   const handlePause = useCallback(() => setIsPlaying(false), []);
 
+  const handleEnded = useCallback(() => {
+    const { isContinuous: cont, currentIndex: idx, playlist: list } = playStateRef.current;
+    if (!cont || idx < 0 || idx >= list.length - 1) {
+      setIsPlaying(false);
+      return;
+    }
+    // Auto-advance to next segment in playlist
+    const nextIdx = idx + 1;
+    const nextItem = list[nextIdx];
+    if (nextItem && nextItem.src) {
+      loadSource(nextItem.src, nextItem.startMs || 0, true);
+      setCurrentPlaylistIndex(nextIdx);
+      playStateRef.current.currentIndex = nextIdx;
+    } else {
+      setIsPlaying(false);
+    }
+  }, []);
+
   // --- Control methods ---
 
   const play = useCallback(() => {
     const el = audioRef.current;
-    if (el && el.src) el.play().catch(() => {});
+    if (el && el.src) el.play().catch(() => { });
   }, []);
 
   const pause = useCallback(() => {
@@ -114,7 +138,7 @@ export function useAudioPlayer() {
     const el = audioRef.current;
     if (!el) return;
     if (el.paused) {
-      el.play().catch(() => {});
+      el.play().catch(() => { });
     } else {
       el.pause();
     }
@@ -145,9 +169,51 @@ export function useAudioPlayer() {
       el.currentTime = startMs / 1000;
     }
     if (autoPlay) {
-      el.play().catch(() => {});
+      el.play().catch(() => { });
     }
   }, []);
+
+  const loadPlaylist = useCallback((newPlaylist, startIndex = 0, autoPlay = true) => {
+    if (!newPlaylist || newPlaylist.length === 0) return;
+    setPlaylist(newPlaylist);
+    setIsContinuous(true);
+    setCurrentPlaylistIndex(startIndex);
+
+    playStateRef.current = {
+      playlist: newPlaylist,
+      currentIndex: startIndex,
+      isContinuous: true
+    };
+
+    const firstItem = newPlaylist[startIndex];
+    if (firstItem && firstItem.src) {
+      loadSource(firstItem.src, firstItem.startMs || 0, autoPlay);
+    }
+  }, [loadSource]);
+
+  const nextTrack = useCallback(() => {
+    const { currentIndex: idx, playlist: list } = playStateRef.current;
+    if (idx >= list.length - 1) return;
+    const nextIdx = idx + 1;
+    const nextItem = list[nextIdx];
+    if (nextItem && nextItem.src) {
+      loadSource(nextItem.src, nextItem.startMs || 0, true);
+      setCurrentPlaylistIndex(nextIdx);
+      playStateRef.current.currentIndex = nextIdx;
+    }
+  }, [loadSource]);
+
+  const prevTrack = useCallback(() => {
+    const { currentIndex: idx, playlist: list } = playStateRef.current;
+    if (idx <= 0) return;
+    const prevIdx = idx - 1;
+    const prevItem = list[prevIdx];
+    if (prevItem && prevItem.src) {
+      loadSource(prevItem.src, prevItem.startMs || 0, true);
+      setCurrentPlaylistIndex(prevIdx);
+      playStateRef.current.currentIndex = prevIdx;
+    }
+  }, [loadSource]);
 
   const setPlaybackRate = useCallback((rate) => {
     const el = audioRef.current;
@@ -164,6 +230,7 @@ export function useAudioPlayer() {
     onLoadedMetadata: handleLoadedMetadata,
     onPlay: handlePlay,
     onPause: handlePause,
+    onEnded: handleEnded,
     preload: 'metadata',
     style: { display: 'none' },
   };
@@ -182,6 +249,9 @@ export function useAudioPlayer() {
     togglePlay,
     seekTo,
     loadSource,
+    loadPlaylist,
+    nextTrack,
+    prevTrack,
     setPlaybackRate,
 
     // Spread onto <audio>
