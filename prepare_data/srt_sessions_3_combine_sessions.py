@@ -1,45 +1,71 @@
 import json
+import re
 from pathlib import Path
+
+
+def natural_sort_key(s):
+    """Sort key that handles embedded numbers naturally (A1, A2, A10)."""
+    return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', s)]
 
 
 def compile_single_instance(instance_id, sessions_folder, output_file):
     """
     Takes the compiled sessions for a single instance and merges them,
     injecting global metadata along the way.
+
+    When the alignment-tool has produced _corrected variants, those are
+    preferred over the originals. _original_backup files are ignored.
     """
     all_segments = []
 
-    # Check if the sessions directory exists and is valid
-    if sessions_folder.exists() and sessions_folder.is_dir():
-        # Iterate through all JSON session files in this instance's folder
-        for filepath in sessions_folder.glob('*.json'):
-            with filepath.open('r', encoding='utf-8') as f:
-                try:
-                    session_data = json.load(f)
-
-                    # --- YOUR UNTOUCHED PARSING LOGIC ---
-                    session_name = filepath.stem  # Gets filename without the .json
-                    for segment in session_data:
-                        # Create a unique Global ID
-                        segment['global_seg_id'] = f"{session_name}_seg{segment['seg_id']}"
-                        # Tag the segment with its source teaching so the UI knows where it came from
-                        segment['source_session'] = session_name
-                    # ------------------------------------
-
-                    all_segments.extend(session_data)
-                    print(f"      ➕ Merged: {filepath.name}")
-                except Exception as e:
-                    print(f"      ❌ Error reading {filepath.name}: {e}")
-
-        # Save the compiled file
-        if len(all_segments) > 0:
-            with output_file.open('w', encoding='utf-8') as out:
-                json.dump(all_segments, out, ensure_ascii=False, indent=2)
-            print(f"   🎯 Success! Saved {len(all_segments)} segments to {output_file.name}")
-        else:
-            print(f"   ⚠️ Warning: No valid JSON segments found inside {sessions_folder}")
-    else:
+    if not (sessions_folder.exists() and sessions_folder.is_dir()):
         print(f"   ⚠️ Warning: No 'sessions' sub-folder found at {sessions_folder}")
+        return
+
+    # Discover base session names (exclude _corrected / _original_backup suffixes)
+    base_names = set()
+    for filepath in sessions_folder.glob('*.json'):
+        stem = filepath.stem
+        if stem.endswith('_original_backup'):
+            continue  # skip backups entirely
+        if stem.endswith('_corrected'):
+            base_names.add(stem[:-10])  # strip _corrected
+        else:
+            base_names.add(stem)
+
+    for name in sorted(base_names, key=natural_sort_key):
+        corrected_path = sessions_folder / f"{name}_corrected.json"
+        original_path = sessions_folder / f"{name}.json"
+
+        # Prefer corrected version if it exists
+        if corrected_path.is_file():
+            filepath = corrected_path
+        elif original_path.is_file():
+            filepath = original_path
+        else:
+            continue
+
+        try:
+            with filepath.open('r', encoding='utf-8') as f:
+                session_data = json.load(f)
+
+            for segment in session_data:
+                segment['global_seg_id'] = f"{name}_seg{segment['seg_id']}"
+                segment['source_session'] = name
+
+            all_segments.extend(session_data)
+            suffix = " (corrected)" if filepath == corrected_path else ""
+            print(f"      ➕ Merged: {filepath.name}{suffix}")
+        except Exception as e:
+            print(f"      ❌ Error reading {filepath.name}: {e}")
+
+    # Save the compiled file
+    if len(all_segments) > 0:
+        with output_file.open('w', encoding='utf-8') as out:
+            json.dump(all_segments, out, ensure_ascii=False, indent=2)
+        print(f"   🎯 Success! Saved {len(all_segments)} segments to {output_file.name}")
+    else:
+        print(f"   ⚠️ Warning: No valid JSON segments found inside {sessions_folder}")
 
 
 if __name__ == "__main__":
