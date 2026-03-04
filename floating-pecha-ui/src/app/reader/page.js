@@ -36,6 +36,48 @@ function getTibetanWeight(text) {
   return Math.max(1, stripped.length);
 }
 
+/** Natural sort comparator: handles embedded numbers (A1, A2, A10). */
+function naturalSortCompare(a, b) {
+  const re = /(\d+)/g;
+  const aParts = a.split(re);
+  const bParts = b.split(re);
+  for (let i = 0; i < Math.min(aParts.length, bParts.length); i++) {
+    if (aParts[i] !== bParts[i]) {
+      const aNum = Number(aParts[i]);
+      const bNum = Number(bParts[i]);
+      if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+      return aParts[i].localeCompare(bParts[i]);
+    }
+  }
+  return a.length - b.length;
+}
+
+/**
+ * Scroll to a syllable element, handling lazy-loaded paragraphs.
+ * If the syllable's paragraph hasn't been rendered yet, scrolls the placeholder
+ * into view first (triggering IntersectionObserver), then scrolls to the exact element.
+ */
+function scrollToSyllable(sylId, paragraphs) {
+  const el = document.getElementById(sylId);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  const pIdx = paragraphs.findIndex(p => p.some(syl => syl.id === sylId));
+  if (pIdx < 0) return;
+  const paraEl = document.querySelector(`[data-pidx="${pIdx}"]`);
+  if (!paraEl) return;
+  paraEl.scrollIntoView({ behavior: 'instant', block: 'center' });
+  let attempts = 0;
+  const check = setInterval(() => {
+    const sylEl = document.getElementById(sylId);
+    if (sylEl || ++attempts > 40) {
+      clearInterval(check);
+      if (sylEl) sylEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, 50);
+}
+
 /** Extract commentary group prefix from session ID (e.g. "A1_xxx" → "A") */
 function getCommentaryGroup(sessionId) {
   const match = sessionId.match(/^([A-Za-z]+)/);
@@ -135,6 +177,7 @@ const LazyParagraph = React.memo(function LazyParagraph({ paraSyls, pIdx, syllab
     <div ref={ref} data-pidx={pIdx} className="r-paragraph">
       {runs.map((run, rIdx) => {
         const renderedSyls = run.syls.map(syl => {
+          if (syl.text === '\n') return <br key={syl.id} />;
           const mediaOptions = syllableMediaMap[syl.id] || [];
           const hasMedia = mediaOptions.length > 0;
           const sizeStyle = sizes[syl.size?.toUpperCase()] || sizes.DEFAULT;
@@ -215,6 +258,8 @@ function ReaderContent() {
   const instanceId = searchParams.get('instance') || 'rpn_ngondro_1';
   const urlSession = searchParams.get('session');
   const urlSylId = searchParams.get('sylId');
+  const urlTime = searchParams.get('time');
+  const urlQ = searchParams.get('q');
 
   // Hooks
   const { prefs, updatePref, loaded } = useReaderPreferences();
@@ -224,12 +269,14 @@ function ReaderContent() {
   const [manifest, setManifest] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [teachingTitle, setTeachingTitle] = useState('');
 
   // UI state
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(!!urlQ);
   const [activeTab, setActiveTab] = useState('player');
   const [activeSylId, setActiveSylId] = useState(null);
+  const [popoverOpen, setPopoverOpen] = useState(false);
   const [activeCommentary, setActiveCommentary] = useState(null);
 
   // Teaching filter: "A", "B", etc. or null = "All Teachings"
@@ -261,12 +308,14 @@ function ReaderContent() {
   const [viewportRange, setViewportRange] = useState({ start: 0, end: 0.1 });
 
   // ----------------------------------------
-  // URL-driven initial state
-  // ----------------------------------------
+  // URL-driven initial state — set immediately so sidebar opens
+  // Full deep-link with time-seek is handled in a later effect after data loads
+  const deepLinkAppliedRef = useRef(false);
   useEffect(() => {
     if (urlSession) {
       setActiveCommentary(urlSession);
       setActiveTab('player');
+      setSidebarOpen(true);
     }
     if (urlSylId) {
       setActiveSylId(urlSylId);
@@ -279,15 +328,26 @@ function ReaderContent() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [manifestRes, sessionsRes] = await Promise.all([
+        const [manifestRes, sessionsRes, catalogRes] = await Promise.all([
           fetch(`/data/archive/${instanceId}/manifest.json`),
-          fetch(`/data/archive/${instanceId}/${instanceId}_compiled_sessions.json`)
+          fetch(`/data/archive/${instanceId}/${instanceId}_compiled_sessions.json`),
+          fetch('/data/archive/catalog.json')
         ]);
         if (manifestRes.ok && sessionsRes.ok) {
           const manifestData = await manifestRes.json();
           const sessionsData = await sessionsRes.json();
           setManifest(manifestData);
           setSessions(sessionsData);
+        }
+        if (catalogRes.ok) {
+          const catalog = await catalogRes.json();
+          for (const teaching of catalog) {
+            const match = (teaching.Instances || []).find(inst => inst.Instance_ID === instanceId);
+            if (match) {
+              setTeachingTitle(teaching.Title_bo || '');
+              break;
+            }
+          }
         }
       } catch (error) {
         console.error("Error loading reader data:", error);
@@ -353,7 +413,7 @@ function ReaderContent() {
     sessions.forEach(segment => {
       if (segment.source_session) ids.add(segment.source_session);
     });
-    return Array.from(ids).sort();
+    return Array.from(ids).sort(naturalSortCompare);
   }, [sessions]);
 
   // ----------------------------------------
@@ -419,11 +479,23 @@ function ReaderContent() {
   const paragraphs = useMemo(() => {
     const result = [];
     let current = [];
+    let prevWasNewline = false;
     manifest.forEach(syl => {
       if (syl.text === '\n') {
-        if (current.length > 0) result.push(current);
-        current = [];
+        if (prevWasNewline) {
+          // Double newline → paragraph break
+          // Remove trailing single newline kept in current
+          if (current.length > 0 && current[current.length - 1].text === '\n') {
+            current.pop();
+          }
+          if (current.length > 0) result.push(current);
+          current = [];
+        } else {
+          prevWasNewline = true;
+          current.push(syl); // Keep single newline in paragraph for <br>
+        }
       } else {
+        prevWasNewline = false;
         current.push(syl);
       }
     });
@@ -684,14 +756,13 @@ function ReaderContent() {
 
     if (playlist.length > 0) {
       const currentMs = audio.currentTimeMs;
-      const wasPlaying = audio.isPlaying;
       // Find segment containing currentMs and restart at its beginning
       let currentIdx = 0;
       for (let i = 0; i < playlist.length; i++) {
         if (currentMs >= playlist[i].startMs) currentIdx = i;
       }
-      audio.loadPlaylist(playlist, currentIdx, wasPlaying);
-      // No seekTo — loadPlaylist starts at the segment's startMs
+      audio.loadPlaylist(playlist, currentIdx, true);
+      // Always auto-play when toggling audio version
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preferRestored]);
@@ -700,10 +771,22 @@ function ReaderContent() {
   // Handlers
   // ----------------------------------------
   const handleSyllableClick = useCallback((sylId) => {
-    setActiveSylId(prev => prev === sylId ? null : sylId);
-  }, []);
+    setActiveSylId(prev => {
+      if (prev === sylId) {
+        setPopoverOpen(false);
+        return null;
+      }
+      setPopoverOpen(true);
+      return sylId;
+    });
+    if (activeCommentary) {
+      audio.pause();
+      setActiveCommentary(null);
+    }
+  }, [activeCommentary, audio]);
 
-  const handleCommentarySelect = useCallback((commentaryId, startSegment) => {
+  const handleCommentarySelect = useCallback((commentaryId, startSegment, autoPlay = true) => {
+    setPopoverOpen(false);
     setActiveCommentary(commentaryId);
     setActiveTab('player');
     setSidebarOpen(true);
@@ -734,17 +817,40 @@ function ReaderContent() {
     });
 
     if (playlist.length > 0) {
-      audio.loadPlaylist(playlist, startIdx, true);
+      audio.loadPlaylist(playlist, startIdx, autoPlay);
 
       const firstSylId = segmentsForCommentary[startIdx]?.syl_uuids?.[0];
       if (firstSylId) {
-        setTimeout(() => {
-          const el = document.getElementById(firstSylId);
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 100);
+        setTimeout(() => scrollToSyllable(firstSylId, paragraphs), 100);
       }
     }
-  }, [audio, sessions, preferRestored]);
+  }, [audio, sessions, preferRestored, paragraphs]);
+
+  // ----------------------------------------
+  // Deep-link: load session + seek to time once data is ready
+  // ----------------------------------------
+  useEffect(() => {
+    if (!urlSession || sessions.length === 0 || deepLinkAppliedRef.current) return;
+    deepLinkAppliedRef.current = true;
+
+    const segsForSession = sessions
+      .filter(s => s.source_session === urlSession)
+      .sort((a, b) => parseToMs(a.start) - parseToMs(b.start));
+
+    let startSeg = null;
+    if (urlTime && segsForSession.length > 0) {
+      const timeMs = parseToMs(urlTime);
+      startSeg = segsForSession.find(s => parseToMs(s.start) === timeMs)
+        || [...segsForSession].reverse().find(s => parseToMs(s.start) <= timeMs);
+    }
+
+    handleCommentarySelect(urlSession, startSeg || undefined, true);
+    if (urlSylId) {
+      setActiveSylId(urlSylId);
+      setTimeout(() => scrollToSyllable(urlSylId, paragraphs), 200);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions]);
 
   const handleTeachingFilterChange = useCallback((group) => {
     if (!group) return;
@@ -763,16 +869,31 @@ function ReaderContent() {
         opt => getCommentaryGroup(opt.source_session) === group
       );
       if (matchingOpt) {
-        handleCommentarySelect(matchingOpt.source_session);
+        handleCommentarySelect(matchingOpt.source_session, undefined, false);
         return;
       }
     }
 
-    // No session found for current syllable position
+    // No session found for current syllable position — compute position-aware prev/next
     const groupSessions = allCommentaryIds.filter(id => getCommentaryGroup(id) === group);
+
+    const currentManifestIdx = activeSylId
+      ? manifest.findIndex(s => s.id === activeSylId)
+      : 0;
+
+    const sessionsWithPositions = groupSessions.map(sessionId => {
+      const segs = sessions.filter(s => s.source_session === sessionId);
+      const firstSylId = segs[0]?.syl_uuids?.[0];
+      const idx = firstSylId ? manifest.findIndex(s => s.id === firstSylId) : -1;
+      return { sessionId, idx };
+    }).filter(s => s.idx >= 0).sort((a, b) => a.idx - b.idx);
+
+    const prevSession = sessionsWithPositions.filter(s => s.idx < currentManifestIdx).pop()?.sessionId || null;
+    const nextSession = sessionsWithPositions.find(s => s.idx >= currentManifestIdx)?.sessionId || null;
+
     setActiveCommentary(null);
-    setNoSessionMessage({ group, groupSessions });
-  }, [audio, activeSylId, syllableMediaMap, allCommentaryIds, handleCommentarySelect]);
+    setNoSessionMessage({ group, groupSessions, prevSession, nextSession });
+  }, [audio, activeSylId, syllableMediaMap, allCommentaryIds, handleCommentarySelect, manifest, sessions]);
 
   const handleSegmentClick = useCallback((segment) => {
     if (!segment?.sylUuids?.length) return;
@@ -837,6 +958,8 @@ function ReaderContent() {
             onTogglePreferRestored={() => setPreferRestored(prev => !prev)}
             getCommentaryGroup={getCommentaryGroup}
             noSessionMessage={noSessionMessage}
+            instanceId={instanceId}
+            teachingTitle={teachingTitle}
           />
         )}
 
@@ -873,19 +996,20 @@ function ReaderContent() {
         manifest={manifest}
         visible={searchOpen}
         onMatchSetsChange={handleMatchSetsChange}
+        initialQuery={urlQ || ''}
       />
 
       <ReaderLayout ref={scrollContainerRef} sidebarOpen={sidebarOpen} sidebar={sidebarContent}>
         {/* Floating Context Popover */}
         <FloatingPopover
           activeSylId={activeSylId}
-          activeCommentary={activeCommentary}
+          popoverOpen={popoverOpen}
           syllableMediaMap={syllableMediaMap}
           manifest={manifest}
           onCommentarySelect={handleCommentarySelect}
           getCommentaryGroup={getCommentaryGroup}
           sidebarSizes={sidebarSizes}
-          onClose={() => setActiveSylId(null)}
+          onClose={() => { setActiveSylId(null); setPopoverOpen(false); }}
         />
 
         <div ref={rootTextRef} className="max-w-4xl mx-auto" style={{ padding: searchOpen ? '5rem 3rem 3rem 3rem' : '3rem' }}>

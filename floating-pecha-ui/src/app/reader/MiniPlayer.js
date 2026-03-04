@@ -153,8 +153,8 @@ export default function MiniPlayer({
                 >
                   {/* Teaching letter positioned strictly outside the left edge of the gray bar */}
                   <div
-                    className={`absolute right-full mr-1.5 top-1/2 -translate-y-1/2 text-[10px] font-bold transition-opacity duration-300 pointer-events-none ${inter.className} ${isHovered ? 'opacity-100' : 'opacity-0'}`}
-                    style={{ color: band.color }}
+                    className={`absolute top-1/2 -translate-y-1/2 text-[10px] font-bold transition-opacity duration-300 pointer-events-none ${inter.className} ${isHovered ? 'opacity-100' : 'opacity-0'}`}
+                    style={{ color: band.color, left: -textBarsLeft, width: textBarsLeft, textAlign: 'center' }}
                   >
                     {band.group}
                   </div>

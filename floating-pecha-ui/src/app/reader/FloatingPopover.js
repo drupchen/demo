@@ -11,7 +11,7 @@ import { formatDurationBadge, parseToMs } from '@/lib/useAudioPlayer';
  */
 export default function FloatingPopover({
     activeSylId,
-    activeCommentary,
+    popoverOpen,
     syllableMediaMap,
     manifest,
     onCommentarySelect,
@@ -114,7 +114,7 @@ export default function FloatingPopover({
         };
     }, [sylRect, onClose]);
 
-    if (!sylRect || commentaryGroups.length === 0 || activeCommentary) return null;
+    if (!sylRect || commentaryGroups.length === 0 || !popoverOpen) return null;
 
     return (
         <div

@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useEffect, useState, useCallback } from 'react';
+import { useMemo, useRef, useEffect, useLayoutEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { uchen, inter } from '@/lib/theme';
 import { parseToMs, formatDurationMs, formatDurationBadge } from '@/lib/useAudioPlayer';
 
@@ -22,9 +23,13 @@ export default function PlayerTab({
   onTogglePreferRestored,
   getCommentaryGroup,
   noSessionMessage,
+  instanceId,
+  teachingTitle,
 }) {
   const transcriptRef = useRef(null);
   const [userScrolledAt, setUserScrolledAt] = useState(0);
+  const [contextMenu, setContextMenu] = useState(null);
+  const contextMenuRef = useRef(null);
 
   // Check if any segment in this commentary has restored audio
   const hasRestored = useMemo(() => {
@@ -48,6 +53,7 @@ export default function PlayerTab({
         durationMs: Math.max(0, endTimeMs - startTimeMs),
         syllables,
         sylUuids: segment.syl_uuids,
+        start: segment.start,
       };
     });
   }, [activeCommentarySegments, manifest]);
@@ -78,6 +84,79 @@ export default function PlayerTab({
 
   const hasPrevSession = currentGroupIndex > 0;
   const hasNextSession = currentGroupIndex >= 0 && currentGroupIndex < groupSessions.length - 1;
+
+  // Extract short session ID (e.g. "A1" from "A1_069 A-Yeshey Lama_1")
+  const shortSessionId = useMemo(() => {
+    if (!activeCommentary) return '';
+    return activeCommentary.split('_')[0];
+  }, [activeCommentary]);
+
+  // Build segment URL helper
+  const buildSegmentUrl = useCallback((seg) => {
+    const url = new URL(window.location.origin + '/reader');
+    url.searchParams.set('instance', instanceId);
+    url.searchParams.set('session', activeCommentary);
+    url.searchParams.set('time', seg.start);
+    if (seg.sylUuids?.[0]) url.searchParams.set('sylId', seg.sylUuids[0]);
+    return url.toString();
+  }, [instanceId, activeCommentary]);
+
+  // Right-click: copy link + show popover
+  const handleSegmentContextMenu = useCallback((e, seg, idx) => {
+    e.preventDefault();
+    const url = buildSegmentUrl(seg);
+    navigator.clipboard.writeText(url);
+    const segText = seg.syllables.map(s => s.text).join('').trim();
+    setContextMenu({
+      segIdx: idx,
+      segText,
+      url,
+      clickPosition: { top: e.clientY, left: e.clientX },
+    });
+  }, [buildSegmentUrl]);
+
+  // Clamp context menu to viewport
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, ready: false });
+
+  useLayoutEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) {
+      setMenuPosition({ top: 0, left: 0, ready: false });
+      return;
+    }
+    const pop = contextMenuRef.current.getBoundingClientRect();
+    const pad = 8;
+    let { top, left } = contextMenu.clickPosition;
+
+    if (top + pop.height > window.innerHeight - pad) top = window.innerHeight - pad - pop.height;
+    if (top < pad) top = pad;
+    if (left + pop.width > window.innerWidth - pad) left = window.innerWidth - pad - pop.width;
+    if (left < pad) left = pad;
+
+    setMenuPosition({ top, left, ready: true });
+  }, [contextMenu]);
+
+  // Click outside to close context menu
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = (e) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target)) {
+        setContextMenu(null);
+      }
+    };
+    const timer = setTimeout(() => document.addEventListener('mousedown', close), 10);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', close);
+    };
+  }, [contextMenu]);
+
+  // "Copy with info" handler
+  const copyWithInfo = useCallback(() => {
+    if (!contextMenu) return;
+    const text = `Listen to: "${contextMenu.segText}"\n(from ${teachingTitle || instanceId}, teaching instance ${instanceId}, session ${shortSessionId}, segment ${contextMenu.segIdx + 1})\n\n${contextMenu.url}`;
+    navigator.clipboard.writeText(text);
+    setContextMenu(null);
+  }, [contextMenu, teachingTitle, instanceId, shortSessionId]);
 
   // Slide animation on session/teaching change
   const [slideClass, setSlideClass] = useState('');
@@ -164,28 +243,39 @@ export default function PlayerTab({
           </div>
         )}
 
-        <div className="flex-1 flex flex-col items-center justify-center px-5 py-8 text-center">
-          <p className={`${inter.className} text-sm r-text-secondary mb-6`}>
-            No session on current location
-          </p>
-          <div className="flex flex-col gap-3">
-            {noSessionMessage.groupSessions.length > 0 && (
-              <button
-                onClick={() => onCommentarySelect(noSessionMessage.groupSessions[0])}
-                className={`${inter.className} text-[11px] font-semibold r-text-accent hover:underline rounded-lg py-2 transition-colors hover:bg-black/5`}
-              >
-                ← Move to previous session
-              </button>
-            )}
-            {noSessionMessage.groupSessions.length > 1 && (
-              <button
-                onClick={() => onCommentarySelect(noSessionMessage.groupSessions[noSessionMessage.groupSessions.length - 1])}
-                className={`${inter.className} text-[11px] font-semibold r-text-accent hover:underline rounded-lg py-2 transition-colors hover:bg-black/5`}
-              >
-                Move to next session →
-              </button>
-            )}
+        <div className="flex-1 flex flex-col px-5 py-4">
+          {/* Previous session — top */}
+          <button
+            onClick={() => noSessionMessage.prevSession && onCommentarySelect(noSessionMessage.prevSession)}
+            disabled={!noSessionMessage.prevSession}
+            className={`${inter.className} w-full text-center py-3 text-[11px] font-semibold rounded-lg transition-colors ${
+              noSessionMessage.prevSession
+                ? 'r-text-accent hover:underline hover:bg-black/5'
+                : 'r-text-secondary opacity-40 cursor-not-allowed'
+            }`}
+          >
+            ← Move to previous session
+          </button>
+
+          {/* Message — center */}
+          <div className="flex-1 flex items-center justify-center">
+            <p className={`${inter.className} text-sm r-text-secondary`}>
+              No session on current location
+            </p>
           </div>
+
+          {/* Next session — bottom */}
+          <button
+            onClick={() => noSessionMessage.nextSession && onCommentarySelect(noSessionMessage.nextSession)}
+            disabled={!noSessionMessage.nextSession}
+            className={`${inter.className} w-full text-center py-3 text-[11px] font-semibold rounded-lg transition-colors ${
+              noSessionMessage.nextSession
+                ? 'r-text-accent hover:underline hover:bg-black/5'
+                : 'r-text-secondary opacity-40 cursor-not-allowed'
+            }`}
+          >
+            Move to next session →
+          </button>
         </div>
       </div>
     );
@@ -225,7 +315,7 @@ export default function PlayerTab({
       <div className="px-5 py-4 border-b flex-shrink-0 r-border">
         {/* Current session label */}
         <div className={`${inter.className} text-[10px] font-medium tracking-wider uppercase mb-2 r-text-secondary`}>
-          Current session: {activeCommentary}
+          Current session: {shortSessionId}
         </div>
 
         {/* Play/Pause + Time */}
@@ -247,28 +337,8 @@ export default function PlayerTab({
               <span>{formatDurationMs(audio.currentTimeMs)}</span>
               <span>{formatDurationMs(totalDurationMs)}</span>
             </div>
-            {/* Progress bar — snaps to segment start on click */}
-            <div
-              className="h-1.5 rounded-full cursor-pointer relative r-progress-track"
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const pct = (e.clientX - rect.left) / rect.width;
-                const clickedMs = Math.floor(pct * totalDurationMs);
-                // Find segment containing the clicked time
-                const targetSeg = transcript.find(
-                  seg => clickedMs >= seg.startTimeMs && clickedMs < seg.endTimeMs
-                );
-                if (targetSeg) {
-                  audio.seekTo(targetSeg.startTimeMs);
-                } else {
-                  // Fallback: last segment whose start <= clickedMs
-                  const pastSegs = transcript.filter(seg => seg.startTimeMs <= clickedMs);
-                  if (pastSegs.length > 0) {
-                    audio.seekTo(pastSegs[pastSegs.length - 1].startTimeMs);
-                  }
-                }
-              }}
-            >
+            {/* Progress bar — display only */}
+            <div className="h-1.5 rounded-full relative r-progress-track">
               <div
                 className="h-full rounded-full transition-all duration-100 r-progress-fill"
                 style={{ width: totalDurationMs > 0 ? `${(audio.currentTimeMs / totalDurationMs) * 100}%` : '0%' }}
@@ -336,15 +406,18 @@ export default function PlayerTab({
 
       {/* Synced Transcript — ALL segments */}
       <div ref={transcriptRef} className={`flex-1 overflow-y-auto px-5 py-4 space-y-1 ${slideClass}`}>
-        {/* Previous session button */}
-        {hasPrevSession && (
-          <button
-            onClick={() => onCommentarySelect(groupSessions[currentGroupIndex - 1])}
-            className={`${inter.className} w-full text-center py-3 mb-2 text-[11px] font-semibold r-text-accent hover:underline rounded-lg transition-colors hover:bg-black/5`}
-          >
-            ← Move to previous session
-          </button>
-        )}
+        {/* Previous session button — always visible, grayed when unavailable */}
+        <button
+          onClick={() => hasPrevSession && onCommentarySelect(groupSessions[currentGroupIndex - 1])}
+          disabled={!hasPrevSession}
+          className={`${inter.className} w-full text-center py-3 mb-2 text-[11px] font-semibold rounded-lg transition-colors ${
+            hasPrevSession
+              ? 'r-text-accent hover:underline hover:bg-black/5'
+              : 'r-text-secondary opacity-40 cursor-not-allowed'
+          }`}
+        >
+          ← Move to previous session
+        </button>
 
         {transcript.map((seg, idx) => {
           const isActive = idx === activeSegIndex;
@@ -354,12 +427,16 @@ export default function PlayerTab({
             <button
               key={seg.id}
               id={`seg-${seg.id}`}
-              onClick={() => audio.seekTo(seg.startTimeMs)}
+              onClick={() => { audio.seekTo(seg.startTimeMs); audio.play(); }}
+              onContextMenu={(e) => handleSegmentContextMenu(e, seg, idx)}
               onMouseEnter={() => !isActive && onSegmentHover?.(seg)}
               onMouseLeave={() => !isActive && onSegmentHover?.(null)}
               className={`w-full text-left p-3 rounded-lg transition-all ${isActive ? 'r-seg-active' : ''} ${isFuture ? 'r-seg-future' : ''}`}
               style={{ opacity: isFuture ? undefined : isActive ? 1 : 0.85 }}
             >
+              <span className={`${inter.className} text-[9px] font-medium r-text-secondary opacity-50 mr-1.5`}>
+                {idx + 1}
+              </span>
               {isActive && (
                 <span className={`${inter.className} text-[10px] font-bold uppercase tracking-wider r-text-accent mr-2`}>
                   Current
@@ -387,15 +464,18 @@ export default function PlayerTab({
           );
         })}
 
-        {/* Next session button */}
-        {hasNextSession && (
-          <button
-            onClick={() => onCommentarySelect(groupSessions[currentGroupIndex + 1])}
-            className={`${inter.className} w-full text-center py-3 mt-2 text-[11px] font-semibold r-text-accent hover:underline rounded-lg transition-colors hover:bg-black/5`}
-          >
-            Move to next session →
-          </button>
-        )}
+        {/* Next session button — always visible, grayed when unavailable */}
+        <button
+          onClick={() => hasNextSession && onCommentarySelect(groupSessions[currentGroupIndex + 1])}
+          disabled={!hasNextSession}
+          className={`${inter.className} w-full text-center py-3 mt-2 text-[11px] font-semibold rounded-lg transition-colors ${
+            hasNextSession
+              ? 'r-text-accent hover:underline hover:bg-black/5'
+              : 'r-text-secondary opacity-40 cursor-not-allowed'
+          }`}
+        >
+          Move to next session →
+        </button>
 
         {activeSegIndex >= 0 && (
           <ReturnButton
@@ -406,6 +486,40 @@ export default function PlayerTab({
           />
         )}
       </div>
+
+      {/* Right-click context menu popover — portal to body to escape transform containing block */}
+      {contextMenu && createPortal(
+        <div
+          ref={contextMenuRef}
+          className="fixed z-50 w-72 r-bg-surface border r-border shadow-2xl rounded-2xl overflow-hidden"
+          style={{
+            top: menuPosition.top,
+            left: menuPosition.left,
+            visibility: menuPosition.ready ? 'visible' : 'hidden',
+          }}
+        >
+          <div className="bg-white/50 backdrop-blur-md p-4">
+            <p className={`${inter.className} text-[10px] uppercase tracking-widest font-bold r-text-accent mb-3`}>
+              Link copied
+            </p>
+            <div className={`${inter.className} text-[11px] space-y-1 mb-4`}>
+              {teachingTitle && (
+                <p><span className="r-text-secondary">Teaching: </span><span className="r-text-primary font-medium">{teachingTitle}</span></p>
+              )}
+              <p><span className="r-text-secondary">Instance: </span><span className="r-text-primary font-medium">{instanceId}</span></p>
+              <p><span className="r-text-secondary">Session: </span><span className="r-text-primary font-medium">{shortSessionId}</span></p>
+              <p><span className="r-text-secondary">Segment: </span><span className="r-text-primary font-medium">{contextMenu.segIdx + 1}</span></p>
+            </div>
+            <button
+              onClick={copyWithInfo}
+              className={`${inter.className} w-full text-center py-2 rounded-lg text-[11px] font-bold r-bg-accent text-white transition-colors hover:opacity-90`}
+            >
+              Copy with info
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

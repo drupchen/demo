@@ -3,8 +3,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { inter } from '@/lib/theme';
 
-export default function SearchBar({ manifest, visible, onMatchSetsChange }) {
-  const [localQuery, setLocalQuery] = useState('');
+export default function SearchBar({ manifest, visible, onMatchSetsChange, initialQuery = '' }) {
+  const [localQuery, setLocalQuery] = useState(initialQuery);
   const [matches, setMatches] = useState([]);
   const [activeMatchIdx, setActiveMatchIdx] = useState(-1);
 

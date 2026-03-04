@@ -165,12 +165,17 @@ export function useAudioPlayer() {
     el.src = src;
     el.load();
 
-    if (startMs > 0) {
-      el.currentTime = startMs / 1000;
-    }
-    if (autoPlay) {
-      el.play().catch(() => { });
-    }
+    // Wait for audio to be ready before seeking and playing
+    const onCanPlay = () => {
+      el.removeEventListener('canplay', onCanPlay);
+      if (startMs > 0) {
+        el.currentTime = startMs / 1000;
+      }
+      if (autoPlay) {
+        el.play().catch(() => { });
+      }
+    };
+    el.addEventListener('canplay', onCanPlay);
   }, []);
 
   const loadPlaylist = useCallback((newPlaylist, startIndex = 0, autoPlay = true) => {

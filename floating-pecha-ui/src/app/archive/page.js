@@ -230,7 +230,7 @@ function ArchiveContent() {
                     {hits.map((hit) => (
                       <Link
                         key={hit.id}
-                        href={`/reader?instance=${hit.instance_id}&sylId=${hit.first_syl_id}&q=${encodeURIComponent(query)}`}
+                        href={`/reader?instance=${hit.instance_id}&session=${encodeURIComponent(hit.session_id)}&time=${encodeURIComponent(hit.start)}&sylId=${hit.first_syl_id}&q=${encodeURIComponent(query)}`}
                         className="group block bg-white p-6 md:p-8 rounded-xl border border-gray-100 hover:border-[var(--theme-gold-border)] hover:shadow-md transition-all"
                       >
                          <div className={`${inter.className} flex items-center gap-3 text-xs font-medium text-[var(--theme-gray)] uppercase tracking-wider mb-4`}>

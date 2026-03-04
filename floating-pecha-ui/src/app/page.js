@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { uchen, inter, getThemeCssVars } from '@/lib/theme';
 import Footer from '@/app/components/Footer';
 
 export default function LandingPage() {
   const [scrollProgress, setScrollProgress] = useState(0);
+  const isAnimatingRef = useRef(false);
+  const hasTriggeredScrollRef = useRef(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -14,17 +16,25 @@ export default function LandingPage() {
       const height = window.innerHeight;
       const progress = Math.min(position / height, 1);
       setScrollProgress(progress);
+
+      // Reset the first-scroll flag when back at the top
+      if (position < 5) {
+        hasTriggeredScrollRef.current = false;
+      }
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Custom Cinematic Scroll Function
-  const scrollToBottom = () => {
-    const targetPosition = window.innerHeight * 1.5; // Target scroll depth
+  // Cinematic scroll down
+  const scrollToBottom = useCallback(() => {
+    if (isAnimatingRef.current) return;
+    isAnimatingRef.current = true;
+
+    const targetPosition = window.innerHeight * 1.5;
     const startPosition = window.scrollY;
     const distance = targetPosition - startPosition;
-    const duration = 2500; // 2.5 seconds (2500ms) - Adjust this for slower/faster
+    const duration = 4000;
     let start = null;
 
     const animation = (currentTime) => {
@@ -32,7 +42,6 @@ export default function LandingPage() {
       const timeElapsed = currentTime - start;
       const progress = Math.min(timeElapsed / duration, 1);
 
-      // Easing Function (Ease In Out Cubic) - Starts slow, accelerates, ends slow
       const ease = progress < 0.5
         ? 4 * progress * progress * progress
         : 1 - Math.pow(-2 * progress + 2, 3) / 2;
@@ -41,13 +50,95 @@ export default function LandingPage() {
 
       if (timeElapsed < duration) {
         window.requestAnimationFrame(animation);
+      } else {
+        isAnimatingRef.current = false;
       }
     };
 
     window.requestAnimationFrame(animation);
-  };
+  }, []);
 
-  const uiOpacity = scrollProgress;
+  // Cinematic scroll back to top (reverse)
+  const scrollToTop = useCallback(() => {
+    if (isAnimatingRef.current) return;
+    isAnimatingRef.current = true;
+
+    const startPosition = window.scrollY;
+    const distance = startPosition;
+    const duration = 4000;
+    let start = null;
+
+    const animation = (currentTime) => {
+      if (start === null) start = currentTime;
+      const timeElapsed = currentTime - start;
+      const progress = Math.min(timeElapsed / duration, 1);
+
+      const ease = progress < 0.5
+        ? 4 * progress * progress * progress
+        : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+      window.scrollTo(0, startPosition - distance * ease);
+
+      if (timeElapsed < duration) {
+        window.requestAnimationFrame(animation);
+      } else {
+        isAnimatingRef.current = false;
+        hasTriggeredScrollRef.current = false;
+      }
+    };
+
+    window.requestAnimationFrame(animation);
+  }, []);
+
+  // Listen for header logo click (custom event from ArchiveHeader)
+  useEffect(() => {
+    const handleToggle = () => {
+      if (window.scrollY < window.innerHeight * 0.5) {
+        scrollToBottom();
+      } else {
+        scrollToTop();
+      }
+    };
+    window.addEventListener('landingScrollToggle', handleToggle);
+    return () => window.removeEventListener('landingScrollToggle', handleToggle);
+  }, [scrollToBottom, scrollToTop]);
+
+  // First scroll/touch at top triggers cinematic animation instead of native scroll
+  useEffect(() => {
+    const handleWheel = (e) => {
+      if (hasTriggeredScrollRef.current || isAnimatingRef.current) return;
+      if (window.scrollY < 5 && e.deltaY > 0) {
+        e.preventDefault();
+        hasTriggeredScrollRef.current = true;
+        scrollToBottom();
+      }
+    };
+
+    let touchStartY = 0;
+    const handleTouchStart = (e) => {
+      touchStartY = e.touches[0].clientY;
+    };
+    const handleTouchMove = (e) => {
+      if (hasTriggeredScrollRef.current || isAnimatingRef.current) return;
+      const deltaY = touchStartY - e.touches[0].clientY;
+      if (window.scrollY < 5 && deltaY > 10) {
+        e.preventDefault();
+        hasTriggeredScrollRef.current = true;
+        scrollToBottom();
+      }
+    };
+
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    return () => {
+      window.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, [scrollToBottom]);
+
+  const uiOpacity = Math.max(0, (scrollProgress - 0.2) / 0.8);
   const videoOpacity = 1 - (scrollProgress * 0.7);
   const arrowOpacity = Math.max(0, 1 - scrollProgress * 5);
 
@@ -111,11 +202,8 @@ export default function LandingPage() {
         <div className="sticky top-0 h-screen w-full flex flex-col items-center justify-center px-6">
 
           <div
-            className="text-center flex flex-col items-center transition-all duration-1000 mb-[10vh]"
-            style={{
-              opacity: uiOpacity,
-              transform: `scale(${0.98 + (uiOpacity * 0.02)})`,
-            }}
+            className="text-center flex flex-col items-center mb-[10vh]"
+            style={{ opacity: uiOpacity }}
           >
             <h1 className={`${uchen.className} text-[var(--theme-gold)] text-6xl md:text-8xl mb-4 drop-shadow-sm`}>
               མཁྱེན་བརྩེའི་འོད་སྣང་།
@@ -128,7 +216,7 @@ export default function LandingPage() {
 
           {/* THE DUAL GATEWAY BUTTONS */}
           <div
-            className="absolute bottom-[20%] flex flex-col md:flex-row gap-6 items-center transition-all duration-1000"
+            className="absolute bottom-[20%] flex flex-col md:flex-row gap-6 items-center"
             style={{
               opacity: uiOpacity,
               pointerEvents: uiOpacity > 0.8 ? 'auto' : 'none'
@@ -158,8 +246,11 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-      {/* 4. FOOTER (Solid background ensures it doesn't float over the video) */}
-      <div className="relative z-20 w-full bg-[#F9F9F7]">
+      {/* 4. FOOTER — fixed at bottom, fades in with content */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-20 bg-[#F9F9F7]"
+        style={{ opacity: uiOpacity, pointerEvents: uiOpacity > 0.8 ? 'auto' : 'none' }}
+      >
         <Footer />
       </div>
     </main>
