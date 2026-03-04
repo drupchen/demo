@@ -1,0 +1,314 @@
+/* ── Fonts ─────────────────────────────────────────────── */
+@import url("https://fonts.googleapis.com/css2?family=Noto+Serif+Tibetan:wght@400;700&display=swap");
+
+:root {
+  --gold: #D4AF37;
+  --gold-light: rgba(212, 175, 55, 0.25);
+  --crimson: #8B1D1D;
+  --neighbor: #E0E8F0;
+  --context: #F0F0F0;
+  --dirty-border: #D4A017;
+  --bg: #FAFAFA;
+  --card-bg: #FFFFFF;
+  --font-tibetan: "Noto Serif Tibetan", "Uchen", serif;
+  --font-ui: system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-ui);
+  background: var(--bg);
+  color: #333;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ───────────────────────────────────────────── */
+header {
+  background: #fff;
+  border-bottom: 1px solid #ddd;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+header h1 {
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.controls label {
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.controls select {
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
+  max-width: 240px;
+}
+
+.status-label {
+  font-size: 12px;
+  color: #888;
+  margin-left: 8px;
+}
+
+.status-label.dirty {
+  color: var(--dirty-border);
+  font-weight: 600;
+}
+
+.actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.actions button {
+  padding: 6px 14px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.actions button:hover:not(:disabled) {
+  background: #f0f0f0;
+}
+
+.actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+#save-btn:not(:disabled) {
+  background: var(--gold);
+  color: #fff;
+  border-color: var(--gold);
+}
+
+/* ── Main ─────────────────────────────────────────────── */
+main {
+  flex: 1;
+  padding: 16px 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.placeholder {
+  text-align: center;
+  color: #999;
+  padding: 60px 0;
+  font-size: 15px;
+}
+
+/* ── Segment Card ─────────────────────────────────────── */
+.segment-card {
+  background: var(--card-bg);
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.segment-card.active {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px var(--gold-light);
+}
+
+.segment-card.dirty {
+  border-left: 4px solid var(--dirty-border);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #FAFAFA;
+  border-bottom: 1px solid #eee;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.card-header:hover {
+  background: #F5F5F5;
+}
+
+.seg-label {
+  font-weight: 600;
+  min-width: 50px;
+}
+
+.syl-count {
+  color: #888;
+}
+
+.audio-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.play-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #ccc;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.play-btn:hover {
+  background: #f0f0f0;
+}
+
+.time-label {
+  font-size: 12px;
+  color: #666;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Alignment Strip ──────────────────────────────────── */
+.alignment-strip {
+  padding: 8px 12px;
+  overflow-x: auto;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  scrollbar-width: thin;
+}
+
+.syl-cell {
+  display: inline-block;
+  padding: 3px 2px;
+  font-family: var(--font-tibetan);
+  font-size: 16px;
+  line-height: 1.4;
+  border-radius: 2px;
+  cursor: default;
+  transition: background 0.15s;
+}
+
+.syl-cell.region-current {
+  background: var(--gold);
+  color: #fff;
+}
+
+.syl-cell.region-neighbor {
+  background: var(--neighbor);
+}
+
+.syl-cell.region-context {
+  background: var(--context);
+  color: #999;
+}
+
+.syl-cell.nature-punct {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.boundary-marker {
+  display: inline-block;
+  width: 2px;
+  height: 24px;
+  background: var(--crimson);
+  margin: 0 2px;
+  border-radius: 1px;
+  vertical-align: middle;
+}
+
+/* ── Adjust Buttons ───────────────────────────────────── */
+.card-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid #eee;
+  flex-wrap: wrap;
+}
+
+.btn-group {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.btn-group-label {
+  font-size: 11px;
+  color: #888;
+  margin-right: 2px;
+}
+
+.adjust-btn {
+  padding: 3px 8px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.adjust-btn:hover {
+  background: #f0f0f0;
+  border-color: #bbb;
+}
+
+.controls-spacer {
+  flex: 1;
+}
+
+/* ── Footer ───────────────────────────────────────────── */
+footer {
+  background: #fff;
+  border-top: 1px solid #ddd;
+  padding: 8px 20px;
+  position: sticky;
+  bottom: 0;
+}
+
+.shortcuts {
+  font-size: 12px;
+  color: #888;
+  text-align: center;
+}
+
+kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background: #f7f7f7;
+  font-family: var(--font-ui);
+  font-size: 11px;
+}

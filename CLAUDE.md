@@ -101,15 +101,17 @@ npm run dev        # http://localhost:3000
 ### Data Pipeline (one-time setup)
 ```bash
 cd prepare_data
-# 1. Parse DOCX → syllable manifest
-python base_layer_ingest.py
-# 2. Parse SRT subtitles
-python srt_sessions_1_parse.py
-python srt_sessions_2_manual_overrides.py
-python srt_sessions_3_combine_sessions.py
-# 3. Generate catalog
+# 1. Generate teaching catalog from relational DB TSVs
 python generate_catalog.py
-# 4. Index into OpenSearch
+# 2. Parse DOCX → syllable-level manifest (one per teaching instance)
+python base_layer_ingest.py
+# 3. Parse SRT subtitles → align to manifest → individual session JSONs
+python srt_sessions_1_parse.py
+# 4. (Optional) Apply manual alignment corrections
+python srt_sessions_2_manual_overrides.py
+# 5. Combine all sessions → compiled_sessions.json per instance
+python srt_sessions_3_combine_sessions.py
+# 6. Index segments into OpenSearch
 python opensearch_ingest.py
 ```
 
