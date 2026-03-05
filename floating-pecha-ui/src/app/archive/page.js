@@ -45,7 +45,7 @@ function ArchiveContent() {
     setHasSearched(true);
 
     try {
-      const userLevel = session?.user?.accessLevel || 0;
+      const userLevel = session?.user?.accessLevel ?? 4;
       const res = await fetch(`/api/search?q=${encodeURIComponent(searchString)}&level=${userLevel}`);
       if (!res.ok) throw new Error("Network response was not OK");
 
@@ -88,7 +88,7 @@ function ArchiveContent() {
   }, {});
 
   // 5. Apply the "Access Onion" to the catalog list
-  const userLevel = session?.user?.accessLevel || 0;
+  const userLevel = session?.user?.accessLevel ?? 4;
 
   const filteredCatalog = catalog.filter(teaching => {
     const rawLevel = teaching.Access_Level ?? teaching.Practice_Level ?? teaching.access_level ?? 4;

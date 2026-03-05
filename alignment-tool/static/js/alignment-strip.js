@@ -62,8 +62,10 @@ export function renderAlignmentStrip(segIdx) {
     // Determine region
     if (i >= startIdx && i <= endIdx) {
       cell.classList.add("region-current");
-    } else if ((i >= prevStart && i <= prevEnd) || (i >= nextStart && i <= nextEnd)) {
+    } else if ((prevStart >= 0 && i >= prevStart && i <= prevEnd) || (nextStart >= 0 && i >= nextStart && i <= nextEnd)) {
       cell.classList.add("region-neighbor");
+    } else if ((prevEnd >= 0 && i > prevEnd && i < startIdx) || (endIdx >= 0 && i > endIdx && nextStart >= 0 && i < nextStart)) {
+      cell.classList.add("region-unassigned");
     } else {
       cell.classList.add("region-context");
     }

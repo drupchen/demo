@@ -233,6 +233,12 @@ main {
   color: #999;
 }
 
+.syl-cell.region-unassigned {
+  background: #fee2e2;
+  color: #b91c1c;
+  opacity: 0.7;
+}
+
 .syl-cell.nature-punct {
   font-size: 13px;
   opacity: 0.7;

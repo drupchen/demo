@@ -72,8 +72,8 @@ function rebuildUuids(segIdx, startIdx, endIdx) {
 
 /**
  * Adjust the start boundary of a segment by `delta` syllables.
- * delta > 0: move start rightward (shrink segment, expand previous)
- * delta < 0: move start leftward (expand segment, shrink previous)
+ * delta > 0: move start rightward (shrink segment, free syllables)
+ * delta < 0: move start leftward (expand segment, reclaim unassigned syllables)
  */
 export function adjustStart(segIdx, delta) {
   if (segIdx < 0 || segIdx >= state.segments.length) return false;
@@ -87,26 +87,18 @@ export function adjustStart(segIdx, delta) {
   // Clamp: segment must keep at least 1 syllable
   newStart = Math.min(newStart, currentEnd);
 
-  // Clamp: can't go before previous segment's start + 1 (prev keeps at least 1)
+  // Clamp: can't overlap previous segment
   if (segIdx > 0) {
-    const prevStart = segStartIdx(segIdx - 1);
-    if (prevStart >= 0) newStart = Math.max(newStart, prevStart + 1);
+    const prevEnd = segEndIdx(segIdx - 1);
+    if (prevEnd >= 0) newStart = Math.max(newStart, prevEnd + 1);
   } else {
     newStart = Math.max(newStart, 0);
   }
 
   if (newStart === currentStart) return false; // no change
 
-  // Rebuild current segment
+  // Rebuild current segment only — freed syllables become unassigned
   rebuildUuids(segIdx, newStart, currentEnd);
-
-  // Adjust previous segment's end to maintain contiguity
-  if (segIdx > 0) {
-    const prevStart = segStartIdx(segIdx - 1);
-    if (prevStart >= 0) {
-      rebuildUuids(segIdx - 1, prevStart, newStart - 1);
-    }
-  }
 
   state.isDirty = true;
   return true;
@@ -114,8 +106,8 @@ export function adjustStart(segIdx, delta) {
 
 /**
  * Adjust the end boundary of a segment by `delta` syllables.
- * delta > 0: move end rightward (expand segment, shrink next)
- * delta < 0: move end leftward (shrink segment, expand next)
+ * delta > 0: move end rightward (expand segment, reclaim unassigned syllables)
+ * delta < 0: move end leftward (shrink segment, free syllables)
  */
 export function adjustEnd(segIdx, delta) {
   if (segIdx < 0 || segIdx >= state.segments.length) return false;
@@ -129,26 +121,18 @@ export function adjustEnd(segIdx, delta) {
   // Clamp: segment must keep at least 1 syllable
   newEnd = Math.max(newEnd, currentStart);
 
-  // Clamp: can't go past next segment's end - 1 (next keeps at least 1)
+  // Clamp: can't overlap next segment
   if (segIdx < state.segments.length - 1) {
-    const nextEnd = segEndIdx(segIdx + 1);
-    if (nextEnd >= 0) newEnd = Math.min(newEnd, nextEnd - 1);
+    const nextStart = segStartIdx(segIdx + 1);
+    if (nextStart >= 0) newEnd = Math.min(newEnd, nextStart - 1);
   } else {
     newEnd = Math.min(newEnd, state.manifest.length - 1);
   }
 
   if (newEnd === currentEnd) return false;
 
-  // Rebuild current segment
+  // Rebuild current segment only — freed syllables become unassigned
   rebuildUuids(segIdx, currentStart, newEnd);
-
-  // Adjust next segment's start to maintain contiguity
-  if (segIdx < state.segments.length - 1) {
-    const nextEnd = segEndIdx(segIdx + 1);
-    if (nextEnd >= 0) {
-      rebuildUuids(segIdx + 1, newEnd + 1, nextEnd);
-    }
-  }
 
   state.isDirty = true;
   return true;
