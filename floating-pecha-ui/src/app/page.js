@@ -205,7 +205,11 @@ export default function LandingPage() {
             className="text-center flex flex-col items-center mb-[10vh]"
             style={{ opacity: uiOpacity }}
           >
-            <h1 className={`${uchen.className} text-[var(--theme-gold)] text-6xl md:text-8xl mb-4 drop-shadow-sm`}>
+            <h1
+              lang="bo"
+              className="text-[var(--theme-gold)] text-7xl md:text-[8rem] -mb-2 drop-shadow-sm whitespace-nowrap"
+              style={{ fontFamily: '"Sadri Yigchen", serif' }}
+            >
               མཁྱེན་བརྩེའི་འོད་སྣང་།
             </h1>
 

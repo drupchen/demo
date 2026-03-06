@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+@layer base {
+  @font-face {
+    font-family: 'Sadri Yigchen';
+    src: url('/fonts/sadri-yigchen.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
