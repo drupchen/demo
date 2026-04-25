@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx next build)",
+      "Bash(python3 -c \"import json,sys; data=json.load\\(sys.stdin\\); print\\(f''Segments: {len\\(data\\)}''\\); seg=data[0]; print\\(f''First seg keys: {list\\(seg.keys\\(\\)\\)}''\\); print\\(f''First seg syl_uuids count: {len\\(seg[\"\"syl_uuids\"\"]\\)}''\\); print\\(f''seg_id: {seg[\"\"seg_id\"\"]}''\\); print\\(f''start: {seg[\"\"start\"\"]}''\\); print\\(f''end: {seg[\"\"end\"\"]}''\\)\")",
+      "Bash(python3 -c \"import json; data=json.load\\(open\\(''/media/drupchen/Khyentse Önang/repos/demo/prepare_data/output/rpn_ngondro_1/sessions/A10_Dk-R.Nyint.N.2a_2.json''\\)\\); print\\(f''Segments: {len\\(data\\)}''\\); seg=data[0]; print\\(f''Keys: {list\\(seg.keys\\(\\)\\)}''\\); print\\(f''syl_uuids count: {len\\(seg[\"\"syl_uuids\"\"]\\)}''\\); print\\(json.dumps\\(seg, indent=2\\)[:500]\\)\")",
+      "Bash(python3 -c \":*)",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\(''/media/drupchen/Khyentse Önang/repos/demo/prepare_data/output/rpn_ngondro_1/manifest.json''\\)\\); print\\(len\\(d\\)\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"http://localhost:3000/reader?instance=yeshe_lama_1\")",
+      "Bash(npx --yes puppeteer --version)",
+      "Bash(pip3 list)",
+      "Bash(npm ls -g puppeteer)",
+      "Bash(npx puppeteer --version)",
+      "Bash(python3 -c \"import selenium\")",
+      "Bash(python3 -c \"import playwright\")",
+      "Bash(google-chrome --headless --disable-gpu --screenshot=/tmp/reader_test.png --window-size=1280,900 \"http://localhost:3000/reader?instance=yeshe_lama_1\")",
+      "Bash(python3 patch_corrected_audio_urls.py)",
+      "Bash(python3 srt_sessions_3_combine_sessions.py)",
+      "WebFetch(domain:termafoundry.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(python3:*)",
+      "Bash(ls \"/media/drupchen/Khyentse Önang/repos/demo/floating-pecha-ui/.next/dev/static/media/noto-serif-tibetan-regular\"*)",
+      "Bash(curl -sI \"http://localhost:3000/_next/static/media/noto-serif-tibetan-regular.58afb73b.woff2\")",
+      "WebFetch(domain:docs.google.com)",
+      "WebFetch(domain:doc-00-48-docstext.googleusercontent.com)",
+      "Bash(ls \"/media/drupchen/Khyentse Önang/repos/demo/\"*.docx)",
+      "Bash(echo \"EXIT:$?\")",
+      "WebFetch(domain:www.w3.org)",
+      "WebFetch(domain:bugzilla.mozilla.org)",
+      "WebFetch(domain:digitaltibetan.github.io)",
+      "Bash(npm run build)"
+    ]
+  }
+}
