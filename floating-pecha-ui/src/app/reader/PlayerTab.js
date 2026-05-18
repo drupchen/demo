@@ -267,7 +267,7 @@ export default function PlayerTab({
         el.offsetTop - container.clientHeight / 2 + el.clientHeight / 2;
       container.scrollTo({
         top: Math.max(0, targetTop),
-        behavior: isJump ? "auto" : "smooth",
+        behavior: isJump ? "instant" : "smooth",
       });
     }
   }, [activeSegIndex, transcript, userScrolledAt]);

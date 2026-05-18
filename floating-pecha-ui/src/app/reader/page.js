@@ -70,10 +70,11 @@ function naturalSortCompare(a, b) {
  * If the syllable's paragraph hasn't been rendered yet, scrolls the placeholder
  * into view first (triggering IntersectionObserver), then scrolls to the exact element.
  */
-function scrollToSyllable(sylId, paragraphs) {
+function scrollToSyllable(sylId, paragraphs, instant = false) {
+  const behavior = instant ? "instant" : "smooth";
   const el = document.getElementById(sylId);
   if (el) {
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.scrollIntoView({ behavior, block: "center" });
     return;
   }
   const pIdx = paragraphs.findIndex((p) => p.some((syl) => syl.id === sylId));
@@ -86,7 +87,7 @@ function scrollToSyllable(sylId, paragraphs) {
     const sylEl = document.getElementById(sylId);
     if (sylEl || ++attempts > 40) {
       clearInterval(check);
-      if (sylEl) sylEl.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (sylEl) sylEl.scrollIntoView({ behavior, block: "center" });
     }
   }, 50);
 }
@@ -364,6 +365,10 @@ function ReaderContent() {
 
   // Cached paragraph DOM elements for weight-based viewport tracking
   const paragraphElsRef = useRef([]);
+
+  // First syllable of a segment reached via a timeline click. The follow effect
+  // skips its smooth scroll for that segment since handleSegmentClick teleports.
+  const jumpedToSylRef = useRef(null);
 
   // Viewport tracking for coverage bar — computed from scroll position
   const [viewportRange, setViewportRange] = useState({ start: 0, end: 0.1 });
@@ -660,13 +665,16 @@ function ReaderContent() {
     }
   }, [audio.currentTimeMs, activeCommentarySegments]);
 
-  // Auto-scroll root text to follow playing segment
+  // Auto-scroll root text to follow playing segment.
+  // A timeline click teleports via handleSegmentClick, so skip the smooth follow
+  // scroll while the jumped-to segment is the current one.
   useEffect(() => {
     if (playingSegSylIds.size === 0) return;
     const container = scrollContainerRef.current;
     if (!container) return;
-    if (Date.now() - rootTextScrolledAt < 8000) return;
     const firstId = [...playingSegSylIds][0];
+    if (firstId === jumpedToSylRef.current) return;
+    if (Date.now() - rootTextScrolledAt < 8000) return;
     const el = document.getElementById(firstId);
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -751,8 +759,7 @@ function ReaderContent() {
   // ----------------------------------------
   const handleNavigateToPosition = useCallback(
     (fraction) => {
-      const container = scrollContainerRef.current;
-      if (!container || !manifest.length || !syllableWeights.length) return;
+      if (!manifest.length || !syllableWeights.length) return;
 
       const totalWeight = syllableWeights[manifest.length];
       const targetWeight = fraction * totalWeight;
@@ -771,54 +778,13 @@ function ReaderContent() {
       const targetSyl = manifest[lo];
       if (!targetSyl || !targetSyl.id) return;
 
-      // Helper to scroll a DOM element to the center of the container
-      const scrollToEl = (el) => {
-        const containerRect = container.getBoundingClientRect();
-        const elRect = el.getBoundingClientRect();
-        const scrollTarget =
-          elRect.top -
-          containerRect.top +
-          container.scrollTop -
-          containerRect.height / 2;
-        container.scrollTo({ top: scrollTarget, behavior: "smooth" });
-      };
-
-      // Try to find the syllable's DOM element directly
-      const el = document.getElementById(targetSyl.id);
-      if (el) {
-        scrollToEl(el);
-        setRootTextScrolledAt(Date.now());
-        return;
-      }
-
-      // Syllable not rendered yet (lazy paragraph placeholder).
-      // Find the paragraph and scroll to it, then retry after render.
-      if (paragraphWeightBounds.length > 0) {
-        let pLo = 0,
-          pHi = paragraphWeightBounds.length - 1;
-        while (pLo < pHi) {
-          const pMid = (pLo + pHi) >>> 1;
-          if (paragraphWeightBounds[pMid].endIdx <= lo) {
-            pLo = pMid + 1;
-          } else {
-            pHi = pMid;
-          }
-        }
-        const paraEl = container.querySelector(`[data-pidx="${pLo}"]`);
-        if (paraEl) {
-          scrollToEl(paraEl);
-          setRootTextScrolledAt(Date.now());
-          // After scroll + lazy render, retry finding the exact syllable
-          setTimeout(() => {
-            const retryEl = document.getElementById(targetSyl.id);
-            if (retryEl) {
-              scrollToEl(retryEl);
-            }
-          }, 500);
-        }
-      }
+      // Teleport to the target — instant, no animation. A smooth scroll stalls
+      // here because lazy paragraphs reflow mid-animation; scrollToSyllable
+      // jumps instantly and handles not-yet-rendered paragraphs.
+      setRootTextScrolledAt(Date.now());
+      scrollToSyllable(targetSyl.id, paragraphs, true);
     },
-    [manifest, syllableWeights, paragraphWeightBounds],
+    [manifest, syllableWeights, paragraphs],
   );
 
   // ----------------------------------------
@@ -1016,16 +982,23 @@ function ReaderContent() {
     ],
   );
 
-  const handleSegmentClick = useCallback((segment, instant = false) => {
-    if (!segment?.sylUuids?.length) return;
-    setRootTextScrolledAt(0);
-    const el = document.getElementById(segment.sylUuids[0]);
-    if (el)
-      el.scrollIntoView({
-        behavior: instant ? "auto" : "smooth",
-        block: "center",
-      });
-  }, []);
+  const handleSegmentClick = useCallback(
+    (segment, instant = false) => {
+      if (!segment?.sylUuids?.length) return;
+      setRootTextScrolledAt(0);
+      const firstSylId = segment.sylUuids[0];
+      if (instant) {
+        // Timeline click: teleport (lazy-paragraph aware) and let the follow
+        // effect skip its smooth scroll for this segment.
+        jumpedToSylRef.current = firstSylId;
+        scrollToSyllable(firstSylId, paragraphs, true);
+        return;
+      }
+      const el = document.getElementById(firstSylId);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    },
+    [paragraphs],
+  );
 
   const handleMatchSetsChange = useCallback((activeSet, allSet) => {
     setActiveMatchSet(activeSet);
