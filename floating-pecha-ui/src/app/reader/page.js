@@ -1016,11 +1016,15 @@ function ReaderContent() {
     ],
   );
 
-  const handleSegmentClick = useCallback((segment) => {
+  const handleSegmentClick = useCallback((segment, instant = false) => {
     if (!segment?.sylUuids?.length) return;
     setRootTextScrolledAt(0);
     const el = document.getElementById(segment.sylUuids[0]);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (el)
+      el.scrollIntoView({
+        behavior: instant ? "auto" : "smooth",
+        block: "center",
+      });
   }, []);
 
   const handleMatchSetsChange = useCallback((activeSet, allSet) => {
