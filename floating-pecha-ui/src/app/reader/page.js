@@ -344,8 +344,8 @@ function ReaderContent() {
   // Teaching filter: "A", "B", etc. or null = "All Teachings"
   const [activeTeachingFilter, setActiveTeachingFilter] = useState(null);
 
-  // Audio version preference (restored = cleaned audio when available)
-  const [preferRestored, setPreferRestored] = useState(true);
+  // Audio version preference (defaults to original; restored = cleaned audio when available)
+  const [preferRestored, setPreferRestored] = useState(false);
 
   // "No session on current location" message for teaching chip clicks
   const [noSessionMessage, setNoSessionMessage] = useState(null);
