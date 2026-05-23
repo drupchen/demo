@@ -20,7 +20,9 @@ import MiniPlayer from "./MiniPlayer";
 import PlayerTab from "./PlayerTab";
 import ReaderLayout from "./ReaderLayout";
 import ReaderNavbar from "./ReaderNavbar";
+import SapcheSidebar from "./SapcheSidebar";
 import SearchBar from "./SearchBar";
+import SectionMarker from "./SectionMarker";
 import "./reader.css";
 
 // ==========================================
@@ -158,6 +160,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
   allMatchesSet,
   handleSyllableClick,
   uchen,
+  sylIdToSections,
 }) {
   const ref = useRef(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -193,11 +196,78 @@ const LazyParagraph = React.memo(function LazyParagraph({
     );
   }
 
-  // Build coverage runs: consecutive syllables with same commentary set
-  const runs = [];
-  let runKey = null;
-  let currentRun = null;
+  // Hide audio-session markers like "{051 ...}" from the reading view.
+  const isSessionMarker = (syl) => {
+    const t = (syl.text || "").trim();
+    return t.startsWith("{") && t.endsWith("}");
+  };
+
+  // Render a single syllable span (section markers are handled separately).
+  const renderSyl = (syl) => {
+    if (syl.text === "\n") return <br key={syl.id} />;
+
+    const mediaOptions = syllableMediaMap[syl.id] || [];
+    const hasMedia = mediaOptions.length > 0;
+    const sizeStyle = sizes[syl.size?.toUpperCase()] || sizes.DEFAULT;
+
+    const isCoveredByFilter = teachingCoverageSet.has(syl.id);
+    const isSelected = activeSylId === syl.id;
+    const isInPlayingSegment = playingSegSylIds.has(syl.id);
+    const isHoveredSegment = hoveredSegSylIds.has(syl.id);
+    const isActiveMatch = activeMatchSet.has(syl.id);
+    const isAnyMatch = allMatchesSet.has(syl.id);
+
+    const fontClass =
+      syl.nature === "TEXT" || syl.nature === "PUNCT" || syl.nature === "SYM"
+        ? uchen.className
+        : "font-sans";
+
+    let colorClass = isCoveredByFilter
+      ? "r-text"
+      : "r-text-disabled r-syl-dimmed";
+    if (!hasMedia && isCoveredByFilter) colorClass = "r-text-muted";
+    let bgClass = "";
+    let extraClass = "";
+
+    if (isSelected) {
+      colorClass = "r-text-accent";
+      extraClass = "font-bold";
+    }
+    if (isActiveMatch) {
+      colorClass = "";
+      bgClass = "r-match-active";
+    } else if (isAnyMatch) {
+      colorClass = "";
+      bgClass = "r-match";
+    } else if (isInPlayingSegment) {
+      bgClass = "r-syl-playing";
+    } else if (isHoveredSegment) {
+      bgClass = "r-syl-hovered";
+    }
+
+    return (
+      <span
+        key={syl.id}
+        id={syl.id}
+        onClick={hasMedia ? () => handleSyllableClick(syl.id) : undefined}
+        className={`${fontClass} r-syl inline relative ${colorClass} ${bgClass} ${extraClass} ${
+          hasMedia && !isSelected ? "cursor-pointer r-hover-red" : ""
+        } ${isInPlayingSegment || isHoveredSegment ? "rounded-sm" : ""}`}
+        style={sizeStyle}
+      >
+        {syl.text}
+      </span>
+    );
+  };
+
+  // Build a flat list of items, breaking on commentary-set change OR a section
+  // start. Section markers become block-level items (siblings of the
+  // commentary-bordered runs), so they are not indented inside the audio border.
+  const items = [];
+  let curSeg = null;
+  let curKey = null;
   paraSyls.forEach((syl) => {
+    if (isSessionMarker(syl)) return; // drop audio-session markers
     const opts = syllableMediaMap[syl.id] || [];
     const groups = [];
     const seen = new Set();
@@ -210,99 +280,47 @@ const LazyParagraph = React.memo(function LazyParagraph({
     });
     groups.sort();
     const key = groups.join(",");
-    if (key !== runKey) {
-      currentRun = { groups, syls: [] };
-      runs.push(currentRun);
-      runKey = key;
+
+    const starts = sylIdToSections?.get(syl.id);
+    if (starts && starts.length) {
+      items.push({ type: "marker", nodes: starts });
+      curSeg = null; // force a new segment after the marker
     }
-    currentRun.syls.push(syl);
+    if (!curSeg || key !== curKey) {
+      curSeg = { type: "seg", groups, syls: [] };
+      items.push(curSeg);
+      curKey = key;
+    }
+    curSeg.syls.push(syl);
   });
 
   return (
     <div ref={ref} data-pidx={pIdx} className="r-paragraph">
-      {runs.map((run, rIdx) => {
-        const renderedSyls = run.syls.map((syl) => {
-          if (syl.text === "\n") return <br key={syl.id} />;
-          const mediaOptions = syllableMediaMap[syl.id] || [];
-          const hasMedia = mediaOptions.length > 0;
-          const sizeStyle = sizes[syl.size?.toUpperCase()] || sizes.DEFAULT;
-
-          const isCoveredByFilter = teachingCoverageSet.has(syl.id);
-          const isSelected = activeSylId === syl.id;
-          const isInPlayingSegment = playingSegSylIds.has(syl.id);
-          const isHoveredSegment = hoveredSegSylIds.has(syl.id);
-          const isActiveMatch = activeMatchSet.has(syl.id);
-          const isAnyMatch = allMatchesSet.has(syl.id);
-
-          const fontClass =
-            syl.nature === "TEXT" ||
-            syl.nature === "PUNCT" ||
-            syl.nature === "SYM"
-              ? uchen.className
-              : "font-sans";
-
-          let colorClass = isCoveredByFilter
-            ? "r-text"
-            : "r-text-disabled r-syl-dimmed";
-          if (!hasMedia && isCoveredByFilter) colorClass = "r-text-muted";
-          let bgClass = "";
-          let extraClass = "";
-
-          if (isSelected) {
-            colorClass = "r-text-accent";
-            extraClass = "font-bold";
-          }
-          if (isActiveMatch) {
-            colorClass = "";
-            bgClass = "r-match-active";
-          } else if (isAnyMatch) {
-            colorClass = "";
-            bgClass = "r-match";
-          } else if (isInPlayingSegment) {
-            bgClass = "r-syl-playing";
-          } else if (isHoveredSegment) {
-            bgClass = "r-syl-hovered";
-          }
-
-          return (
-            <span
-              key={syl.id}
-              id={syl.id}
-              onClick={hasMedia ? () => handleSyllableClick(syl.id) : undefined}
-              className={`${fontClass} r-syl inline relative ${colorClass} ${bgClass} ${extraClass} ${
-                hasMedia && !isSelected ? "cursor-pointer r-hover-red" : ""
-              } ${isInPlayingSegment || isHoveredSegment ? "rounded-sm" : ""}`}
-              style={sizeStyle}
-            >
-              {syl.text}
-            </span>
-          );
-        });
-
-        if (run.groups.length === 0) {
-          return (
-            <React.Fragment key={`r${rIdx}`}>{renderedSyls}</React.Fragment>
-          );
+      {items.map((item, i) => {
+        if (item.type === "marker") {
+          return item.nodes.map((n) => (
+            <SectionMarker key={`m-${n.id}`} node={n} />
+          ));
         }
-
+        const syls = item.syls.map(renderSyl);
+        if (item.groups.length === 0) {
+          return <React.Fragment key={`s${i}`}>{syls}</React.Fragment>;
+        }
         return (
-          <div key={`r${rIdx}`} className="relative">
+          <div key={`s${i}`} className="relative">
             <div
               className="absolute top-0 bottom-0 flex"
               style={{ right: "calc(100% + 8px)", gap: "2px" }}
             >
-              {run.groups.map((g) => (
+              {item.groups.map((g) => (
                 <div
                   key={g}
                   className="rounded-full"
-                  style={{
-                    width: "3px",
-                    backgroundColor: commentaryColorMap[g],
-                  }}
+                  style={{ width: "3px", backgroundColor: commentaryColorMap[g] }}
                 />
               ))}
             </div>
-            {renderedSyls}
+            {syls}
           </div>
         );
       })}
@@ -332,9 +350,17 @@ function ReaderContent() {
   const [sessions, setSessions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [teachingTitle, setTeachingTitle] = useState("");
+  const [sapche, setSapche] = useState(null);
 
   // UI state
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [tocOpen, setTocOpen] = useState(true);
+  const [tocWidth, setTocWidth] = useState(280);
+  const [collapsedIds, setCollapsedIds] = useState(new Set());
+  const [activeSectionId, setActiveSectionId] = useState(null);
+  // While a sapche click is settling the scroll, ignore scroll-driven active
+  // updates so the highlighted row doesn't flicker to intermediate sections.
+  const suppressActiveUntilRef = useRef(0);
   const [searchOpen, setSearchOpen] = useState(!!urlQ);
   const [activeTab, setActiveTab] = useState("player");
   const [activeSylId, setActiveSylId] = useState(null);
@@ -419,6 +445,10 @@ function ReaderContent() {
             }
           }
         }
+        fetch(`/data/archive/${instanceId}/sapche.json`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then(setSapche)
+          .catch(() => setSapche(null));
       } catch (error) {
         console.error("Error loading reader data:", error);
       } finally {
@@ -646,6 +676,91 @@ function ReaderContent() {
       .join("")
       .slice(0, 80);
   }, [activeCommentarySegments, audio.currentTimeMs, manifest]);
+
+  // ----------------------------------------
+  // Derived data: sapche flat list + startSylId → section nodes map
+  // ----------------------------------------
+  const { sapcheNodes, sylIdToSections } = useMemo(() => {
+    const nodes = [];
+    const map = new Map(); // startSylId -> nodes[] (shallow..deep)
+    const walk = (n) => {
+      if (n.number !== "") nodes.push(n); // skip the document root
+      if (n.startSylId && n.number !== "") { // skip root: it's the title, not a section
+        const arr = map.get(n.startSylId) || [];
+        arr.push(n);
+        map.set(n.startSylId, arr);
+      }
+      (n.children || []).forEach(walk);
+    };
+    (sapche?.roots || []).forEach(walk);
+    for (const arr of map.values()) arr.sort((a, b) => a.depth - b.depth);
+    return { sapcheNodes: nodes, sylIdToSections: map };
+  }, [sapche]);
+
+  const idToNode = useMemo(() => {
+    const m = new Map();
+    sapcheNodes.forEach((n) => m.set(n.id, n));
+    return m;
+  }, [sapcheNodes]);
+
+  const numberToId = useMemo(() => {
+    const m = new Map();
+    sapcheNodes.forEach((n) => m.set(n.number, n.id));
+    return m;
+  }, [sapcheNodes]);
+
+  // ----------------------------------------
+  // Active-section tracking — scroll position → sapche highlight
+  // ----------------------------------------
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || !sapcheNodes.length) return;
+    const update = () => {
+      if (Date.now() < suppressActiveUntilRef.current) return; // settling a click
+      // Match the teleport's top-alignment: a section is "active" once its
+      // marker reaches ~the scroll-margin line below the reading area's top.
+      const top = container.getBoundingClientRect().top + 28;
+      let active = null;
+      for (const n of sapcheNodes) {
+        const el =
+          document.getElementById(`sec-${n.id}`) ||
+          (n.startSylId && document.getElementById(n.startSylId));
+        if (!el) continue;
+        if (el.getBoundingClientRect().top <= top) active = n; else break;
+      }
+      setActiveSectionId((prev) =>
+        active && active.id !== prev ? active.id : prev
+      );
+    };
+    update();
+    container.addEventListener("scroll", update, { passive: true });
+    return () => container.removeEventListener("scroll", update);
+  }, [sapcheNodes]);
+
+  // Follow the active section with minimal hierarchy: keep only the active
+  // node and its ancestors open, collapsing every other branch behind us.
+  useEffect(() => {
+    if (!activeSectionId) return;
+    const node = idToNode.get(activeSectionId);
+    if (!node) return;
+    const openIds = new Set([activeSectionId]); // active node + its ancestors
+    const parts = node.number.split(".");
+    for (let i = 1; i < parts.length; i++) {
+      const id = numberToId.get(parts.slice(0, i).join("."));
+      if (id) openIds.add(id);
+    }
+    setCollapsedIds((prev) => {
+      const next = new Set();
+      for (const n of sapcheNodes) {
+        if ((n.children?.length || 0) > 0 && !openIds.has(n.id)) next.add(n.id);
+      }
+      // Avoid a re-render if the collapse set is unchanged.
+      if (next.size === prev.size && [...next].every((id) => prev.has(id))) {
+        return prev;
+      }
+      return next;
+    });
+  }, [activeSectionId, idToNode, numberToId, sapcheNodes]);
 
   // ----------------------------------------
   // Track currently-playing segment for root text highlighting
@@ -1005,6 +1120,75 @@ function ReaderContent() {
     setAllMatchesSet(allSet);
   }, []);
 
+  const onToggleCollapse = useCallback((id) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+  const onCollapseAll = useCallback(() => {
+    const ids = new Set();
+    const walk = (n) => { if ((n.children||[]).length) { ids.add(n.id); n.children.forEach(walk); } };
+    (sapche?.roots?.[0]?.children || []).forEach(walk);
+    setCollapsedIds(ids);
+  }, [sapche]);
+  const onExpandAll = useCallback(() => setCollapsedIds(new Set()), []);
+
+  const handleSapcheSelect = useCallback((node) => {
+    if (!node.startSylId) return;
+    setRootTextScrolledAt(Date.now());
+    // Show the clicked row immediately and pause scroll-driven highlight changes
+    // while the scroll settles, so the sidebar doesn't flicker to other rows.
+    setActiveSectionId(node.id);
+    suppressActiveUntilRef.current = Date.now() + 900;
+
+    const targetEl = () =>
+      document.getElementById(`sec-${node.id}`) ||
+      document.getElementById(node.startSylId);
+
+    // If the section's paragraph isn't rendered yet, trigger its render.
+    if (!targetEl()) scrollToSyllable(node.startSylId, paragraphs, true);
+
+    // Re-pin the section to the top each frame until its position is stable.
+    // Every scroll is instant, so the target stays put as lazy paragraphs render
+    // and shift the layout — no visible jump to a wrong section.
+    let last = null;
+    let stable = 0;
+    let frames = 0;
+    const pin = () => {
+      const el = targetEl();
+      if (el) {
+        el.scrollIntoView({ block: "start", behavior: "auto" });
+        const pos = Math.round(el.getBoundingClientRect().top);
+        if (pos === last) stable += 1;
+        else {
+          stable = 0;
+          last = pos;
+        }
+      }
+      if (stable < 3 && ++frames < 50) {
+        requestAnimationFrame(pin);
+      } else {
+        suppressActiveUntilRef.current = 0; // resume normal tracking
+      }
+    };
+    requestAnimationFrame(pin);
+  }, [paragraphs]);
+
+  const startResize = useCallback((e) => {
+    e.preventDefault();
+    document.body.style.userSelect = "none";
+    const move = (ev) => setTocWidth(Math.min(560, Math.max(200, ev.clientX)));
+    const up = () => {
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  }, []);
+
   // ----------------------------------------
   // Loading state
   // ----------------------------------------
@@ -1092,7 +1276,10 @@ function ReaderContent() {
       <ReaderNavbar
         onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
         onToggleSearch={() => setSearchOpen((prev) => !prev)}
+        onToggleContents={() => setTocOpen((v) => !v)}
         sidebarOpen={sidebarOpen}
+        contentsOpen={tocOpen}
+        hasContents={!!sapche}
         prefs={prefs}
         onUpdatePref={updatePref}
       />
@@ -1108,6 +1295,17 @@ function ReaderContent() {
         ref={scrollContainerRef}
         sidebarOpen={sidebarOpen}
         sidebar={sidebarContent}
+        leftSidebar={sapche ? (
+          <SapcheSidebar roots={sapche.roots} activeId={activeSectionId}
+            collapsedIds={collapsedIds} onToggleCollapse={onToggleCollapse}
+            onSelect={handleSapcheSelect} onExpandAll={onExpandAll} onCollapseAll={onCollapseAll}
+            onHide={() => setTocOpen(false)} />
+        ) : null}
+        leftOpen={tocOpen && !!sapche}
+        leftWidth={tocWidth}
+        onLeftResize={startResize}
+        showLeftReveal={!!sapche && !tocOpen}
+        onRevealLeft={() => setTocOpen(true)}
       >
         {/* Floating Context Popover */}
         <FloatingPopover
@@ -1147,6 +1345,7 @@ function ReaderContent() {
                 allMatchesSet={allMatchesSet}
                 handleSyllableClick={handleSyllableClick}
                 uchen={uchen}
+                sylIdToSections={sylIdToSections}
               />
             ))}
           </div>

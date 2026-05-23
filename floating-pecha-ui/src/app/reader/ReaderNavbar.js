@@ -7,7 +7,10 @@ import ReadingSettings from './ReadingSettings';
 export default function ReaderNavbar({
   onToggleSidebar,
   onToggleSearch,
+  onToggleContents,
   sidebarOpen,
+  contentsOpen,
+  hasContents,
   prefs,
   onUpdatePref,
 }) {
@@ -68,6 +71,16 @@ export default function ReaderNavbar({
             />
           )}
         </div>
+
+        {hasContents && (
+          <button
+            onClick={onToggleContents}
+            className={`${inter.className} p-2 rounded-md transition-colors duration-200 text-xs font-semibold tracking-wide ${contentsOpen ? 'r-text-accent' : 'r-text-muted r-hover-accent'}`}
+            aria-label={contentsOpen ? 'Close contents' : 'Open contents'}
+          >
+            Contents
+          </button>
+        )}
 
         <button
           onClick={onToggleSidebar}

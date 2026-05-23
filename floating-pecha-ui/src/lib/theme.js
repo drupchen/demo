@@ -133,12 +133,22 @@ export function getSizes(baseRem = 1.75, lineHeight = 1.6) {
 }
 
 // ==========================================
-// 7. STATIC SIZES (backwards compatibility)
+// 7. SAPCHE (TABLE OF CONTENTS) INK TOKENS
+// ==========================================
+export const sapcheInk = [
+  "#9a9082", "#857c6e", "#6f675a", "#585146",
+  "#423c33", "#332e27", "#2a2620",
+]; // depth 1..7+, clamp deeper to last
+export const sapcheInkFor = (depth) =>
+  sapcheInk[Math.min(Math.max(depth, 1), sapcheInk.length) - 1];
+
+// ==========================================
+// 8. STATIC SIZES (backwards compatibility)
 // ==========================================
 export const SIZES = getSizes(1.75, 1.6);
 
 // ==========================================
-// 8. CSS VARIABLE GENERATOR
+// 9. CSS VARIABLE GENERATOR
 // ==========================================
 
 /**
