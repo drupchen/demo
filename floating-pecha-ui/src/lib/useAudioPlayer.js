@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
+import { resolveTimeUpdate } from './audioSeek';
 
 // ==========================================
 // UTILITY FUNCTIONS (exported standalone)
@@ -85,13 +86,23 @@ export function useAudioPlayer() {
   const [isContinuous, setIsContinuous] = useState(false);
   const playStateRef = useRef({ playlist: [], currentIndex: -1, isContinuous: false });
 
+  // Target (in seconds) of an in-flight load+seek. While set, `timeupdate`
+  // readings far from it are ignored so the element's transient near-zero time
+  // during loading doesn't drive time-based UI to the start of the recording.
+  const pendingSeekSecRef = useRef(null);
+
   // --- Event handlers ---
 
   const handleTimeUpdate = useCallback(() => {
     const el = audioRef.current;
-    if (el) {
-      setCurrentTimeMs(Math.round(el.currentTime * 1000));
-    }
+    if (!el) return;
+    const { accept, clearPending } = resolveTimeUpdate(
+      pendingSeekSecRef.current,
+      el.currentTime,
+    );
+    if (clearPending) pendingSeekSecRef.current = null;
+    if (!accept) return;
+    setCurrentTimeMs(Math.round(el.currentTime * 1000));
   }, []);
 
   const handleLoadedMetadata = useCallback(() => {
@@ -147,6 +158,8 @@ export function useAudioPlayer() {
   const seekTo = useCallback((ms) => {
     const el = audioRef.current;
     if (el) {
+      // A manual seek is authoritative — drop any pending load+seek guard.
+      pendingSeekSecRef.current = null;
       el.currentTime = ms / 1000;
       setCurrentTimeMs(ms);
     }
@@ -160,6 +173,10 @@ export function useAudioPlayer() {
     setCurrentTimeMs(startMs);
     setDurationMs(0);
     setIsPlaying(false);
+
+    // Ignore the element's transient pre-seek time readings until it reaches
+    // startMs (see resolveTimeUpdate). No guard when starting at 0 — nothing to seek.
+    pendingSeekSecRef.current = startMs > 0 ? startMs / 1000 : null;
 
     // Set src imperatively to keep user-gesture chain intact for autoplay
     el.src = src;

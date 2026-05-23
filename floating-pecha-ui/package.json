@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node tests/audioSeek.test.mjs"
   },
   "dependencies": {
     "@opensearch-project/opensearch": "^3.5.1",
