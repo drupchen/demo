@@ -381,14 +381,37 @@ export default function PlayerTab({
 
       {/* Player Controls */}
       <div className="px-5 py-4 border-b flex-shrink-0 r-border">
-        {/* Current session label */}
-        <div
-          className={`${inter.className} text-[10px] font-medium tracking-wider uppercase mb-2 r-text-secondary`}
-        >
-          Current session: {shortSessionId}
+        {/* Current session label + audio version toggle (top-right) */}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div
+            className={`${inter.className} text-[10px] font-medium tracking-wider uppercase r-text-secondary`}
+          >
+            Current session: {shortSessionId}
+          </div>
+          {hasRestored && onTogglePreferRestored && (
+            <div className="flex rounded-md overflow-hidden border r-border flex-shrink-0">
+              <button
+                onClick={() => preferRestored && onTogglePreferRestored()}
+                className={`${inter.className} px-2.5 py-1 text-[10px] font-bold transition-all ${
+                  !preferRestored ? "r-btn-active" : "r-text-secondary"
+                }`}
+              >
+                Original
+              </button>
+              <button
+                onClick={() => !preferRestored && onTogglePreferRestored()}
+                className={`${inter.className} px-2.5 py-1 text-[10px] font-bold transition-all ${
+                  preferRestored ? "r-btn-active" : "r-text-secondary"
+                }`}
+              >
+                Restored
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Play/Pause + Time */}
+        {/* Play/Pause + Time — bar and times are one combo, vertically centered
+            with the play button. */}
         <div className="flex items-center gap-4 mb-3">
           <button
             onClick={audio.togglePlay}
@@ -418,12 +441,6 @@ export default function PlayerTab({
           </button>
 
           <div className="flex-1">
-            <div
-              className={`${inter.className} flex justify-between text-[10px] font-medium mb-1 r-text-secondary`}
-            >
-              <span>{formatDurationMs(audio.currentTimeMs)}</span>
-              <span>{formatDurationMs(totalDurationMs)}</span>
-            </div>
             {/* Progress bar — display only */}
             <div className="h-1.5 rounded-full relative r-progress-track">
               <div
@@ -435,6 +452,12 @@ export default function PlayerTab({
                       : "0%",
                 }}
               />
+            </div>
+            <div
+              className={`${inter.className} flex justify-between text-[10px] font-medium mt-1 r-text-secondary`}
+            >
+              <span>{formatDurationMs(audio.currentTimeMs)}</span>
+              <span>{formatDurationMs(totalDurationMs)}</span>
             </div>
           </div>
         </div>
@@ -471,44 +494,63 @@ export default function PlayerTab({
           </div>
         )}
 
-        {/* Speed selector + audio version toggle */}
-        <div className="flex items-center justify-between mt-3">
-          <div className="flex items-center gap-1">
-            {[0.75, 1, 1.25, 1.5, 2].map((rate) => (
-              <button
-                key={rate}
-                onClick={() => audio.setPlaybackRate(rate)}
-                className={`${inter.className} px-2 py-1 rounded text-[10px] font-bold transition-all ${
-                  audio.playbackRate === rate
-                    ? "r-btn-active"
-                    : "r-text-secondary"
-                }`}
-              >
-                {rate}x
-              </button>
-            ))}
+        {/* Playback speed: SPEED + slider + value share a row (centered on the
+            track); ticks sit on their own row, aligned under the thumb. */}
+        <div className="mt-3">
+          <div className="flex items-center gap-2">
+            <span
+              className={`${inter.className} w-12 flex-shrink-0 text-[9px] font-semibold uppercase tracking-wider r-text-secondary`}
+            >
+              Speed
+            </span>
+            <input
+              type="range"
+              min={0.5}
+              max={2}
+              step={0.05}
+              value={audio.playbackRate}
+              onChange={(e) => audio.setPlaybackRate(parseFloat(e.target.value))}
+              aria-label="Playback speed"
+              className="r-speed-slider flex-1 min-w-0"
+              style={{
+                background: `linear-gradient(to right, var(--reader-accent, #D4AF37) calc(${
+                  (audio.playbackRate - 0.5) / 1.5
+                } * (100% - 14px) + 7px), var(--reader-bg-elevated, #F5F5F5) calc(${
+                  (audio.playbackRate - 0.5) / 1.5
+                } * (100% - 14px) + 7px))`,
+              }}
+            />
+            <button
+              onClick={() => audio.setPlaybackRate(1)}
+              title="Reset to 1×"
+              className={`${inter.className} w-10 flex-shrink-0 text-right text-[11px] font-bold tabular-nums transition-colors ${
+                audio.playbackRate === 1
+                  ? "r-text-secondary cursor-default"
+                  : "r-text-accent hover:underline"
+              }`}
+            >
+              {+audio.playbackRate.toFixed(2)}×
+            </button>
           </div>
-
-          {hasRestored && onTogglePreferRestored && (
-            <div className="flex rounded-md overflow-hidden border r-border">
-              <button
-                onClick={() => preferRestored && onTogglePreferRestored()}
-                className={`${inter.className} px-2.5 py-1 text-[10px] font-bold transition-all ${
-                  !preferRestored ? "r-btn-active" : "r-text-secondary"
-                }`}
-              >
-                Original
-              </button>
-              <button
-                onClick={() => !preferRestored && onTogglePreferRestored()}
-                className={`${inter.className} px-2.5 py-1 text-[10px] font-bold transition-all ${
-                  preferRestored ? "r-btn-active" : "r-text-secondary"
-                }`}
-              >
-                Restored
-              </button>
-            </div>
-          )}
+          {/* Ticks span exactly the slider width (ml/mr match SPEED/value
+              columns) and account for the 14px thumb so they sit under it. */}
+          <div className="relative h-3 mt-1 ml-14 mr-12">
+            {[0.5, 1, 1.5, 2].map((t) => {
+              const v = (t - 0.5) / 1.5;
+              return (
+                <span
+                  key={t}
+                  className={`${inter.className} r-speed-tick-label absolute`}
+                  style={{
+                    left: `calc(${v} * (100% - 14px) + 7px)`,
+                    transform: "translateX(-50%)",
+                  }}
+                >
+                  {t === 1 ? "1×" : t}
+                </span>
+              );
+            })}
+          </div>
         </div>
       </div>
 

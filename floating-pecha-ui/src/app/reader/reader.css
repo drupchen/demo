@@ -270,6 +270,59 @@
 .r-toc-iconbtn { font-size:16px; line-height:1; padding:3px 6px; color:#9a8f76; background:none; border:0; cursor:pointer; border-radius:4px; }
 .r-toc-iconbtn:hover { color:#8B1D1D; background:rgba(0,0,0,0.05); }
 
+/* --- Playback speed slider --- */
+.r-speed-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--reader-bg-elevated, #F5F5F5); /* overridden inline with the fill gradient */
+  cursor: pointer;
+  outline: none;
+}
+.r-speed-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--reader-accent, #D4AF37);
+  border: 2px solid var(--reader-bg-surface, #FFFFFF);
+  box-shadow: 0 0 0 1px var(--reader-border, #E5E7EB);
+  cursor: pointer;
+  transition: transform 100ms ease;
+}
+.r-speed-slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
+.r-speed-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--reader-accent-subtle, #FDF8EE);
+}
+/* Firefox: track + filled progress are separate pseudo-elements */
+.r-speed-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--reader-bg-elevated, #F5F5F5);
+}
+.r-speed-slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--reader-accent, #D4AF37);
+}
+.r-speed-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--reader-accent, #D4AF37);
+  border: 2px solid var(--reader-bg-surface, #FFFFFF);
+  box-shadow: 0 0 0 1px var(--reader-border, #E5E7EB);
+  cursor: pointer;
+}
+.r-speed-tick-label {
+  font-size: 8px;
+  line-height: 1;
+  color: var(--reader-text-muted, #9CA3AF);
+  white-space: nowrap;
+}
+
 /* Reveal tab shown when the sidebar is hidden */
 .r-toc-reveal { position:absolute; top:50%; left:0; transform:translateY(-50%); z-index:30;
   writing-mode:vertical-rl; padding:12px 4px; font-size:11px; letter-spacing:0.1em;
