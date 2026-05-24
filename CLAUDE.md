@@ -143,10 +143,11 @@ Notes:
   the archive instance IDs.
 - The reader shows the sapche automatically when `sapche.json` is present; instances without
   it are unaffected.
-- Like the rest of `prepare_data/`, this script is gitignored — share it with collaborators
-  the same way as the other pipeline scripts. Full rationale (and the future option of the
-  tool exporting UUIDs directly to skip this step):
-  `docs/superpowers/specs/2026-05-21-reader-sapche-toc-design.md`.
+- `sapche_align.py` is versioned in the repo alongside the other `prepare_data/`
+  pipeline scripts. Only the virtualenv, caches and generated `output/` are gitignored
+  (see `.gitignore`), so collaborators get the script with a normal checkout. Full
+  rationale (and the future option of the tool exporting UUIDs directly to skip this
+  step): `docs/superpowers/specs/2026-05-21-reader-sapche-toc-design.md`.
 
 ## Environment Variables
 
