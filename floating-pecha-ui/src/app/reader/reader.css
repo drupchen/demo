@@ -261,6 +261,8 @@
 
 /* Sidebar tree */
 .r-toc-row { display:flex; align-items:center; gap:6px; padding:4px 8px; cursor:pointer; white-space:nowrap; scroll-margin-block:24px; }
+/* Desaturated depth accent — a quiet echo of the study view's full-strength bars */
+.r-toc-accent { width:3px; align-self:stretch; border-radius:2px; flex:none; opacity:0.45; min-height:1.2em; }
 .r-toc-row:hover { background:rgba(0,0,0,0.04); }
 .r-toc-row-active { background:rgba(139,29,29,0.07); box-shadow:inset 2px 0 0 #8B1D1D; }
 .r-toc-title { font-size:15px; line-height:1.45; }
@@ -286,6 +288,21 @@
 .r-study-num { font-size:13px; color:#9a8f76; min-width:52px; text-align:right; }
 .r-study-title { line-height:1.7; }
 .r-study-chevron { font-size:15px; }
+/* Depth-accent bar (full strength here — no commentary colors in the study view) */
+.r-study-accent { width:5px; align-self:stretch; border-radius:3px; flex:none; min-height:1.6em; }
+/* Sibling-navigation pills, revealed on row hover at the right edge */
+.r-study-nav { display:flex; gap:2px; margin-left:auto; opacity:0; transition:opacity 120ms ease; }
+.r-study-row:hover .r-study-nav { opacity:1; }
+.r-study-navbtn { width:24px; height:24px; border-radius:9999px; border:1px solid #e0dccf;
+  background:#FFFDF8; color:#6f675a; font-size:12px; line-height:1; cursor:pointer; }
+.r-study-navbtn:hover { color:#8B1D1D; border-color:#8B1D1D; }
+.r-study-navbtn:disabled { opacity:0.3; cursor:default; }
+.r-study-navbtn:disabled:hover { color:#6f675a; border-color:#e0dccf; }
+/* Section-text preview popover (fixed-positioned next to the hovered/focused row) */
+.r-study-preview { position:fixed; z-index:110; max-width:560px; padding:14px 18px;
+  background:#FFFDF8; border:1px solid #e0dccf; border-radius:8px;
+  box-shadow:0 8px 28px rgba(42,38,32,0.18); font-size:17px; line-height:1.9; color:#423c33; }
+.r-study-preview-num { font-size:11px; color:#9a8f76; margin-bottom:6px; }
 @media (max-width: 640px) {
   .r-study-body { padding:24px 10px 30vh; }
   .r-study-num { min-width:36px; }

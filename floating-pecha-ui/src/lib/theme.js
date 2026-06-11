@@ -158,6 +158,26 @@ export const sapcheInk = [
 export const sapcheInkFor = (depth) =>
   sapcheInk[Math.min(Math.max(depth, 1), sapcheInk.length) - 1];
 
+// Depth-accent palette, borrowed from the sapche_discovery prototype (Tailwind
+// 300-shades, cycling past the last entry). Full strength in the study view
+// (no commentary bars there, so the colour channel is free); the reader
+// sidebar uses it desaturated via CSS opacity. The commentary palette
+// (COMMENTARY_COLORS) keeps exclusive use of colour inside the text itself.
+export const sapcheAccent = [
+  "#fca5a5", // red-300
+  "#fdba74", // orange-300
+  "#fcd34d", // amber-300
+  "#bef264", // lime-300
+  "#86efac", // green-300
+  "#67e8f9", // cyan-300
+  "#7dd3fc", // sky-300
+  "#93c5fd", // lapis-light
+  "#c4b5fd", // violet-300
+  "#f9a8d4", // pink-300
+];
+export const sapcheAccentFor = (depth) =>
+  sapcheAccent[Math.max(depth, 0) % sapcheAccent.length];
+
 // ==========================================
 // 8. STATIC SIZES (backwards compatibility)
 // ==========================================

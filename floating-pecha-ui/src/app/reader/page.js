@@ -711,6 +711,33 @@ function ReaderContent() {
     return m;
   }, [sapcheNodes]);
 
+  // Short text excerpt per section, shown by the study view's preview popover.
+  // Built from the manifest stream between each node's anchor syllables,
+  // skipping the brace-shaped audio-session markers.
+  const sectionPreviews = useMemo(() => {
+    const m = new Map();
+    if (!manifest?.length || !sapcheNodes.length) return m;
+    const indexOf = new Map();
+    manifest.forEach((s, i) => indexOf.set(s.id, i));
+    for (const n of sapcheNodes) {
+      if (!n.startSylId) continue;
+      const start = indexOf.get(n.startSylId);
+      if (start == null) continue;
+      const end = n.endSylId != null && indexOf.has(n.endSylId)
+        ? indexOf.get(n.endSylId)
+        : manifest.length - 1;
+      let text = "";
+      for (let i = start; i <= end && text.length < 220; i++) {
+        const t = manifest[i].text || "";
+        if (t.startsWith("{")) continue; // audio-session markers
+        text += t.replace(/\n/g, "");
+      }
+      if (text.length >= 220) text = `${text.slice(0, 220)}…`;
+      if (text) m.set(n.id, text);
+    }
+    return m;
+  }, [manifest, sapcheNodes]);
+
   // ----------------------------------------
   // Active-section tracking — scroll position → sapche highlight
   // ----------------------------------------
@@ -1280,6 +1307,7 @@ function ReaderContent() {
         onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
         onToggleSearch={() => setSearchOpen((prev) => !prev)}
         onToggleContents={() => setTocOpen((v) => !v)}
+        onOpenStudy={() => setStudyOpen(true)}
         sidebarOpen={sidebarOpen}
         contentsOpen={tocOpen}
         hasContents={!!sapche}
@@ -1368,6 +1396,7 @@ function ReaderContent() {
             handleSapcheSelect(node);
           }}
           onClose={() => setStudyOpen(false)}
+          previewFor={(node) => sectionPreviews.get(node.id) || null}
         />
       )}
 
