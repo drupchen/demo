@@ -9,6 +9,7 @@ export default function ReaderNavbar({
   onToggleSidebar,
   onToggleSearch,
   onToggleContents,
+  onOpenStudy,
   sidebarOpen,
   contentsOpen,
   hasContents,
@@ -97,6 +98,16 @@ export default function ReaderNavbar({
             aria-label={contentsOpen ? 'Close contents' : 'Open contents'}
           >
             Contents
+          </button>
+        )}
+
+        {hasContents && onOpenStudy && (
+          <button
+            onClick={onOpenStudy}
+            className="p-2 rounded-md transition-colors duration-200 text-xs font-medium tracking-wide r-text-muted r-hover-accent"
+            aria-label="Open sapche study view"
+          >
+            Study
           </button>
         )}
 
