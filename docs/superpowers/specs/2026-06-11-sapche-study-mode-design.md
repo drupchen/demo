@@ -168,3 +168,19 @@ semantic text tags, and per-section notes):
    `{…}` session markers.
 4. **Prominent entry point** — a labelled **Study** button in the reader navbar
    next to Contents (shown when a sapche exists), in addition to the sidebar ⛶.
+
+Later the same day (after review with Jérémy): outline **numbers are hidden
+everywhere** for now (numbering style undecided; `node.number` still drives
+internal logic) and the **ink depth-ramp was dropped** — one `sapcheInk` colour
+for all titles, depth being carried by indentation, type size and accent bars.
+
+### Iteration 3 — pills earn their place + breadcrumb
+
+- A sibling pill is rendered only when its jump target is **≥ 5 visible rows
+  away** (`SIBLING_JUMP_MIN_ROWS`) — adjacent siblings don't need a button, the
+  pills' real job is leaping over big expanded subtrees. No more disabled state:
+  a pill is either useful or absent.
+- A **sticky breadcrumb** under the study header shows the ancestor chain of
+  the topmost visible row (same "current section" convention as the reader's
+  scroll tracking, offset > the rows' 80px scroll-margin). Each crumb has its
+  depth-accent dot, truncates long titles, and clicking it jumps back up.
