@@ -1,5 +1,5 @@
 "use client";
-import { inter, sapcheInkFor, uchen } from "@/lib/theme";
+import { inter, sapcheAccentFor, sapcheInkFor, uchen } from "@/lib/theme";
 import { useEffect, useRef } from "react";
 
 function Row({ node, activeId, collapsed, onToggleCollapse, onSelect }) {
@@ -18,6 +18,11 @@ function Row({ node, activeId, collapsed, onToggleCollapse, onSelect }) {
         style={{ paddingLeft: 6 + node.depth * 12 }}
         onClick={() => onSelect(node)}
       >
+        <span
+          className="r-toc-accent"
+          style={{ backgroundColor: sapcheAccentFor(node.depth) }}
+          aria-hidden="true"
+        />
         <span className={`r-sapche-num ${inter.className}`}>{node.number}</span>
         {kids.length > 0 ? (
           <button
