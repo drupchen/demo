@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Wrangler / Cloudflare
+.dev.vars
+.wrangler/
+.open-next/
+worker-configuration.d.ts
+
+# Generated manifests
+public/data/world/gallery-manifest.json

@@ -8,6 +8,13 @@
     font-style: normal;
     font-display: swap;
   }
+  @font-face {
+    font-family: 'Monlam Uni Dutsa';
+    src: url('/fonts/MonlamUniDutsa.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
 }
 
 :root {

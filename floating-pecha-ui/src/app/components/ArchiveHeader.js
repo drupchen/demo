@@ -1,146 +1,205 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useSession, signIn, signOut } from "next-auth/react";
-import { inter, getThemeCssVars } from '@/lib/theme';
+import { cormorant, outfit } from "@/lib/theme";
 
 export default function ArchiveHeader() {
   const { data: session } = useSession();
   const pathname = usePathname();
-  const [isVisible, setIsVisible] = useState(false);
-  const isHomepage = pathname === '/';
+  const [scrolled, setScrolled] = useState(false);
 
-  // Check if the current page has its own custom navigation bar
-  const isCustomNavRoute = pathname.startsWith('/reader') || pathname.startsWith('/player');
-
-  // Determine current section for the breadcrumbs
-  const inWorld = pathname.startsWith('/world');
-  const inArchive = pathname.startsWith('/archive');
+  // The landing ('/') and full-screen reader/player provide their own chrome.
+  const isCustomNavRoute =
+    pathname === "/" || pathname.startsWith("/reader") || pathname.startsWith("/player");
 
   useEffect(() => {
     if (isCustomNavRoute) return;
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [isCustomNavRoute]);
 
-    // Homepage: always visible
-    if (isHomepage) {
-      setIsVisible(true);
-      return;
-    }
+  if (isCustomNavRoute) return null;
 
-    if (pathname !== '/') {
-      setIsVisible(true);
-      return;
-    }
-
-    const handleScroll = () => {
-      if (window.scrollY > 150) {
-        setIsVisible(true);
-      } else {
-        setIsVisible(false);
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    handleScroll();
-
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [pathname, isCustomNavRoute, isHomepage]);
-
-  if (isCustomNavRoute) {
-    return null;
-  }
-
-  const handleLogoClick = (e) => {
-    if (isHomepage) {
-      e.preventDefault();
-      // Dispatch custom event for page.js to handle the cinematic scroll
-      window.dispatchEvent(new CustomEvent('landingScrollToggle'));
-    }
-  };
+  const inWorld = pathname.startsWith("/world");
+  const inArchive = pathname.startsWith("/archive");
 
   return (
     <header
-      className={`
-        ${isHomepage ? '' : 'border-b border-gray-200'} sticky top-0 z-50 transition-all duration-700 ease-in-out
-        ${isVisible
-          ? isHomepage
-            ? 'bg-black/20 backdrop-blur-sm opacity-100 translate-y-0'
-            : 'bg-white/80 backdrop-blur-md opacity-100 translate-y-0'
-          : 'bg-transparent opacity-0 -translate-y-2 pointer-events-none'
-        }
-      `}
-      style={getThemeCssVars()}
+      className={`${outfit.className} ${cormorant.variable} ${outfit.variable}`}
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 50,
+        background: "#F8F5EE",
+        borderBottom: "1px solid rgba(162, 131, 72, 0.22)",
+        boxShadow: scrolled ? "0 4px 18px -10px rgba(7, 27, 56, 0.18)" : "none",
+        transition: "box-shadow 0.4s",
+      }}
     >
-      <div className={`${inter.className} ${isHomepage ? 'px-6' : 'max-w-6xl mx-auto px-6'} h-20 flex justify-between items-center text-sm`}>
-
-        {/* BREADCRUMB NAVIGATION */}
-        <div className="flex items-center gap-4">
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "16px 40px",
+          maxWidth: 1280,
+          margin: "0 auto",
+        }}
+      >
+        {/* Brand + breadcrumb */}
+        <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
           <Link
             href="/"
-            onClick={handleLogoClick}
-            className={`font-extrabold text-lg tracking-wide transition-colors cursor-pointer ${
-              isHomepage
-                ? 'text-white/80 hover:text-white drop-shadow-sm'
-                : 'text-[var(--theme-hover-red)] hover:text-black'
-            }`}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              textDecoration: "none",
+            }}
           >
-            Khyentse Önang
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: "50%",
+                background: "radial-gradient(circle at 38% 30%, #E9C56B, #ECB320 58%, #A28348)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#0A2347",
+                fontSize: 15,
+                boxShadow: "0 0 0 1px rgba(236, 179, 32, 0.42), 0 0 14px rgba(236, 179, 32, 0.32)",
+                flexShrink: 0,
+              }}
+            >
+              ༀ
+            </div>
+            <span
+              className={cormorant.className}
+              style={{
+                fontSize: 19,
+                fontWeight: 500,
+                letterSpacing: "0.01em",
+                color: "#0A2347",
+              }}
+            >
+              Rabsal Dawa
+            </span>
           </Link>
 
-          {/* DYNAMIC BREADCRUMB */}
-          {pathname !== '/' && (inWorld || inArchive) && (
+          {(inArchive || inWorld) && (
             <>
               <svg
-                width="18" height="18" viewBox="0 0 24 24" fill="none"
-                stroke="var(--theme-gold)" strokeWidth="3"
-                strokeLinecap="round" strokeLinejoin="round"
-                className="opacity-80"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#ECB320"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               >
                 <path d="M9 5 L19 12 L9 19" />
               </svg>
-
-              <Link
-                href={inWorld ? "/world" : "/archive"}
-                className="text-[var(--theme-gold)] font-extrabold text-lg tracking-wide hover:text-[var(--theme-hover-red)] transition-colors"
+              <span
+                style={{
+                  fontSize: 12,
+                  letterSpacing: "0.22em",
+                  textTransform: "uppercase",
+                  fontWeight: 500,
+                  color: "#A8231B",
+                }}
               >
-                {inWorld ? "World" : "Archives"}
-              </Link>
+                {inWorld ? "World" : "Archive"}
+              </span>
             </>
           )}
         </div>
 
-        {/* USER SESSION / LOGIN — hidden on homepage */}
-        {!isHomepage && (
-          <div className="flex items-center gap-6">
-            <div className="text-[var(--theme-gray)] hidden md:block">
-              {session ? (
-                <span>Welcome, <strong className="text-[var(--theme-hover-red)]">{session.user.name}</strong> (Access Level: {session.user.accessLevel})</span>
-              ) : (
-                <span>Welcome, <strong>Public Visitor</strong> (Access Level: 0)</span>
-              )}
-            </div>
-            <div>
-              {session ? (
-                <button
-                  onClick={() => signOut()}
-                  className="bg-red-50 text-[var(--theme-hover-red)] px-4 py-2 rounded-lg font-bold hover:bg-red-100 transition-colors"
-                >
-                  Sign Out
-                </button>
-              ) : (
-                <button
-                  onClick={() => signIn()}
-                  className="bg-[var(--theme-gold)] text-white px-4 py-2 rounded-lg font-bold hover:bg-[var(--theme-hover-red)] transition-colors"
-                >
-                  Archive Login
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
+        {/* Auth */}
+        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+          {session ? (
+            <>
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 300,
+                  color: "#5E6B78",
+                  display: "none",
+                }}
+                className="rd-meta"
+              >
+                {session.user?.name} · Level {session.user?.accessLevel ?? 0}
+              </span>
+              <button
+                onClick={() => signOut()}
+                style={{
+                  fontSize: 11.5,
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                  color: "#A8231B",
+                  background: "transparent",
+                  border: "1px solid rgba(168, 35, 27, 0.4)",
+                  borderRadius: 2,
+                  padding: "9px 18px",
+                  cursor: "pointer",
+                  transition: "all 0.3s cubic-bezier(0.22, 0.61, 0.30, 1)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(168, 35, 27, 0.08)";
+                  e.currentTarget.style.borderColor = "#A8231B";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.borderColor = "rgba(168, 35, 27, 0.4)";
+                }}
+              >
+                Sign out
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => signIn()}
+              style={{
+                fontSize: 11.5,
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                color: "#F8F5EE",
+                background: "#A8231B",
+                border: "1px solid #A8231B",
+                borderRadius: 2,
+                padding: "9px 20px",
+                cursor: "pointer",
+                boxShadow: "inset 0 0 0 1px rgba(236, 179, 32, 0.55)",
+                transition: "all 0.3s cubic-bezier(0.22, 0.61, 0.30, 1)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-1px)";
+                e.currentTarget.style.boxShadow =
+                  "inset 0 0 0 1px rgba(236, 179, 32, 0.85), 0 8px 18px -8px rgba(122, 24, 18, 0.6)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "none";
+                e.currentTarget.style.boxShadow = "inset 0 0 0 1px rgba(236, 179, 32, 0.55)";
+              }}
+            >
+              Sign in
+            </button>
+          )}
+        </div>
       </div>
+      <style jsx>{`
+        @media (min-width: 768px) {
+          .rd-meta {
+            display: inline !important;
+          }
+        }
+      `}</style>
     </header>
   );
 }

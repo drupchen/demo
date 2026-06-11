@@ -1,6 +1,8 @@
-# Khyentse Onang (མཁྱེན་བརྩེའི་འོད་སྣང་ — Khyentse's Radiance)
+# Rabsal Dawa (རབ་གསལ་ཟླ་བ། — The Brilliant Moon)
 
-Digital archive, virtual museum, and scholar's teaching portal for the teachings of Dilgo Khyentse Rinpoche. Built by Shechen Archives.
+Digital archive of the recorded teachings of Dilgo Khyentse Rinpoche — preserved, aligned to their texts, and opened to all who wish to listen. Built by Shechen Archives.
+
+> The local repo directory is still `khyentse-onang/` and the Next.js app subdirectory is still `floating-pecha-ui/` — both retained from the project's earlier names to avoid forced clones / path rewrites. All deployed Cloudflare resources use `rabsal-dawa*`.
 
 ## Project Structure
 
@@ -21,9 +23,9 @@ khyentse-onang/
 │   │   │   ├── ArchiveHeader.js       # Global nav with breadcrumbs + auth login/logout
 │   │   │   └── Footer.js              # Simple copyright footer (Shechen Archives)
 │   │   ├── api/
-│   │   │   ├── auth/[...nextauth]/route.js  # NextAuth credentials provider (demo users)
-│   │   │   ├── search/route.js              # OpenSearch full-text search API
-│   │   │   └── gallery/route.js             # Filesystem-based gallery media API
+│   │   │   ├── auth/[...nextauth]/route.js  # Auth.js v5 handlers (D1-backed Credentials provider)
+│   │   │   ├── search/route.js              # Search API (temporarily 503 — migrating to Meilisearch)
+│   │   │   └── gallery/route.js             # Gallery route (reads pre-built static manifest)
 │   │   └── lib/
 │   │       └── theme.js               # Design system: fonts (Uchen/Inter), colors, sizes
 │   ├── public/data/                   # Static data files (gitignored, not in repo)
@@ -65,11 +67,12 @@ Content is gated by numeric access levels (0–4). Level 0 = public. Higher leve
 ## Tech Stack
 
 - **Frontend**: Next.js 16 (App Router), React 19, Tailwind CSS 4
-- **Auth**: next-auth with credentials provider (demo hardcoded users)
-- **Search**: OpenSearch (via `@opensearch-project/opensearch`)
+- **Auth**: Auth.js v5 (`next-auth@5`) — Credentials provider, users in Cloudflare D1, bcryptjs password hashes
+- **Database**: Cloudflare D1 (SQLite at the edge), migrations under `floating-pecha-ui/migrations/`
+- **Search**: being migrated off OpenSearch to Meilisearch — `/api/search` returns 503 in the interim
 - **Fonts**: Uchen (Tibetan), Inter (Latin) — loaded via `next/font/google`
-- **Data Pipeline**: Python with `python-docx`, `botok` (Tibetan tokenizer), `opensearchpy`
-- **Infrastructure**: Docker Compose for OpenSearch
+- **Data Pipeline**: Python with `python-docx`, `botok` (Tibetan tokenizer); the OpenSearch ingest script is unused for now
+- **Infrastructure**: Cloudflare Workers via the OpenNext adapter (`@opennextjs/cloudflare`), local dev via `wrangler dev`
 
 ## Design System (`src/lib/theme.js`)
 
@@ -84,19 +87,27 @@ All colors and sizes are centralized. Pages use CSS custom properties via `getTh
 ## Development
 
 ```bash
-# Start OpenSearch
-docker compose up -d
-
-# Run the UI
+# Start the app on the Workers runtime (auth + D1 work here)
 cd floating-pecha-ui
 npm install
-npm run dev        # http://localhost:3000
-
-# Demo login credentials
-# public / demo    → Access Level 0
-# ngondro / demo   → Access Level 1
-# dzogrim / demo   → Access Level 4
+cp .dev.vars.example .dev.vars   # then set AUTH_SECRET to a real random string
+npm run dev:cf                   # http://localhost:8787 — first build takes 1–2 min
 ```
+
+`npm run dev` still runs a plain `next dev`, but **auth and D1 require `npm run dev:cf`** because the D1 binding is only injected under wrangler. Without a real `AUTH_SECRET` in `.dev.vars`, sign-in silently fails on `/api/auth/csrf`.
+
+### Seeding accounts (first time)
+
+```bash
+cd floating-pecha-ui
+npm run db:apply        # apply D1 migrations locally
+SEED_PASSWORD_PUBLIC=...  \
+SEED_PASSWORD_NGONDRO=... \
+SEED_PASSWORD_DZOGRIM=... \
+npm run seed
+```
+
+OpenSearch (docker-compose) is no longer required for the app to run.
 
 ### Data Pipeline (one-time setup)
 ```bash
@@ -149,10 +160,66 @@ Notes:
   rationale (and the future option of the tool exporting UUIDs directly to skip this
   step): `docs/superpowers/specs/2026-05-21-reader-sapche-toc-design.md`.
 
+## Deployment
+
+The app is deployed to Cloudflare Workers at:
+
+- **URL:** `https://rabsal-dawa.frere-jeremy.workers.dev`
+- **D1 database:** `rabsal-dawa-dev` (binding `DB`, UUID `84fc220e-189a-42d6-8a5c-ba3e73102568`)
+- **R2 bucket:** `rabsal-dawa-media` (binding `MEDIA`, public via `https://pub-89e39b431c564ba1a6f3d7bd0f53e81b.r2.dev`)
+- **Worker secrets** (set via `wrangler secret put`): `AUTH_SECRET`, `AUTH_URL`. Stored in the user's password manager.
+
+### Deploying a new version
+
+```bash
+cd floating-pecha-ui
+R2_PUBLIC_BASE="https://pub-89e39b431c564ba1a6f3d7bd0f53e81b.r2.dev" npm run deploy
+```
+
+The script regenerates the gallery manifest (with R2 URLs for mp4 entries), builds with OpenNext, writes a `.assetsignore` to exclude the videos from Workers assets, and runs `wrangler deploy`.
+
+### Uploading new media to R2
+
+Add files locally to `floating-pecha-ui/public/data/world/{gallery/mp4,videos}/`, then:
+
+```bash
+cd floating-pecha-ui
+npm run media:upload          # idempotent — skips files already present
+```
+
+After uploading, **redeploy** so the manifest reflects the new entries:
+
+```bash
+R2_PUBLIC_BASE="https://pub-89e39b431c564ba1a6f3d7bd0f53e81b.r2.dev" npm run deploy
+```
+
+### Changing remote user passwords
+
+```bash
+cd floating-pecha-ui
+SEED_PASSWORD_PUBLIC=...  \
+SEED_PASSWORD_NGONDRO=... \
+SEED_PASSWORD_DZOGRIM=... \
+npm run seed -- --remote
+```
+
+(The seed is idempotent — re-running just overwrites the existing password hashes for those usernames.)
+
+### Resetting Worker secrets
+
+```bash
+cd floating-pecha-ui
+NEW=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+echo -n "$NEW" | npx wrangler secret put AUTH_SECRET
+# Then save $NEW in the password manager.
+```
+
 ## Environment Variables
 
-- `OPENSEARCH_URL` — OpenSearch endpoint (default: `http://localhost:9200`)
-- `NEXTAUTH_SECRET` — NextAuth secret (defaults to dev key)
+Local secrets live in `floating-pecha-ui/.dev.vars` (gitignored, template at `.dev.vars.example`). Remote secrets are set via `wrangler secret put` on the deployed Worker.
+
+- `AUTH_SECRET` — Auth.js v5 JWT signing secret. **Required** — without it `/api/auth/csrf` returns 500.
+- `AUTH_URL` — canonical origin of the running app (e.g. `http://localhost:8787` locally). `NEXTAUTH_SECRET` / `NEXTAUTH_URL` are also accepted as fallbacks.
 
 ## Notes
 

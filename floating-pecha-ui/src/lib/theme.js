@@ -1,4 +1,4 @@
-import { Uchen, Inter } from 'next/font/google';
+import { Uchen, Inter, Cormorant_Garamond, Outfit } from 'next/font/google';
 
 // ==========================================
 // 1. TYPOGRAPHY (FONTS)
@@ -14,6 +14,22 @@ export const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-inter',
+});
+
+// Landing-page fonts: high-contrast serif display + quiet humanist body
+export const cormorant = Cormorant_Garamond({
+  weight: ['400', '500', '600'],
+  style: ['normal', 'italic'],
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-cormorant',
+});
+
+export const outfit = Outfit({
+  weight: ['300', '400', '500'],
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-outfit',
 });
 
 // ==========================================

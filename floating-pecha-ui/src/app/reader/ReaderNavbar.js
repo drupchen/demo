@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { inter } from '@/lib/theme';
+import Link from 'next/link';
+import { outfit } from '@/lib/theme';
 import ReadingSettings from './ReadingSettings';
 
 export default function ReaderNavbar({
@@ -29,18 +30,35 @@ export default function ReaderNavbar({
   }, [settingsOpen]);
 
   return (
-    <nav className="fixed top-0 z-[60] w-full h-16 border-b px-6 md:px-10 flex items-center justify-between r-bg r-border">
-      <a
-        href="/archive"
-        className={`${inter.className} group flex items-center gap-2.5 text-[10px] md:text-xs font-semibold uppercase tracking-[0.18em] transition-colors duration-200 r-text-muted r-hover-accent`}
-        aria-label="Back to Catalog"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-200 group-hover:-translate-x-1">
-          <line x1="19" y1="12" x2="5" y2="12" />
-          <polyline points="12 19 5 12 12 5" />
-        </svg>
-        <span>Catalog</span>
-      </a>
+    <nav className={`${outfit.className} fixed top-0 z-60 w-full h-16 border-b px-6 md:px-10 flex items-center justify-between r-bg r-border`}>
+      <div className="flex items-center gap-4">
+        {/* Small brand seal — anchors the reader in the same visual lineage as the landing */}
+        <Link
+          href="/"
+          className="rd-seal flex items-center justify-center w-7 h-7 rounded-full shrink-0"
+          style={{
+            background: 'radial-gradient(circle at 38% 30%, #E9C56B, #ECB320 58%, #A28348)',
+            color: '#0A2347',
+            fontSize: 12,
+            boxShadow: '0 0 0 1px rgba(236, 179, 32, 0.42), 0 0 10px rgba(236, 179, 32, 0.28)',
+          }}
+          aria-label="Rabsal Dawa — home"
+        >
+          ༀ
+        </Link>
+
+        <Link
+          href="/archive"
+          className="group flex items-center gap-2.5 text-[10px] md:text-xs font-medium uppercase tracking-[0.18em] transition-colors duration-200 r-text-muted r-hover-accent"
+          aria-label="Back to Catalog"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-200 group-hover:-translate-x-1">
+            <line x1="19" y1="12" x2="5" y2="12" />
+            <polyline points="12 19 5 12 12 5" />
+          </svg>
+          <span>Catalog</span>
+        </Link>
+      </div>
 
       <div className="flex items-center gap-1">
         <button
@@ -57,7 +75,7 @@ export default function ReaderNavbar({
         <div className="relative" ref={settingsRef}>
           <button
             onClick={() => setSettingsOpen(prev => !prev)}
-            className={`${inter.className} p-2 rounded-md transition-colors duration-200 text-sm font-bold ${settingsOpen ? 'r-text-accent' : 'r-text-muted r-hover-accent'}`}
+            className={`p-2 rounded-md transition-colors duration-200 text-sm font-semibold ${settingsOpen ? 'r-text-accent' : 'r-text-muted r-hover-accent'}`}
             aria-label="Reading settings"
           >
             Aa
@@ -75,7 +93,7 @@ export default function ReaderNavbar({
         {hasContents && (
           <button
             onClick={onToggleContents}
-            className={`${inter.className} p-2 rounded-md transition-colors duration-200 text-xs font-semibold tracking-wide ${contentsOpen ? 'r-text-accent' : 'r-text-muted r-hover-accent'}`}
+            className={`p-2 rounded-md transition-colors duration-200 text-xs font-medium tracking-wide ${contentsOpen ? 'r-text-accent' : 'r-text-muted r-hover-accent'}`}
             aria-label={contentsOpen ? 'Close contents' : 'Open contents'}
           >
             Contents

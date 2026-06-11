@@ -929,8 +929,9 @@ function ReaderContent() {
       for (let i = 0; i < playlist.length; i++) {
         if (currentMs >= playlist[i].startMs) currentIdx = i;
       }
-      audio.loadPlaylist(playlist, currentIdx, true);
-      // Always auto-play when toggling audio version
+      // Preserve the prior play/pause state when switching audio version —
+      // resume playback if we were playing, stay paused if we weren't.
+      audio.loadPlaylist(playlist, currentIdx, audio.isPlaying);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preferRestored]);

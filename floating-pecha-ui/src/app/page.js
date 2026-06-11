@@ -1,262 +1,259 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import Link from 'next/link';
-import { uchen, inter, getThemeCssVars } from '@/lib/theme';
-import Footer from '@/app/components/Footer';
+import React, { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { cormorant, outfit } from "@/lib/theme";
+import styles from "./page.module.css";
+
+// Six gateways into the archive. Order matters — first row is welcome / how-to,
+// second row is the three teachings we have data for plus the search guide.
+const GATEWAYS = [
+  {
+    badge: "◆ Article",
+    badgeClass: "bArticle",
+    grad: "tAzure",
+    svg: (
+      <svg viewBox="0 0 300 132" preserveAspectRatio="none">
+        <path d="M-20 124 Q150 30 320 124" fill="none" stroke="#ECB320" strokeWidth="1" />
+      </svg>
+    ),
+    title: "About Dilgo Khyentse Rinpoche",
+    blurb:
+      "One of the foremost masters of the Nyingma and Rimé traditions — a teacher whose voice continues through these recordings.",
+    cta: "Read",
+    href: "/world",
+  },
+  {
+    badge: "✦ Guide",
+    badgeClass: "bGuide",
+    grad: "tJade",
+    svg: (
+      <svg viewBox="0 0 300 132" preserveAspectRatio="none">
+        <circle cx="150" cy="66" r="48" fill="none" stroke="#F0EBDE" strokeWidth=".8" />
+      </svg>
+    ),
+    title: "How the reader works",
+    blurb:
+      "Aligned audio, syllable-level coverage across sessions, and the textual heart of every teaching — explained simply.",
+    cta: "Enter",
+    href: "/archive",
+  },
+  {
+    badge: "♫ Playlist",
+    badgeClass: "bPlaylist",
+    grad: "tAmber",
+    svg: (
+      <svg viewBox="0 0 300 132" preserveAspectRatio="none">
+        <path d="M40 100 H260 M40 80 H260" stroke="#F0EBDE" strokeWidth=".6" />
+      </svg>
+    ),
+    title: "Foundations · Ngöndro",
+    blurb:
+      "Eighteen sessions of oral commentary on the preliminaries — the indispensable ground of practice.",
+    cta: "Enter",
+    href: "/reader?instance=rpn_ngondro_1",
+  },
+  {
+    badge: "❖ Collection",
+    badgeClass: "bCollection",
+    grad: "tVermilion",
+    svg: (
+      <svg viewBox="0 0 300 132" preserveAspectRatio="none">
+        <path d="M-20 124 Q150 24 320 124" fill="none" stroke="#ECB320" strokeWidth="1" />
+      </svg>
+    ),
+    title: "Yeshe Lama · The Path of Dzogchen",
+    blurb:
+      "Extended commentary on Jigme Lingpa's Yeshe Lama, drawn from over a hundred recorded sessions.",
+    cta: "Enter",
+    href: "/reader?instance=yeshe_lama_1",
+  },
+  {
+    badge: "♫ Playlist",
+    badgeClass: "bPlaylist",
+    grad: "tGold",
+    svg: (
+      <svg viewBox="0 0 300 132" preserveAspectRatio="none">
+        <circle cx="150" cy="66" r="28" fill="none" stroke="#9A2018" strokeWidth=".8" />
+      </svg>
+    ),
+    title: "Thok-Tha Bar-Sum",
+    blurb:
+      "A view–meditation–conduct cycle taught across multiple sessions — a clear entry into the Great Perfection.",
+    cta: "Enter",
+    href: "/reader?instance=thokthabarsum_1",
+  },
+  {
+    badge: "✦ Guide",
+    badgeClass: "bGuide",
+    grad: "tMist",
+    svg: (
+      <svg viewBox="0 0 300 132" preserveAspectRatio="none">
+        <path d="M50 50 H250 M50 72 H250" stroke="#075794" strokeWidth=".6" />
+      </svg>
+    ),
+    title: "Searching in Tibetan",
+    blurb:
+      "Find passages by syllable, phrase, or topic — with results aligned to the exact moment they are spoken.",
+    cta: "Enter",
+    href: "/archive?view=search",
+  },
+];
 
 export default function LandingPage() {
-  const [scrollProgress, setScrollProgress] = useState(0);
-  const isAnimatingRef = useRef(false);
-  const hasTriggeredScrollRef = useRef(false);
+  const [scrolled, setScrolled] = useState(false);
+  const revealRefs = useRef([]);
 
+  // Topbar darkens on scroll past ~40px
   useEffect(() => {
-    const handleScroll = () => {
-      const position = window.scrollY;
-      const height = window.innerHeight;
-      const progress = Math.min(position / height, 1);
-      setScrollProgress(progress);
-
-      // Reset the first-scroll flag when back at the top
-      if (position < 5) {
-        hasTriggeredScrollRef.current = false;
-      }
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    const onScroll = () => setScrolled(window.scrollY > 40);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Cinematic scroll down
-  const scrollToBottom = useCallback(() => {
-    if (isAnimatingRef.current) return;
-    isAnimatingRef.current = true;
-
-    const targetPosition = window.innerHeight * 1.5;
-    const startPosition = window.scrollY;
-    const distance = targetPosition - startPosition;
-    const duration = 4000;
-    let start = null;
-
-    const animation = (currentTime) => {
-      if (start === null) start = currentTime;
-      const timeElapsed = currentTime - start;
-      const progress = Math.min(timeElapsed / duration, 1);
-
-      const ease = progress < 0.5
-        ? 4 * progress * progress * progress
-        : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-
-      window.scrollTo(0, startPosition + distance * ease);
-
-      if (timeElapsed < duration) {
-        window.requestAnimationFrame(animation);
-      } else {
-        isAnimatingRef.current = false;
-      }
-    };
-
-    window.requestAnimationFrame(animation);
+  // IntersectionObserver-driven fade-in for `.reveal` elements
+  useEffect(() => {
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add(styles.revealIn);
+            io.unobserve(e.target);
+          }
+        });
+      },
+      { threshold: 0.16 }
+    );
+    revealRefs.current.forEach((el) => el && io.observe(el));
+    return () => io.disconnect();
   }, []);
 
-  // Cinematic scroll back to top (reverse)
-  const scrollToTop = useCallback(() => {
-    if (isAnimatingRef.current) return;
-    isAnimatingRef.current = true;
-
-    const startPosition = window.scrollY;
-    const distance = startPosition;
-    const duration = 4000;
-    let start = null;
-
-    const animation = (currentTime) => {
-      if (start === null) start = currentTime;
-      const timeElapsed = currentTime - start;
-      const progress = Math.min(timeElapsed / duration, 1);
-
-      const ease = progress < 0.5
-        ? 4 * progress * progress * progress
-        : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-
-      window.scrollTo(0, startPosition - distance * ease);
-
-      if (timeElapsed < duration) {
-        window.requestAnimationFrame(animation);
-      } else {
-        isAnimatingRef.current = false;
-        hasTriggeredScrollRef.current = false;
-      }
-    };
-
-    window.requestAnimationFrame(animation);
-  }, []);
-
-  // Listen for header logo click (custom event from ArchiveHeader)
-  useEffect(() => {
-    const handleToggle = () => {
-      if (window.scrollY < window.innerHeight * 0.5) {
-        scrollToBottom();
-      } else {
-        scrollToTop();
-      }
-    };
-    window.addEventListener('landingScrollToggle', handleToggle);
-    return () => window.removeEventListener('landingScrollToggle', handleToggle);
-  }, [scrollToBottom, scrollToTop]);
-
-  // First scroll/touch at top triggers cinematic animation instead of native scroll
-  useEffect(() => {
-    const handleWheel = (e) => {
-      if (hasTriggeredScrollRef.current || isAnimatingRef.current) return;
-      if (window.scrollY < 5 && e.deltaY > 0) {
-        e.preventDefault();
-        hasTriggeredScrollRef.current = true;
-        scrollToBottom();
-      }
-    };
-
-    let touchStartY = 0;
-    const handleTouchStart = (e) => {
-      touchStartY = e.touches[0].clientY;
-    };
-    const handleTouchMove = (e) => {
-      if (hasTriggeredScrollRef.current || isAnimatingRef.current) return;
-      const deltaY = touchStartY - e.touches[0].clientY;
-      if (window.scrollY < 5 && deltaY > 10) {
-        e.preventDefault();
-        hasTriggeredScrollRef.current = true;
-        scrollToBottom();
-      }
-    };
-
-    window.addEventListener('wheel', handleWheel, { passive: false });
-    window.addEventListener('touchstart', handleTouchStart, { passive: true });
-    window.addEventListener('touchmove', handleTouchMove, { passive: false });
-    return () => {
-      window.removeEventListener('wheel', handleWheel);
-      window.removeEventListener('touchstart', handleTouchStart);
-      window.removeEventListener('touchmove', handleTouchMove);
-    };
-  }, [scrollToBottom]);
-
-  const uiOpacity = Math.max(0, (scrollProgress - 0.2) / 0.8);
-  const videoOpacity = 1 - (scrollProgress * 0.7);
-  const arrowOpacity = Math.max(0, 1 - scrollProgress * 5);
+  const addReveal = (i) => (el) => {
+    revealRefs.current[i] = el;
+  };
 
   return (
-    <main className="relative min-h-[200vh] bg-transparent" style={getThemeCssVars()}>
+    <div className={`${styles.page} ${outfit.className} ${cormorant.variable} ${outfit.variable}`}>
+      <div className={styles.grain} />
 
-      {/* 1. FIXED BACKGROUND LAYER */}
-      <div className="fixed inset-0 z-0 bg-[#F9F9F7]">
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="w-full h-full object-cover"
-          style={{
-            opacity: videoOpacity,
-            filter: `
-              blur(${scrollProgress * 25}px)
-              grayscale(${scrollProgress * 80}%)
-              brightness(${1 + scrollProgress * 0.2})
-            `,
-          }}
-        >
-          <source src="/data/world/videos/landing-slowmo.mp4" type="video/mp4" />
-        </video>
+      {/* TOPBAR */}
+      <header className={`${styles.topbar} ${scrolled ? styles.topbarScrolled : ""}`}>
+        <Link href="/" className={styles.brand}>
+          <div className={styles.seal}>ༀ</div>
+          <span className={styles.brandName}>Rabsal Dawa</span>
+        </Link>
+        <nav className={styles.navlinks}>
+          <a href="#gateways">Explore</a>
+          <Link href="/archive">Archive</Link>
+          <Link href="/archive?view=search">Search</Link>
+          <Link href="/archive">Reader</Link>
+        </nav>
+        <Link href="/archive" className={styles.navCta}>
+          Enter the archive
+        </Link>
+      </header>
 
-        <div
-          className="absolute inset-0 bg-[#F9F9F7]"
-          style={{ opacity: scrollProgress * 0.85 }}
-        />
-      </div>
+      {/* ACT I — THE BRILLIANCE */}
+      <section className={styles.stage}>
+        <div className={styles.halo}>
+          <div className={styles.bloom} />
+          <div className={`${styles.ring} ${styles.r5}`} />
+          <div className={`${styles.ring} ${styles.r4}`} />
+          <div className={`${styles.ring} ${styles.r3}`} />
+          <div className={`${styles.ring} ${styles.r2}`} />
+          <div className={`${styles.ring} ${styles.r1}`} />
+          <div className={styles.moon} />
+        </div>
+        <div lang="bo" className={styles.inscription}>
+          རབ་གསལ་ཟླ་བ།
+        </div>
 
-      {/* 2. CLICKABLE GLOWING ARROW (Triggers the slow descent) */}
-      <button
-        onClick={scrollToBottom}
-        className="fixed bottom-16 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center transition-all duration-300 hover:scale-110 cursor-pointer"
-        style={{
-          opacity: arrowOpacity,
-          pointerEvents: arrowOpacity > 0.1 ? 'auto' : 'none'
-        }}
-        aria-label="Descend into the Archives"
-      >
-        <svg
-          width="80"
-          height="40"
-          viewBox="0 0 120 60"
-          fill="none"
-          stroke="white"
-          strokeWidth="6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="animate-bounce opacity-90"
-          style={{ filter: 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))' }}
-        >
-          <path d="M10 15 L60 45 L110 15" />
-        </svg>
-      </button>
-
-      {/* 3. THE MANDALA GATEWAY */}
-      <section className="relative z-10 h-[200vh] flex flex-col items-center pointer-events-none">
-        <div className="sticky top-0 h-screen w-full flex flex-col items-center justify-center px-6">
-
-          <div
-            className="text-center flex flex-col items-center mb-[10vh]"
-            style={{ opacity: uiOpacity }}
-          >
-            <h1
-              lang="bo"
-              className="text-[var(--theme-gold)] text-7xl md:text-[8rem] -mb-2 drop-shadow-sm whitespace-nowrap"
-              style={{ fontFamily: '"Sadri Yigchen", serif' }}
-            >
-              མཁྱེན་བརྩེའི་འོད་སྣང་།
-            </h1>
-
-            <h2 className={`${inter.className} text-[var(--theme-gray)] text-lg md:text-xl tracking-[0.7em] uppercase font-bold opacity-90`}>
-              Khyentse&apos;s Radiance
-            </h2>
+        <div className={styles.heroTop}>
+          <div className={styles.eyebrow}>
+            <span>Oral Teachings Archive</span>
           </div>
+          <h1 className={`${cormorant.className} ${styles.title}`}>
+            Rabsal <span className={styles.titleAccent}>Dawa</span>
+          </h1>
+        </div>
 
-          {/* THE DUAL GATEWAY BUTTONS */}
-          <div
-            className="absolute bottom-[20%] flex flex-col md:flex-row gap-6 items-center"
-            style={{
-              opacity: uiOpacity,
-              pointerEvents: uiOpacity > 0.8 ? 'auto' : 'none'
-            }}
-          >
-            <Link href="/world">
-              <button className={`
-                ${inter.className} px-10 py-5 border border-[var(--theme-gold)] text-[var(--theme-gold)]
-                bg-white/10 backdrop-blur-md rounded-full uppercase tracking-[0.3em] font-bold text-[10px] md:text-[11px]
-                hover:bg-[var(--theme-gold)] hover:text-white transition-all duration-500
-                shadow-sm active:scale-95 whitespace-nowrap
-              `}>
-                Dilgo Khyentse&apos;s World
-              </button>
-            </Link>
+        <div className={styles.heroBottom}>
+          <p className={styles.lede}>
+            The recorded voice of Dilgo Khyentse Rinpoche — preserved, aligned to its texts, and
+            opened to all who wish to listen.
+          </p>
+          <a href="#gateways" className={styles.enterBtn}>
+            Begin <span className={styles.arr}>→</span>
+          </a>
+        </div>
 
-            <Link href="/archive">
-              <button className={`
-                ${inter.className} px-10 py-5 border border-[var(--theme-gold)] text-[var(--theme-gold)]
-                bg-white/10 backdrop-blur-md rounded-full uppercase tracking-[0.3em] font-bold text-[10px] md:text-[11px]
-                hover:bg-[var(--theme-gold)] hover:text-white transition-all duration-500
-                shadow-sm active:scale-95 whitespace-nowrap
-              `}>
-                The Teaching Archives
-              </button>
-            </Link>
-          </div>
+        <div className={styles.scrollHint}>
+          Scroll
+          <span className={styles.chev} />
         </div>
       </section>
-      {/* 4. FOOTER — fixed at bottom, fades in with content */}
-      <div
-        className="fixed bottom-0 left-0 right-0 z-20 bg-[#F9F9F7]"
-        style={{ opacity: uiOpacity, pointerEvents: uiOpacity > 0.8 ? 'auto' : 'none' }}
-      >
-        <Footer />
-      </div>
-    </main>
+
+      {/* ACT II — THE APPROACH */}
+      <section ref={addReveal(0)} className={`${styles.approach} ${styles.reveal}`}>
+        <div className={styles.approachMark}>❖</div>
+        <h2>
+          You are entering a recorded silence —<br />a voice that <em>still instructs</em>.
+        </h2>
+        <p>
+          Each teaching is held exactly as it was spoken, its audio aligned word by word to the
+          page. Wander inward at your own pace; nothing here is in a hurry.
+        </p>
+      </section>
+
+      {/* ACT III — THE RESTING PLACE */}
+      <section className={styles.gateways} id="gateways">
+        <div ref={addReveal(1)} className={`${styles.gatewaysHead} ${styles.reveal}`}>
+          <h2>Ways to begin</h2>
+          <p>Gateways into the collection — read, listen, or follow a guided path.</p>
+        </div>
+        <div className={styles.grid}>
+          {GATEWAYS.map((g, i) => (
+            <Link
+              key={g.title}
+              ref={addReveal(2 + i)}
+              href={g.href}
+              className={`${styles.card} ${styles.reveal}`}
+              style={{ transitionDelay: `${(i % 3) * 0.08}s` }}
+            >
+              <div className={styles.thumb}>
+                <div className={`${styles.grad} ${styles[g.grad]}`} />
+                {g.svg}
+              </div>
+              <div className={styles.body}>
+                <span className={`${styles.badge} ${styles[g.badgeClass]}`}>{g.badge}</span>
+                <h3>{g.title}</h3>
+                <p>{g.blurb}</p>
+                <span className={styles.enter}>
+                  {g.cta} <span className={styles.arrow}>→</span>
+                </span>
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        <footer ref={addReveal(8)} className={`${styles.footer} ${styles.reveal}`}>
+          <div>
+            <h4>
+              Rabsal Dawa<span lang="bo" className={styles.footerBo}>རབ་གསལ་ཟླ་བ།</span>
+            </h4>
+            <p>
+              A digital archive of the teachings of Dilgo Khyentse Rinpoche — preserved and shared
+              by Shechen Archives.
+            </p>
+          </div>
+          <div className={styles.footMeta}>
+            © 2026 Shechen Archives
+            <br />
+            For the benefit of all beings
+          </div>
+        </footer>
+      </section>
+    </div>
   );
 }

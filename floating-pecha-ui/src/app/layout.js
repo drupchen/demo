@@ -3,8 +3,9 @@ import ArchiveHeader from './components/ArchiveHeader'; // Ensure this matches y
 import './globals.css';
 
 export const metadata = {
-  title: 'Khyentse Önang Digital Archive',
-  description: 'Digital Archive, Virtual Museum, and Scholar’s Teaching Portal',
+  title: 'Rabsal Dawa · The Brilliant Moon',
+  description:
+    'A digital archive of the recorded teachings of Dilgo Khyentse Rinpoche — preserved, aligned to their texts, and opened to all who wish to listen.',
 };
 
 export default function RootLayout({ children }) {

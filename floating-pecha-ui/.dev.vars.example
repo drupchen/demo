@@ -1,0 +1,6 @@
+# Copy to .dev.vars (gitignored) for local wrangler dev.
+# Auth.js v5 uses AUTH_SECRET; NEXTAUTH_SECRET is kept for any legacy references.
+NEXTAUTH_SECRET=replace-with-a-real-random-string
+AUTH_SECRET=replace-with-a-real-random-string
+NEXTAUTH_URL=http://localhost:8787
+AUTH_URL=http://localhost:8787
