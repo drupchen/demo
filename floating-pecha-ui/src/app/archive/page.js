@@ -45,7 +45,7 @@ function ArchiveContent() {
     setHasSearched(true);
 
     try {
-      const userLevel = session?.user?.accessLevel || 0;
+      const userLevel = session?.user?.accessLevel ?? 0;
       const res = await fetch(`/api/search?q=${encodeURIComponent(searchString)}&level=${userLevel}`);
       if (!res.ok) throw new Error("Network response was not OK");
 
@@ -88,7 +88,7 @@ function ArchiveContent() {
   }, {});
 
   // 5. Apply the "Access Onion" to the catalog list
-  const userLevel = session?.user?.accessLevel || 0;
+  const userLevel = session?.user?.accessLevel ?? 0;
 
   const filteredCatalog = catalog.filter(teaching => {
     const rawLevel = teaching.Access_Level ?? teaching.Practice_Level ?? teaching.access_level ?? 4;
@@ -115,21 +115,19 @@ function ArchiveContent() {
         <div className="flex justify-center gap-12 mb-16 border-b border-gray-100">
           <button
             onClick={() => toggleView('browse')}
-            className={`${inter.className} pb-4 text-xs font-bold uppercase tracking-[0.2em] transition-all border-b-2 ${
-              viewMode === 'browse'
-              ? "text-[var(--theme-hover-red)] border-[var(--theme-hover-red)]"
-              : "text-[var(--theme-gray)] border-transparent hover:text-black"
-            }`}
+            className={`${inter.className} pb-4 text-xs font-bold uppercase tracking-[0.2em] transition-all border-b-2 ${viewMode === 'browse'
+                ? "text-[var(--theme-hover-red)] border-[var(--theme-hover-red)]"
+                : "text-[var(--theme-gray)] border-transparent hover:text-black"
+              }`}
           >
             Browse Catalog
           </button>
           <button
             onClick={() => toggleView('search')}
-            className={`${inter.className} pb-4 text-xs font-bold uppercase tracking-[0.2em] transition-all border-b-2 ${
-              viewMode === 'search'
-              ? "text-[var(--theme-hover-red)] border-[var(--theme-hover-red)]"
-              : "text-[var(--theme-gray)] border-transparent hover:text-black"
-            }`}
+            className={`${inter.className} pb-4 text-xs font-bold uppercase tracking-[0.2em] transition-all border-b-2 ${viewMode === 'search'
+                ? "text-[var(--theme-hover-red)] border-[var(--theme-hover-red)]"
+                : "text-[var(--theme-gray)] border-transparent hover:text-black"
+              }`}
           >
             Search Text
           </button>
@@ -230,10 +228,10 @@ function ArchiveContent() {
                     {hits.map((hit) => (
                       <Link
                         key={hit.id}
-                        href={`/reader?instance=${hit.instance_id}&sylId=${hit.first_syl_id}&q=${encodeURIComponent(query)}`}
+                        href={`/reader?instance=${hit.instance_id}&session=${encodeURIComponent(hit.session_id)}&time=${encodeURIComponent(hit.start)}&sylId=${hit.first_syl_id}&q=${encodeURIComponent(query)}`}
                         className="group block bg-white p-6 md:p-8 rounded-xl border border-gray-100 hover:border-[var(--theme-gold-border)] hover:shadow-md transition-all"
                       >
-                         <div className={`${inter.className} flex items-center gap-3 text-xs font-medium text-[var(--theme-gray)] uppercase tracking-wider mb-4`}>
+                        <div className={`${inter.className} flex items-center gap-3 text-xs font-medium text-[var(--theme-gray)] uppercase tracking-wider mb-4`}>
                           <span>Session: {hit.session_id}</span>
                           <span>•</span>
                           <span className="text-[var(--theme-gold)]">{hit.start}</span>

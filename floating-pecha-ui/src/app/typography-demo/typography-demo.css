@@ -1,0 +1,363 @@
+/* ==========================================
+ * Typography Demo — CSS Techniques for Tibetan Script
+ * ========================================== */
+
+/* --- Font Declarations --- */
+
+@font-face {
+  font-family: 'Tibetan Chogyal';
+  src: url('/fonts/TibetanChogyalUnicode-170221.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Jomolhari with metric overrides ("tamed" variant).
+   local() only matches system-installed fonts, not CSS-declared ones.
+   So we load the same woff2 from public/fonts/ with overrides applied. */
+@font-face {
+  font-family: 'Jomolhari Tamed';
+  src: url('/fonts/jomolhari.woff2') format('woff2');
+  ascent-override: 100%;
+  descent-override: 40%;
+  line-gap-override: 0%;
+  font-display: swap;
+}
+
+/* Sadri Yigchen with metric overrides */
+@font-face {
+  font-family: 'Sadri Yigchen Tamed';
+  src: url('/fonts/sadri-yigchen.woff2') format('woff2');
+  ascent-override: 100%;
+  descent-override: 40%;
+  line-gap-override: 0%;
+  font-display: swap;
+}
+
+/* --- 1. Yig Chung Alignment Techniques --- */
+
+.typo-yigchung-old {
+  font-size: 0.70em;
+  vertical-align: 0.33em;
+}
+
+/* dominant-baseline: hanging does NOT work for HTML inline elements.
+   The yig chung offset is computed via Canvas TextMetrics instead. */
+
+/* --- 2. Cross-Script Scaling via font-size-adjust --- */
+
+.typo-adjust-jomolhari {
+  font-size-adjust: cap-height 0.55;
+}
+
+.typo-adjust-sadri {
+  font-size-adjust: cap-height 0.65;
+}
+
+.typo-adjust-chogyal {
+  font-size-adjust: cap-height 0.62;
+}
+
+/* --- 3. text-box Trimming --- */
+
+.typo-trimmed {
+  text-box: trim-both cap alphabetic;
+}
+
+/* --- Page Layout --- */
+
+.typo-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem 2rem 4rem;
+}
+
+.typo-page-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: #1A1A1A;
+}
+
+.typo-page-subtitle {
+  font-size: 1rem;
+  color: #6B7280;
+  margin-bottom: 3rem;
+}
+
+/* --- Section Cards --- */
+
+.typo-section {
+  margin-bottom: 3rem;
+  padding: 2rem;
+  border: 1px solid #E5E7EB;
+  border-radius: 0.75rem;
+  background: #FAFAFA;
+}
+
+.typo-section-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: #1A1A1A;
+}
+
+.typo-section-desc {
+  font-size: 0.875rem;
+  color: #6B7280;
+  margin-bottom: 1.5rem;
+}
+
+/* --- Comparison Grid --- */
+
+.typo-comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .typo-comparison {
+    grid-template-columns: 1fr;
+  }
+}
+
+.typo-panel {
+  padding: 1.5rem;
+  border: 1px solid #E5E7EB;
+  border-radius: 0.5rem;
+  background: white;
+}
+
+.typo-panel-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9CA3AF;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.typo-label-old {
+  color: #DC2626;
+}
+
+.typo-label-new {
+  color: #16A34A;
+}
+
+/* --- Code Blocks --- */
+
+.typo-code {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.75rem;
+  background: #F3F4F6;
+  padding: 0.75rem 1rem;
+  border-radius: 0.375rem;
+  margin-top: 1rem;
+  white-space: pre-wrap;
+  color: #374151;
+  line-height: 1.6;
+  border: 1px solid #E5E7EB;
+}
+
+/* --- Font Showcase Stack --- */
+
+.typo-font-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.typo-font-card {
+  padding: 1.5rem;
+  border: 1px solid #E5E7EB;
+  border-radius: 0.5rem;
+  background: white;
+}
+
+.typo-font-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #D4AF37;
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* --- Slider Control --- */
+
+.typo-slider-group {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 0.5rem;
+}
+
+.typo-slider-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.typo-slider {
+  flex: 1;
+  accent-color: #D4AF37;
+  height: 6px;
+}
+
+.typo-slider-value {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #D4AF37;
+  min-width: 3.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Mixed Script Rows --- */
+
+.typo-mixed-row {
+  padding: 1.25rem 1.5rem;
+  border: 1px solid #E5E7EB;
+  border-radius: 0.5rem;
+  background: white;
+  margin-bottom: 1rem;
+}
+
+.typo-mixed-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9CA3AF;
+  margin-bottom: 0.5rem;
+}
+
+/* --- Background highlight for spacing visibility --- */
+
+.typo-bg-lines > * {
+  background: rgba(212, 175, 55, 0.08);
+}
+
+/* --- Baseline reference line --- */
+
+.typo-baseline-ref {
+  position: relative;
+}
+
+.typo-baseline-ref::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(220, 38, 38, 0.3);
+}
+
+/* --- Metrics Display --- */
+
+.typo-metrics {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 0.375rem;
+  font-size: 0.8rem;
+}
+
+.typo-metrics-title {
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.typo-metrics-table {
+  width: 100%;
+  font-size: 0.75rem;
+  color: #4B5563;
+}
+
+.typo-metrics-table td {
+  padding: 0.15rem 0;
+}
+
+.typo-metrics-table td:first-child {
+  color: #6B7280;
+  padding-right: 1rem;
+}
+
+.typo-metrics-table td:last-child {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Full measurement table (appendix) --- */
+
+.typo-full-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+}
+
+.typo-full-table th,
+.typo-full-table td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.typo-full-table th {
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: #F3F4F6;
+}
+
+.typo-full-table td {
+  color: #4B5563;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Note / explanation box --- */
+
+.typo-note {
+  margin-top: 1.5rem;
+  padding: 1rem 1.25rem;
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: #92400E;
+}
+
+.typo-note code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.2rem;
+  font-size: 0.75rem;
+}
+
+/* --- Font offset badge --- */
+
+.typo-font-offset {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: #6B7280;
+  text-transform: none;
+  letter-spacing: normal;
+}

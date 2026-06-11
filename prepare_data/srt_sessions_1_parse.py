@@ -92,6 +92,21 @@ def sync_and_log_folder(manifest_path, srt_folder, catalog_path, output_folder, 
         json_out = out_dir / f"{base_name}.json"
         log_out = log_dir / f"{base_name}.log"
 
+        # Determine audio URLs once per SRT file (not per segment).
+        # SRT filenames follow "{Session_ID}_..." pattern (e.g., "A1_069 A-Yeshey Lama_1").
+        # The Session_ID prefix matches the audio_map keys.
+        session_tag = base_name.split('_')[0]
+        if session_tag in audio_map:
+            srt_media_original = audio_map[session_tag].get("original", "")
+            srt_media_restored = audio_map[session_tag].get("restored", "")
+            url_for_ext = srt_media_restored or srt_media_original
+            srt_media_ext = url_for_ext.split('.')[-1].split('?')[0] if url_for_ext else ""
+        else:
+            print(f"WARNING: No audio mapping for session tag '{session_tag}' (SRT: {base_name})")
+            srt_media_original = ""
+            srt_media_restored = ""
+            srt_media_ext = ""
+
         final_sync_data = []
 
         last_clean_pos = 0
@@ -152,45 +167,11 @@ def sync_and_log_folder(manifest_path, srt_folder, catalog_path, output_folder, 
 
                     match_slice = manifest[slice_start: best_match['manifest_end']]
 
-                    # --- DUAL AUDIO SYNC MAPPING (WITH PRIORITY) ---
-                    media_original = ""
-                    media_restored = ""
-                    media_ext = ""
-
-                    if match_slice:
-                        session_tag = base_name  # e.g., "A3" from "A3.srt"
-                        tag_found = None
-
-                        # Pass 1: Try to find the exact tag for THIS specific session
-                        for syl in match_slice:
-                            if session_tag in syl.get('tags', []) and session_tag in audio_map:
-                                tag_found = session_tag
-                                break
-
-                        # Pass 2: Fallback to the first available tag if the specific one isn't found
-                        if not tag_found:
-                            for syl in match_slice:
-                                for tag in syl.get('tags', []):
-                                    if tag in audio_map:
-                                        tag_found = tag
-                                        break
-                                if tag_found:
-                                    break
-
-                        # Apply the audio URLs based on the tag we found
-                        if tag_found:
-                            media_original = audio_map[tag_found].get("original", "")
-                            media_restored = audio_map[tag_found].get("restored", "")
-
-                            url_for_ext = media_restored or media_original
-                            if url_for_ext:
-                                media_ext = url_for_ext.split('.')[-1].split('?')[0]
-
                     final_sync_data.append({
                         "seg_id": sub.index,
-                        "media_original": media_original,
-                        "media_restored": media_restored,
-                        "media_type": media_ext,
+                        "media_original": srt_media_original,
+                        "media_restored": srt_media_restored,
+                        "media_type": srt_media_ext,
                         "start": str(sub.start),
                         "end": str(sub.end),
                         "syl_uuids": [m['id'] for m in match_slice]

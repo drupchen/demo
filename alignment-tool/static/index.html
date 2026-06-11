@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="bo">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alignment Correction Tool</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <header>
+    <h1>Alignment Correction Tool</h1>
+    <div class="controls">
+      <label>
+        Instance:
+        <select id="instance-select" disabled>
+          <option value="">Loading...</option>
+        </select>
+      </label>
+      <label>
+        Session:
+        <select id="session-select" disabled>
+          <option value="">Select instance first</option>
+        </select>
+      </label>
+      <span id="status-label" class="status-label"></span>
+    </div>
+    <div class="actions">
+      <button id="save-btn" disabled>Save corrections</button>
+      <button id="undo-btn" disabled>Undo all</button>
+      <button id="combine-btn" disabled>Combine all sessions</button>
+    </div>
+  </header>
+
+  <main id="segments-container">
+    <p class="placeholder">Select an instance and session to begin.</p>
+  </main>
+
+  <footer>
+    <div class="shortcuts">
+      <strong>Keyboard:</strong>
+      <kbd>j</kbd>/<kbd>k</kbd> next/prev segment &nbsp;
+      <kbd>[</kbd>/<kbd>]</kbd> adjust start &nbsp;
+      <kbd>{</kbd>/<kbd>}</kbd> adjust end &nbsp;
+      <kbd>&lt;</kbd>/<kbd>&gt;</kbd> shift all &nbsp;
+      <kbd>Space</kbd> play/pause &nbsp;
+      <kbd>Ctrl+S</kbd> save
+    </div>
+  </footer>
+
+  <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>

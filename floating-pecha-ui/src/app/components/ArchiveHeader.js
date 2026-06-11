@@ -10,6 +10,7 @@ export default function ArchiveHeader() {
   const { data: session } = useSession();
   const pathname = usePathname();
   const [isVisible, setIsVisible] = useState(false);
+  const isHomepage = pathname === '/';
 
   // Check if the current page has its own custom navigation bar
   const isCustomNavRoute = pathname.startsWith('/reader') || pathname.startsWith('/player');
@@ -20,6 +21,12 @@ export default function ArchiveHeader() {
 
   useEffect(() => {
     if (isCustomNavRoute) return;
+
+    // Homepage: always visible
+    if (isHomepage) {
+      setIsVisible(true);
+      return;
+    }
 
     if (pathname !== '/') {
       setIsVisible(true);
@@ -38,39 +45,45 @@ export default function ArchiveHeader() {
     handleScroll();
 
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [pathname, isCustomNavRoute]);
+  }, [pathname, isCustomNavRoute, isHomepage]);
 
   if (isCustomNavRoute) {
     return null;
   }
 
-  // Smooth scroll back to top if on landing page
   const handleLogoClick = (e) => {
-    if (pathname === '/') {
+    if (isHomepage) {
       e.preventDefault();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Dispatch custom event for page.js to handle the cinematic scroll
+      window.dispatchEvent(new CustomEvent('landingScrollToggle'));
     }
   };
 
   return (
     <header
       className={`
-        border-b border-gray-200 sticky top-0 z-50 transition-all duration-700 ease-in-out
+        ${isHomepage ? '' : 'border-b border-gray-200'} sticky top-0 z-50 transition-all duration-700 ease-in-out
         ${isVisible
-          ? 'bg-white/80 backdrop-blur-md opacity-100 translate-y-0'
+          ? isHomepage
+            ? 'bg-black/20 backdrop-blur-sm opacity-100 translate-y-0'
+            : 'bg-white/80 backdrop-blur-md opacity-100 translate-y-0'
           : 'bg-transparent opacity-0 -translate-y-2 pointer-events-none'
         }
       `}
       style={getThemeCssVars()}
     >
-      <div className={`${inter.className} max-w-6xl mx-auto px-6 h-20 flex justify-between items-center text-sm`}>
+      <div className={`${inter.className} ${isHomepage ? 'px-6' : 'max-w-6xl mx-auto px-6'} h-20 flex justify-between items-center text-sm`}>
 
         {/* BREADCRUMB NAVIGATION */}
         <div className="flex items-center gap-4">
           <Link
             href="/"
             onClick={handleLogoClick}
-            className="text-[var(--theme-hover-red)] font-extrabold text-lg tracking-wide hover:text-black transition-colors"
+            className={`font-extrabold text-lg tracking-wide transition-colors cursor-pointer ${
+              isHomepage
+                ? 'text-white/80 hover:text-white drop-shadow-sm'
+                : 'text-[var(--theme-hover-red)] hover:text-black'
+            }`}
           >
             Khyentse Önang
           </Link>
@@ -97,33 +110,35 @@ export default function ArchiveHeader() {
           )}
         </div>
 
-        {/* USER SESSION / LOGIN */}
-        <div className="flex items-center gap-6">
-          <div className="text-[var(--theme-gray)] hidden md:block">
-            {session ? (
-              <span>Welcome, <strong className="text-[var(--theme-hover-red)]">{session.user.name}</strong> (Access Level: {session.user.accessLevel})</span>
-            ) : (
-              <span>Welcome, <strong>Public Visitor</strong> (Access Level: 0)</span>
-            )}
+        {/* USER SESSION / LOGIN — hidden on homepage */}
+        {!isHomepage && (
+          <div className="flex items-center gap-6">
+            <div className="text-[var(--theme-gray)] hidden md:block">
+              {session ? (
+                <span>Welcome, <strong className="text-[var(--theme-hover-red)]">{session.user.name}</strong> (Access Level: {session.user.accessLevel})</span>
+              ) : (
+                <span>Welcome, <strong>Public Visitor</strong> (Access Level: 0)</span>
+              )}
+            </div>
+            <div>
+              {session ? (
+                <button
+                  onClick={() => signOut()}
+                  className="bg-red-50 text-[var(--theme-hover-red)] px-4 py-2 rounded-lg font-bold hover:bg-red-100 transition-colors"
+                >
+                  Sign Out
+                </button>
+              ) : (
+                <button
+                  onClick={() => signIn()}
+                  className="bg-[var(--theme-gold)] text-white px-4 py-2 rounded-lg font-bold hover:bg-[var(--theme-hover-red)] transition-colors"
+                >
+                  Archive Login
+                </button>
+              )}
+            </div>
           </div>
-          <div>
-            {session ? (
-              <button
-                onClick={() => signOut()}
-                className="bg-red-50 text-[var(--theme-hover-red)] px-4 py-2 rounded-lg font-bold hover:bg-red-100 transition-colors"
-              >
-                Sign Out
-              </button>
-            ) : (
-              <button
-                onClick={() => signIn()}
-                className="bg-[var(--theme-gold)] text-white px-4 py-2 rounded-lg font-bold hover:bg-[var(--theme-hover-red)] transition-colors"
-              >
-                Archive Login
-              </button>
-            )}
-          </div>
-        </div>
+        )}
 
       </div>
     </header>

@@ -6,14 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node tests/audioSeek.test.mjs"
   },
   "dependencies": {
     "@opensearch-project/opensearch": "^3.5.1",
     "next": "16.1.6",
     "next-auth": "^4.24.13",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "termaui": "^0.2.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

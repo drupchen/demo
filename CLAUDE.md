@@ -101,19 +101,53 @@ npm run dev        # http://localhost:3000
 ### Data Pipeline (one-time setup)
 ```bash
 cd prepare_data
-# 1. Parse DOCX → syllable manifest
-python base_layer_ingest.py
-# 2. Parse SRT subtitles
-python srt_sessions_1_parse.py
-python srt_sessions_2_manual_overrides.py
-python srt_sessions_3_combine_sessions.py
-# 3. Generate catalog
+# 1. Generate teaching catalog from relational DB TSVs
 python generate_catalog.py
-# 4. Index into OpenSearch
+# 2. Parse DOCX → syllable-level manifest (one per teaching instance)
+python base_layer_ingest.py
+# 3. Parse SRT subtitles → align to manifest → individual session JSONs
+python srt_sessions_1_parse.py
+# 4. (Optional) Apply manual alignment corrections
+python srt_sessions_2_manual_overrides.py
+# 5. Combine all sessions → compiled_sessions.json per instance
+python srt_sessions_3_combine_sessions.py
+# 6. Index segments into OpenSearch
 python opensearch_ingest.py
 ```
 
 Output goes to `prepare_data/output/`, then must be copied to `floating-pecha-ui/public/data/archive/`.
+
+### Sapche (Table of Contents) alignment
+A teaching's *sapche* (ས་བཅད་, the outline) arrives from the annotation tool as a JSON export
+whose sections are anchored by **character offsets** into the text (e.g. `docs/export-4.json`,
+fields `original_text` + `roots[]` with `original_start`/`original_end`/`children`). The reader
+navigates by **syllable UUID**, so an alignment step converts offsets → UUIDs:
+
+```bash
+cd prepare_data
+python sapche_align.py <export.json> <instance_id>
+# example:
+python sapche_align.py ../docs/export-4.json drime_shalung_1
+# → writes floating-pecha-ui/public/data/archive/drime_shalung_1/sapche.json
+```
+
+What it does: walks the export's `original_text` and the instance's `manifest.json` together,
+skipping audio-session markers (`{NNN ...}`) and whitespace differences, and maps each
+section's start/end offsets to the syllable UUID at that position; it also precomputes the
+outline number, depth, and part (intro/main/conclusion) per section.
+
+Notes:
+- The instance's `manifest.json` must already exist (pipeline steps 1–2) — alignment is
+  against those syllables.
+- Pass `<instance_id>` explicitly: the export's `document_id` is **not** a reliable key to
+  the archive instance IDs.
+- The reader shows the sapche automatically when `sapche.json` is present; instances without
+  it are unaffected.
+- `sapche_align.py` is versioned in the repo alongside the other `prepare_data/`
+  pipeline scripts. Only the virtualenv, caches and generated `output/` are gitignored
+  (see `.gitignore`), so collaborators get the script with a normal checkout. Full
+  rationale (and the future option of the tool exporting UUIDs directly to skip this
+  step): `docs/superpowers/specs/2026-05-21-reader-sapche-toc-design.md`.
 
 ## Environment Variables
 
