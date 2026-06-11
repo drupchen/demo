@@ -57,7 +57,6 @@ function StudyRow({
           style={{ backgroundColor: sapcheAccentFor(node.depth) }}
           aria-hidden="true"
         />
-        <span className={`${inter.className} r-study-num`}>{node.number}</span>
         {kids.length > 0 ? (
           <button
             type="button"
@@ -396,10 +395,10 @@ export default function SapcheStudyView({ roots, activeId, onSelect, onClose, pr
             transform: preview.above ? "translateY(-100%)" : undefined,
           }}
           role="note"
-          aria-label={`Preview of section ${previewNode.number}`}
+          aria-label="Section text preview"
         >
           <div className={`${inter.className} r-study-preview-num`}>
-            {previewNode.number} · {"Space / Esc to dismiss"}
+            Space / Esc to dismiss
           </div>
           {previewText}
         </div>

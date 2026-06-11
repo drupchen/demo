@@ -23,7 +23,6 @@ function Row({ node, activeId, collapsed, onToggleCollapse, onSelect }) {
           style={{ backgroundColor: sapcheAccentFor(node.depth) }}
           aria-hidden="true"
         />
-        <span className={`r-sapche-num ${inter.className}`}>{node.number}</span>
         {kids.length > 0 ? (
           <button
             type="button"
