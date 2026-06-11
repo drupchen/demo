@@ -140,3 +140,31 @@ convention:
 - Persistence of study collapse state.
 - Side-by-side tree+text mode (option C) — revisit after the colleague's feedback.
 - Enriching `sapche.json` with notes/annotations from the prototype's DB.
+
+---
+
+## Iteration 2 — depth accents, previews, prominence (2026-06-11)
+
+After comparing with the `sapche_discovery` prototype, Jérémy approved importing
+these elements (and explicitly rejected text previews under titles in the tree,
+semantic text tags, and per-section notes):
+
+1. **Depth-accent colors** — the prototype's 10-hue Tailwind-300 palette
+   (`sapcheAccent` in `theme.js`), drawn as a left accent bar per row.
+   *Full strength in the study view* (no commentary bars there — the colour
+   channel is free) and **desaturated (45 % opacity, 3 px) in the reader's ToC
+   sidebar**. The original "no hue for sapche" rule still holds inside the text
+   itself: inline section markers stay neutral, commentary colours keep
+   exclusive use of the margin.
+2. **Sibling-navigation pills** — ↑/↓ buttons revealed on row hover in the study
+   view; previous/next sibling with fallback to the parent at boundaries
+   (prototype gutter-pill semantics). Keyboard equivalents already existed.
+3. **Section text preview popover** — hover a study row (450 ms delay) or press
+   **Space** on the focused row to peek at the section's first ~220 characters
+   without leaving the study view (this replaces the prototype's Bézier
+   link-to-text). Sticky when opened with Space: follows arrow navigation;
+   Esc dismisses the popover first, the view second. Excerpts are computed in
+   `page.js` from the manifest between each node's anchor syllables, skipping
+   `{…}` session markers.
+4. **Prominent entry point** — a labelled **Study** button in the reader navbar
+   next to Contents (shown when a sapche exists), in addition to the sidebar ⛶.
