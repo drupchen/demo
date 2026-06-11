@@ -48,3 +48,6 @@ worker-configuration.d.ts
 
 # Generated manifests
 public/data/world/gallery-manifest.json
+
+# Local-only helper scripts
+scripts/*.local.sh
