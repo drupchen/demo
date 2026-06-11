@@ -1363,6 +1363,7 @@ function ReaderContent() {
           roots={sapche.roots}
           activeId={activeSectionId}
           onSelect={(node) => {
+            if (!node.startSylId) return; // un-anchored node: keep the study view open
             setStudyOpen(false);
             handleSapcheSelect(node);
           }}

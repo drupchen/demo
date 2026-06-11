@@ -18,6 +18,10 @@ function StudyRow({ node, collapsed, activeId, focusedId, onToggle, onSelect }) 
     <>
       <div
         id={`study-${node.id}`}
+        role="treeitem"
+        aria-level={node.depth}
+        aria-expanded={kids.length > 0 ? !isCollapsed : undefined}
+        aria-selected={focusedId === node.id}
         className={`r-study-row ${activeId === node.id ? "r-study-row-active" : ""} ${
           focusedId === node.id ? "r-study-row-focused" : ""
         }`}
@@ -74,12 +78,14 @@ export default function SapcheStudyView({ roots, activeId, onSelect, onClose }) 
     [top, collapsed]
   );
 
-  const onToggle = (id) =>
+  const onToggle = (id) => {
+    setFocusedId(id); // chevron clicks move the focus ring too, so mouse and keyboard stay in step
     setCollapsed((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  };
   const onCollapseAll = () => setCollapsed(new Set(collectCollapsibleIds(top)));
   const onExpandAll = () => setCollapsed(new Set());
 
@@ -109,6 +115,26 @@ export default function SapcheStudyView({ roots, activeId, onSelect, onClose }) 
       onClose();
       return;
     }
+    if (e.key === "Tab") {
+      // aria-modal does not trap focus by itself; without this, Tab walks out
+      // of the overlay into the (hidden) reader and Esc stops working.
+      const focusables = overlayRef.current?.querySelectorAll("button") ?? [];
+      if (focusables.length > 0) {
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === overlayRef.current)) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      } else {
+        e.preventDefault();
+      }
+      e.stopPropagation();
+      return;
+    }
     const idx = rows.findIndex((n) => n.id === focusedId);
     const node = idx >= 0 ? rows[idx] : null;
     const focusRow = (i) => {
@@ -123,18 +149,17 @@ export default function SapcheStudyView({ roots, activeId, onSelect, onClose }) 
         focusRow(idx < 0 ? 0 : idx - 1);
         break;
       case "ArrowLeft": {
-        if (!node) return;
-        const kids = node.children || [];
-        if (kids.length && !collapsed.has(node.id)) onToggle(node.id);
-        else if (parentOf.get(node.id)) setFocusedId(parentOf.get(node.id).id);
+        const kids = node?.children || [];
+        if (node && kids.length && !collapsed.has(node.id)) onToggle(node.id);
+        else if (node && parentOf.get(node.id)) setFocusedId(parentOf.get(node.id).id);
         break;
       }
       case "ArrowRight": {
-        if (!node) return;
-        const kids = node.children || [];
-        if (!kids.length) return;
-        if (collapsed.has(node.id)) onToggle(node.id);
-        else setFocusedId(kids[0].id);
+        const kids = node?.children || [];
+        if (node && kids.length) {
+          if (collapsed.has(node.id)) onToggle(node.id);
+          else setFocusedId(kids[0].id);
+        }
         break;
       }
       case "Enter":
@@ -154,6 +179,7 @@ export default function SapcheStudyView({ roots, activeId, onSelect, onClose }) 
       role="dialog"
       aria-modal="true"
       aria-label="Sapche study view"
+      aria-activedescendant={focusedId ? `study-${focusedId}` : undefined}
       tabIndex={-1}
       onKeyDown={onKeyDown}
     >
@@ -195,7 +221,7 @@ export default function SapcheStudyView({ roots, activeId, onSelect, onClose }) 
         </span>
       </div>
       <div className="r-study-body">
-        <div className="r-study-col">
+        <div className="r-study-col" role="tree" aria-label="Sapche outline">
           {top.map((n) => (
             <StudyRow
               key={n.id}
