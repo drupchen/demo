@@ -1,5 +1,5 @@
 "use client";
-import { inter, sapcheAccentFor, sapcheInkFor, uchen } from "@/lib/theme";
+import { inter, sapcheAccentFor, sapcheInk, uchen } from "@/lib/theme";
 import { useEffect, useRef } from "react";
 
 function Row({ node, activeId, collapsed, onToggleCollapse, onSelect }) {
@@ -40,7 +40,7 @@ function Row({ node, activeId, collapsed, onToggleCollapse, onSelect }) {
         )}
         <span
           className={`${uchen.className} r-toc-title`}
-          style={{ color: sapcheInkFor(node.depth) }}
+          style={{ color: sapcheInk }}
         >
           {node.title}
         </span>

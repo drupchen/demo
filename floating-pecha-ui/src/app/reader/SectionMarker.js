@@ -1,5 +1,5 @@
 "use client";
-import { uchen, sapcheInkFor } from "@/lib/theme";
+import { uchen, sapcheInk } from "@/lib/theme";
 
 // Outline numbers are deliberately not displayed for now (pending a decision
 // on numbering style — Arabic vs Tibetan); node.number still drives internal
@@ -7,7 +7,7 @@ import { uchen, sapcheInkFor } from "@/lib/theme";
 export default function SectionMarker({ node }) {
   return (
     <div className="r-sapche-marker" id={`sec-${node.id}`} data-depth={node.depth}>
-      <span className={uchen.className} style={{ fontWeight: 600, color: sapcheInkFor(node.depth) }}>
+      <span className={uchen.className} style={{ fontWeight: 600, color: sapcheInk }}>
         {node.title}
       </span>
       <span className="r-sapche-rule" />

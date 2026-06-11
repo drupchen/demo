@@ -151,12 +151,10 @@ export function getSizes(baseRem = 1.75, lineHeight = 1.6) {
 // ==========================================
 // 7. SAPCHE (TABLE OF CONTENTS) INK TOKENS
 // ==========================================
-export const sapcheInk = [
-  "#9a9082", "#857c6e", "#6f675a", "#585146",
-  "#423c33", "#332e27", "#2a2620",
-]; // depth 1..7+, clamp deeper to last
-export const sapcheInkFor = (depth) =>
-  sapcheInk[Math.min(Math.max(depth, 1), sapcheInk.length) - 1];
+// Single ink for all sapche titles regardless of depth (the depth ramp was
+// dropped 2026-06-11 — depth is now conveyed by indentation and the accent
+// bars alone).
+export const sapcheInk = "#423c33";
 
 // Depth-accent palette, borrowed from the sapche_discovery prototype (Tailwind
 // 300-shades, cycling past the last entry). Full strength in the study view

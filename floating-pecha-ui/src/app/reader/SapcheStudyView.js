@@ -5,7 +5,7 @@
 // Depth-accent colors (borrowed from the sapche_discovery prototype) are full
 // strength here because the study view shows no commentary color bars.
 // Spec: docs/superpowers/specs/2026-06-11-sapche-study-mode-design.md
-import { inter, sapcheAccentFor, sapcheInkFor, uchen } from "@/lib/theme";
+import { inter, sapcheAccentFor, sapcheInk, uchen } from "@/lib/theme";
 import { collectCollapsibleIds, flattenVisibleRows } from "@/lib/sapcheStudy";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -74,7 +74,7 @@ function StudyRow({
         )}
         <span
           className={`${uchen.className} r-study-title`}
-          style={{ color: sapcheInkFor(node.depth), fontSize: studySizeFor(node.depth) }}
+          style={{ color: sapcheInk, fontSize: studySizeFor(node.depth) }}
         >
           {node.title}
         </span>
