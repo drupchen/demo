@@ -296,8 +296,16 @@
 .r-study-navbtn { width:24px; height:24px; border-radius:9999px; border:1px solid #e0dccf;
   background:#FFFDF8; color:#6f675a; font-size:12px; line-height:1; cursor:pointer; }
 .r-study-navbtn:hover { color:#8B1D1D; border-color:#8B1D1D; }
-.r-study-navbtn:disabled { opacity:0.3; cursor:default; }
-.r-study-navbtn:disabled:hover { color:#6f675a; border-color:#e0dccf; }
+/* Sticky breadcrumb under the header: ancestor path of the topmost visible row */
+.r-study-breadcrumb { display:flex; align-items:center; gap:4px; overflow-x:auto;
+  padding:6px 24px; min-height:38px; background:#FBF9F3; border-bottom:1px solid #e0dccf; }
+.r-study-crumb { display:inline-flex; align-items:center; gap:7px; max-width:240px;
+  background:none; border:0; cursor:pointer; padding:3px 6px; border-radius:4px;
+  font-size:15px; line-height:1.6; color:#423c33; }
+.r-study-crumb:hover { color:#8B1D1D; background:rgba(0,0,0,0.04); }
+.r-study-crumb-txt { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.r-study-crumb-dot { width:8px; height:8px; border-radius:2px; flex:none; }
+.r-study-crumb-sep { color:#9a8f76; font-size:12px; flex:none; }
 /* Section-text preview popover (fixed-positioned next to the hovered/focused row) */
 .r-study-preview { position:fixed; z-index:110; max-width:560px; padding:14px 18px;
   background:#FFFDF8; border:1px solid #e0dccf; border-radius:8px;

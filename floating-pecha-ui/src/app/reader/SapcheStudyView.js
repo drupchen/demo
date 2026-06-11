@@ -7,13 +7,16 @@
 // Spec: docs/superpowers/specs/2026-06-11-sapche-study-mode-design.md
 import { inter, sapcheAccentFor, sapcheInk, uchen } from "@/lib/theme";
 import { collectCollapsibleIds, flattenVisibleRows } from "@/lib/sapcheStudy";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 const STUDY_SIZES = [30, 26, 23, 21, 19]; // uchen px for depth 1..5; deeper → 18
 const studySizeFor = (depth) =>
   depth >= 6 ? 18 : STUDY_SIZES[Math.max(depth, 1) - 1];
 
 const PREVIEW_HOVER_DELAY_MS = 450;
+// A sibling pill only earns its place when it actually saves scrolling: the
+// jump target must be at least this many visible rows away.
+const SIBLING_JUMP_MIN_ROWS = 5;
 
 function StudyRow({
   node,
@@ -22,6 +25,7 @@ function StudyRow({
   collapsed,
   activeId,
   focusedId,
+  rowIndex,
   onToggle,
   onSelect,
   onFocusNode,
@@ -31,11 +35,20 @@ function StudyRow({
   const kids = node.children || [];
   const isCollapsed = collapsed.has(node.id);
   // Same-level navigation, mirroring the prototype's gutter pills: previous /
-  // next sibling, falling back to the parent at either boundary.
+  // next sibling, falling back to the parent at either boundary. A pill is
+  // only shown when its target is far enough (in visible rows) for the jump
+  // to beat plain scrolling — adjacent siblings don't need a button.
   const myIdx = siblings.findIndex((s) => s.id === node.id);
   const prevTarget = myIdx > 0 ? siblings[myIdx - 1] : parentNode;
   const nextTarget =
     myIdx >= 0 && myIdx < siblings.length - 1 ? siblings[myIdx + 1] : parentNode;
+  const farEnough = (target) =>
+    target &&
+    rowIndex.has(target.id) &&
+    rowIndex.has(node.id) &&
+    Math.abs(rowIndex.get(target.id) - rowIndex.get(node.id)) >= SIBLING_JUMP_MIN_ROWS;
+  const showPrev = farEnough(prevTarget);
+  const showNext = farEnough(nextTarget);
   return (
     <>
       <div
@@ -78,34 +91,38 @@ function StudyRow({
         >
           {node.title}
         </span>
-        <span className="r-study-nav" aria-hidden="true">
-          <button
-            type="button"
-            className="r-study-navbtn"
-            disabled={!prevTarget}
-            tabIndex={-1}
-            title={prevTarget ? `↑ ${prevTarget.title}` : "Already first at this level"}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (prevTarget) onFocusNode(prevTarget.id);
-            }}
-          >
-            ↑
-          </button>
-          <button
-            type="button"
-            className="r-study-navbtn"
-            disabled={!nextTarget}
-            tabIndex={-1}
-            title={nextTarget ? `↓ ${nextTarget.title}` : "Already last at this level"}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (nextTarget) onFocusNode(nextTarget.id);
-            }}
-          >
-            ↓
-          </button>
-        </span>
+        {(showPrev || showNext) && (
+          <span className="r-study-nav" aria-hidden="true">
+            {showPrev && (
+              <button
+                type="button"
+                className="r-study-navbtn"
+                tabIndex={-1}
+                title={`↑ ${prevTarget.title}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFocusNode(prevTarget.id);
+                }}
+              >
+                ↑
+              </button>
+            )}
+            {showNext && (
+              <button
+                type="button"
+                className="r-study-navbtn"
+                tabIndex={-1}
+                title={`↓ ${nextTarget.title}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFocusNode(nextTarget.id);
+                }}
+              >
+                ↓
+              </button>
+            )}
+          </span>
+        )}
       </div>
       {!isCollapsed &&
         kids.map((c) => (
@@ -117,6 +134,7 @@ function StudyRow({
             collapsed={collapsed}
             activeId={activeId}
             focusedId={focusedId}
+            rowIndex={rowIndex}
             onToggle={onToggle}
             onSelect={onSelect}
             onFocusNode={onFocusNode}
@@ -148,15 +166,58 @@ export default function SapcheStudyView({ roots, activeId, onSelect, onClose, pr
   // popover came from hover (closes on mouseleave) or Space (sticky, follows
   // arrow navigation until toggled off).
   const [preview, setPreview] = useState(null);
+  // Ancestor chain (root → current) of the topmost visible row — the sticky
+  // breadcrumb that answers "where am I?" deep inside an expanded subtree.
+  const [crumbs, setCrumbs] = useState([]);
   const previewSourceRef = useRef(null);
   const hoverTimerRef = useRef(null);
   const overlayRef = useRef(null);
   const treeRef = useRef(null);
+  const bodyRef = useRef(null);
 
   const { rows, parentOf } = useMemo(
     () => flattenVisibleRows(top, collapsed),
     [top, collapsed]
   );
+  const rowIndex = useMemo(() => {
+    const m = new Map();
+    rows.forEach((n, i) => m.set(n.id, i));
+    return m;
+  }, [rows]);
+
+  // Current section = the last row at or above the body's top edge (same
+  // convention as the reader's active-section tracking).
+  const updateCrumbs = () => {
+    const body = bodyRef.current;
+    if (!body) return;
+    // Offset must exceed the rows' scroll-margin-block (80px), otherwise the
+    // row a crumb/focus jump lands on never counts as "current".
+    const topLine = body.getBoundingClientRect().top + 90;
+    let current = null;
+    for (const n of rows) {
+      const el = document.getElementById(`study-${n.id}`);
+      if (!el) continue;
+      if (el.getBoundingClientRect().top <= topLine) current = n;
+      else break;
+    }
+    const chain = [];
+    for (let walk = current; walk; walk = parentOf.get(walk.id) || null) {
+      chain.unshift(walk);
+    }
+    setCrumbs((prev) =>
+      prev.length === chain.length && prev.every((n, i) => n.id === chain[i].id)
+        ? prev
+        : chain
+    );
+  };
+
+  // Recompute after every layout change (collapse/expand re-flows the rows);
+  // rAF waits for the DOM to reflect the new row set first.
+  useEffect(() => {
+    const raf = requestAnimationFrame(updateCrumbs);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
 
   const onToggle = (id) => {
     setFocusedId(id); // chevron clicks move the focus ring too, so mouse and keyboard stay in step
@@ -224,9 +285,16 @@ export default function SapcheStudyView({ roots, activeId, onSelect, onClose, pr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusedId]);
 
-  // Scrolling the tree invalidates the popover's fixed position — drop it.
+  // Scrolling the tree invalidates the popover's fixed position — drop it —
+  // and moves the breadcrumb's "current" row.
   const onBodyScroll = () => {
     if (preview) setPreview(null);
+    updateCrumbs();
+  };
+
+  const gotoCrumb = (node) => {
+    setFocusedId(node.id);
+    document.getElementById(`study-${node.id}`)?.scrollIntoView({ block: "start" });
   };
 
   const onKeyDown = (e) => {
@@ -358,7 +426,27 @@ export default function SapcheStudyView({ roots, activeId, onSelect, onClose, pr
           </button>
         </span>
       </div>
-      <div className="r-study-body" onScroll={onBodyScroll}>
+      <nav className="r-study-breadcrumb" aria-label="Current section path">
+        {crumbs.map((n, i) => (
+          <Fragment key={n.id}>
+            {i > 0 && <span className="r-study-crumb-sep">›</span>}
+            <button
+              type="button"
+              className={`${uchen.className} r-study-crumb`}
+              onClick={() => gotoCrumb(n)}
+              title={n.title}
+            >
+              <span
+                className="r-study-crumb-dot"
+                style={{ backgroundColor: sapcheAccentFor(n.depth) }}
+                aria-hidden="true"
+              />
+              <span className="r-study-crumb-txt">{n.title}</span>
+            </button>
+          </Fragment>
+        ))}
+      </nav>
+      <div ref={bodyRef} className="r-study-body" onScroll={onBodyScroll}>
         <div
           ref={treeRef}
           className="r-study-col"
@@ -377,6 +465,7 @@ export default function SapcheStudyView({ roots, activeId, onSelect, onClose, pr
               collapsed={collapsed}
               activeId={activeId}
               focusedId={focusedId}
+              rowIndex={rowIndex}
               onToggle={onToggle}
               onSelect={onSelect}
               onFocusNode={setFocusedId}
