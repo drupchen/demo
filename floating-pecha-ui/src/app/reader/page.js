@@ -21,6 +21,7 @@ import PlayerTab from "./PlayerTab";
 import ReaderLayout from "./ReaderLayout";
 import ReaderNavbar from "./ReaderNavbar";
 import SapcheSidebar from "./SapcheSidebar";
+import SapcheStudyView from "./SapcheStudyView";
 import SearchBar from "./SearchBar";
 import SectionMarker from "./SectionMarker";
 import "./reader.css";
@@ -355,6 +356,7 @@ function ReaderContent() {
   // UI state
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tocOpen, setTocOpen] = useState(true);
+  const [studyOpen, setStudyOpen] = useState(false);
   const [tocWidth, setTocWidth] = useState(280);
   const [collapsedIds, setCollapsedIds] = useState(new Set());
   const [activeSectionId, setActiveSectionId] = useState(null);
@@ -1300,7 +1302,8 @@ function ReaderContent() {
           <SapcheSidebar roots={sapche.roots} activeId={activeSectionId}
             collapsedIds={collapsedIds} onToggleCollapse={onToggleCollapse}
             onSelect={handleSapcheSelect} onExpandAll={onExpandAll} onCollapseAll={onCollapseAll}
-            onHide={() => setTocOpen(false)} />
+            onHide={() => setTocOpen(false)}
+            onExpand={() => setStudyOpen(true)} />
         ) : null}
         leftOpen={tocOpen && !!sapche}
         leftWidth={tocWidth}
@@ -1354,6 +1357,18 @@ function ReaderContent() {
 
         <Footer className="mt-8" style={{ paddingBottom: "3.5rem" }} />
       </ReaderLayout>
+
+      {studyOpen && sapche && (
+        <SapcheStudyView
+          roots={sapche.roots}
+          activeId={activeSectionId}
+          onSelect={(node) => {
+            setStudyOpen(false);
+            handleSapcheSelect(node);
+          }}
+          onClose={() => setStudyOpen(false)}
+        />
+      )}
 
       <MiniPlayer
         manifest={manifest}

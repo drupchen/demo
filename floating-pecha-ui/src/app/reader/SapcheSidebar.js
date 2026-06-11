@@ -65,6 +65,7 @@ export default function SapcheSidebar({
   onExpandAll,
   onCollapseAll,
   onHide,
+  onExpand,
 }) {
   const top = roots[0]?.children || []; // skip the document root node
   return (
@@ -84,6 +85,15 @@ export default function SapcheSidebar({
           </span>
         </span>
         <span className="flex items-center gap-0.5">
+          <button
+            type="button"
+            className="r-toc-iconbtn"
+            onClick={onExpand}
+            title="Study view"
+            aria-label="Open study view"
+          >
+            ⛶
+          </button>
           <button
             type="button"
             className="r-toc-iconbtn"
