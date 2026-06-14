@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { inter } from "@/lib/theme";
-import { ADMIN_CHROME, COLORS } from "@/lib/theme";
+import { inter, ADMIN_CHROME, COLORS } from "@/lib/theme";
 
 // ─── Nav items ────────────────────────────────────────────────────────────────
 
@@ -179,9 +178,9 @@ export default function AdminShell({ user, children }) {
       </header>
 
       {/* ── Body: nav + content ── */}
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {/* Side nav */}
-        <nav
+      <div className="admin-body" style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+        {/* Side nav — desktop vertical strip / mobile horizontal top strip */}
+        <nav className="admin-sidenav"
           style={{
             width: 210,
             flexShrink: 0,
@@ -193,8 +192,9 @@ export default function AdminShell({ user, children }) {
             gap: 2,
           }}
         >
-          {/* Nav section label */}
+          {/* Nav section label — hidden on mobile strip */}
           <div
+            className="admin-nav-section-label"
             style={{
               fontSize: 10,
               fontWeight: 600,
@@ -210,9 +210,10 @@ export default function AdminShell({ user, children }) {
           {NAV_ITEMS.map((item) => {
             const isActive = !item.disabled && pathname.startsWith(item.href);
             return (
-              <div key={item.href}>
+              <div key={item.href} className="admin-nav-item-wrap">
                 {item.disabled ? (
                   <div
+                    className="admin-nav-item admin-nav-item--disabled"
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -228,8 +229,9 @@ export default function AdminShell({ user, children }) {
                     <span style={{ opacity: 0.5 }}>
                       {ICONS[item.href]}
                     </span>
-                    <span>{item.label}</span>
+                    <span className="admin-nav-label">{item.label}</span>
                     <span
+                      className="admin-nav-soon"
                       style={{
                         marginLeft: "auto",
                         fontSize: 9,
@@ -249,6 +251,7 @@ export default function AdminShell({ user, children }) {
                 ) : (
                   <Link
                     href={item.href}
+                    className="admin-nav-item"
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -288,7 +291,7 @@ export default function AdminShell({ user, children }) {
                     >
                       {ICONS[item.href]}
                     </span>
-                    <span>{item.label}</span>
+                    <span className="admin-nav-label">{item.label}</span>
                   </Link>
                 )}
               </div>
@@ -298,6 +301,7 @@ export default function AdminShell({ user, children }) {
 
         {/* Content canvas */}
         <main
+          className="admin-content"
           style={{
             flex: 1,
             overflow: "auto",
@@ -309,11 +313,55 @@ export default function AdminShell({ user, children }) {
         </main>
       </div>
 
-      {/* Responsive: collapse side-nav to top row at narrow widths */}
       <style>{`
+        /* ── Mobile: collapse side-nav into a compact horizontal strip ── */
         @media (max-width: 768px) {
-          .admin-logout-label {
-            display: none;
+          .admin-logout-label { display: none; }
+
+          /* Stack body vertically so the strip sits between topbar + content */
+          .admin-body {
+            flex-direction: column;
+            overflow: visible;
+          }
+
+          /* The nav becomes a horizontal pill-row strip */
+          .admin-sidenav {
+            width: 100% !important;
+            border-right: none !important;
+            border-bottom: 1px solid ${ADMIN_CHROME.NAV_BORDER};
+            flex-direction: row !important;
+            align-items: center;
+            padding: 0 12px !important;
+            gap: 4px !important;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            /* Don't stretch to fill height on column axis */
+            flex-shrink: 0;
+          }
+
+          /* Hide the "Gestion" section label on mobile — not needed in strip mode */
+          .admin-nav-section-label { display: none; }
+
+          /* Each item wrapper becomes inline */
+          .admin-nav-item-wrap { flex-shrink: 0; }
+
+          /* Nav items: pill shape, no left border accent, horizontal padding */
+          .admin-nav-item {
+            border-left: none !important;
+            border-radius: 6px !important;
+            margin-right: 0 !important;
+            padding: 7px 12px !important;
+            white-space: nowrap;
+          }
+
+          /* Hide the "bientôt" badge — too noisy in the compact strip */
+          .admin-nav-soon { display: none; }
+
+          /* Content area fills remaining space and scrolls normally */
+          .admin-content {
+            flex: 1;
+            overflow: auto;
+            padding: 20px 16px !important;
           }
         }
       `}</style>

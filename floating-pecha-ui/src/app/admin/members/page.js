@@ -96,7 +96,7 @@ export default function MembersPage() {
             boxShadow: `0 1px 3px rgba(0,0,0,0.12)`,
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#2D3140";
+            e.currentTarget.style.background = ADMIN_CHROME.BAR_BG_HOVER;
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background = ADMIN_CHROME.BAR_BG;
@@ -169,10 +169,7 @@ export default function MembersPage() {
         <MemberDrawer
           user={selected}
           onClose={() => setSelected(null)}
-          onChanged={() => {
-            handleChanged();
-            setSelected(null);
-          }}
+          onChanged={handleChanged}
         />
       )}
 

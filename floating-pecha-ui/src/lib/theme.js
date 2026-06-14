@@ -75,6 +75,16 @@ export const ADMIN_CHROME = {
   DANGER: '#C0392B',
   DANGER_SUBTLE: '#FDF0EF',
   DANGER_BORDER: '#F5C6C2',
+  DANGER_HOVER: '#F9D5D3',   // Danger button hover background
+  DANGER_ACTIVE: '#E57373',  // Danger button active/in-progress background
+
+  // Success (password reset feedback, etc.)
+  SUCCESS_BG: '#F0FDF4',
+  SUCCESS_BORDER: '#BBF7D0',
+  SUCCESS_TEXT: '#166534',
+
+  // Interactive hover on dark bar buttons
+  BAR_BG_HOVER: '#2D3140',
 
   // Focus ring
   FOCUS: '#D4AF37',

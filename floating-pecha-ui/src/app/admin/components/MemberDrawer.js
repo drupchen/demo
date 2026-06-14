@@ -161,6 +161,7 @@ export default function MemberDrawer({ user, onClose, onChanged }) {
   const [pwSaving, setPwSaving] = useState(false);
   const [pwError, setPwError] = useState("");
   const [pwSuccess, setPwSuccess] = useState(false);
+  const pwSuccessTimerRef = useRef(null);
 
   // Delete state
   const [deletePhase, setDeletePhase] = useState("idle"); // idle | confirm
@@ -176,6 +177,14 @@ export default function MemberDrawer({ user, onClose, onChanged }) {
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
   }, [onClose]);
+
+  // Clear the password-success flash timer on unmount so no state update fires
+  // after the component is gone.
+  useEffect(() => {
+    return () => {
+      if (pwSuccessTimerRef.current) clearTimeout(pwSuccessTimerRef.current);
+    };
+  }, []);
 
   // ── Save edit ──
   const handleSave = async () => {
@@ -222,7 +231,10 @@ export default function MemberDrawer({ user, onClose, onChanged }) {
       }
       setPassword("");
       setPwSuccess(true);
-      setTimeout(() => setPwSuccess(false), 3000);
+      // Refresh list without closing the drawer so the success flash stays visible.
+      onChanged();
+      if (pwSuccessTimerRef.current) clearTimeout(pwSuccessTimerRef.current);
+      pwSuccessTimerRef.current = setTimeout(() => setPwSuccess(false), 3000);
     } catch {
       setPwError("Erreur réseau inattendue");
     } finally {
@@ -244,7 +256,10 @@ export default function MemberDrawer({ user, onClose, onChanged }) {
         setDeletePhase("idle");
         return;
       }
+      // Refresh the list, then close the drawer. The drawer must close so we
+      // are not left showing a panel for a now-deleted user.
       onChanged();
+      onClose();
     } catch {
       setDeleteError("Erreur réseau inattendue");
       setDeletePhase("idle");
@@ -411,7 +426,7 @@ export default function MemberDrawer({ user, onClose, onChanged }) {
               letterSpacing: "0.01em",
             }}
             onMouseEnter={(e) => {
-              if (!saving) e.currentTarget.style.background = "#2D3140";
+              if (!saving) e.currentTarget.style.background = ADMIN_CHROME.BAR_BG_HOVER;
             }}
             onMouseLeave={(e) => {
               if (!saving) e.currentTarget.style.background = ADMIN_CHROME.BAR_BG;
@@ -443,11 +458,11 @@ export default function MemberDrawer({ user, onClose, onChanged }) {
                 marginTop: 8,
                 marginBottom: 4,
                 padding: "8px 12px",
-                background: "#F0FDF4",
-                border: "1px solid #BBF7D0",
+                background: ADMIN_CHROME.SUCCESS_BG,
+                border: `1px solid ${ADMIN_CHROME.SUCCESS_BORDER}`,
                 borderRadius: 7,
                 fontSize: 12.5,
-                color: "#166534",
+                color: ADMIN_CHROME.SUCCESS_TEXT,
               }}
             >
               Mot de passe mis à jour.
@@ -501,7 +516,7 @@ export default function MemberDrawer({ user, onClose, onChanged }) {
                 transition: "background 0.15s",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#F9D5D3";
+                e.currentTarget.style.background = ADMIN_CHROME.DANGER_HOVER;
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = ADMIN_CHROME.DANGER_SUBTLE;
@@ -555,7 +570,7 @@ export default function MemberDrawer({ user, onClose, onChanged }) {
                     fontSize: 13,
                     fontWeight: 600,
                     color: "#FFFFFF",
-                    background: deleting ? "#E57373" : ADMIN_CHROME.DANGER,
+                    background: deleting ? ADMIN_CHROME.DANGER_ACTIVE : ADMIN_CHROME.DANGER,
                     border: "none",
                     borderRadius: 7,
                     cursor: deleting ? "not-allowed" : "pointer",

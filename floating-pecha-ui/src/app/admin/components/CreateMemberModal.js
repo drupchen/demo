@@ -365,7 +365,7 @@ export default function CreateMemberModal({ onClose, onChanged }) {
                 letterSpacing: "0.01em",
               }}
               onMouseEnter={(e) => {
-                if (!saving) e.currentTarget.style.background = "#2D3140";
+                if (!saving) e.currentTarget.style.background = ADMIN_CHROME.BAR_BG_HOVER;
               }}
               onMouseLeave={(e) => {
                 if (!saving) e.currentTarget.style.background = ADMIN_CHROME.BAR_BG;
