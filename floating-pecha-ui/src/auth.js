@@ -39,6 +39,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           name: row.name,
           username: row.username,
           accessLevel: row.access_level,
+          role: row.role ?? "member",
         };
       },
     }),
@@ -49,6 +50,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.id = user.id;
         token.accessLevel = user.accessLevel;
         token.username = user.username;
+        token.role = user.role;
       }
       return token;
     },
@@ -57,6 +59,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = token.id;
         session.user.accessLevel = token.accessLevel ?? 0;
         session.user.username = token.username;
+        session.user.role = token.role ?? "member";
       }
       return session;
     },
