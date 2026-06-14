@@ -268,9 +268,11 @@ function ArchiveContent() {
                 onChange={(e) => setQuery(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: '28px 60px 28px 32px',
+                  padding: '22px 60px 22px 32px',
                   fontSize: 26,
-                  lineHeight: 1.2,
+                  // Tall enough for stacked Tibetan glyphs (vowel signs above,
+                  // subjoined consonants below) — 1.2 clipped them.
+                  lineHeight: 1.7,
                   borderRadius: 10,
                   border: `1px solid ${colors.cline}`,
                   background: '#fff',
@@ -298,9 +300,9 @@ function ArchiveContent() {
                   style={{
                     position: 'absolute',
                     inset: 0,
-                    padding: '28px 60px 28px 32px',
+                    padding: '22px 60px 22px 32px',
                     fontSize: 26,
-                    lineHeight: 1.2,
+                    lineHeight: 1.7, // match the input so the placeholder aligns
                     color: colors.inkSoft,
                     fontFamily: `var(--font-outfit), sans-serif`,
                     pointerEvents: 'none',
