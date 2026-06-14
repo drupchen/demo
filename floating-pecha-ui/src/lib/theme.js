@@ -35,6 +35,51 @@ export const outfit = Outfit({
 // ==========================================
 // 2. COLORS
 // ==========================================
+
+// Admin-specific chrome tokens — separate from the public reading surface so
+// the user is visually aware they are "in admin" at all times.
+export const ADMIN_CHROME = {
+  // Top bar
+  BAR_BG: '#1C1F26',          // Deep slate — distinct from any public page
+  BAR_BORDER: '#2D3140',      // Subtle border below bar
+  BAR_TEXT: '#E8EAF0',        // Near-white body text on bar
+  BAR_MUTED: '#7A8099',       // Secondary text on bar (username, etc.)
+
+  // Side nav
+  NAV_BG: '#FFFFFF',          // White nav panel
+  NAV_BORDER: '#E8EAF0',      // Right hairline
+  NAV_ITEM_TEXT: '#3C4257',   // Default nav label
+  NAV_ITEM_ACTIVE_BG: '#FDF8ED', // Gold-tinted subtle highlight
+  NAV_ITEM_ACTIVE_TEXT: '#1C1F26',
+  NAV_ITEM_ACTIVE_BORDER: '#D4AF37', // Gold left accent bar
+  NAV_ITEM_DISABLED: '#B8BDD4',
+
+  // Content canvas
+  CANVAS_BG: '#F6F7F9',       // Slightly cool light grey — distinct from BG_SURFACE
+  SURFACE: '#FFFFFF',         // Card / table background
+  SURFACE_BORDER: '#E8EAF0',  // Table dividers, card borders
+
+  // Chips / badges
+  BADGE_ADMIN_BG: '#FDF3D0',
+  BADGE_ADMIN_TEXT: '#8B6A00',
+  BADGE_ADMIN_BORDER: '#D4AF3780',
+  BADGE_MEMBER_BG: '#F1F2F6',
+  BADGE_MEMBER_TEXT: '#5A607A',
+  BADGE_MEMBER_BORDER: '#D4D7E8',
+
+  LEVEL_BG: '#F6F7F9',
+  LEVEL_TEXT: '#3C4257',
+  LEVEL_BORDER: '#D4D7E8',
+
+  // Danger
+  DANGER: '#C0392B',
+  DANGER_SUBTLE: '#FDF0EF',
+  DANGER_BORDER: '#F5C6C2',
+
+  // Focus ring
+  FOCUS: '#D4AF37',
+};
+
 export const COLORS = {
   // --- Legacy tokens (used across landing, archive, world pages) ---
   GOLD: '#D4AF37',
