@@ -18,9 +18,10 @@ const REMOTE = process.argv.includes("--remote");
 const TARGET_FLAG = REMOTE ? "--remote" : "--local";
 
 const USERS = [
-  { username: "public",  name: "Public Visitor",   level: 0, env: "SEED_PASSWORD_PUBLIC"  },
-  { username: "ngondro", name: "Ngondro Student",  level: 1, env: "SEED_PASSWORD_NGONDRO" },
-  { username: "dzogrim", name: "Dzogrim Student",  level: 4, env: "SEED_PASSWORD_DZOGRIM" },
+  { username: "public",  name: "Public Visitor",  level: 0, role: "member", env: "SEED_PASSWORD_PUBLIC"  },
+  { username: "ngondro", name: "Ngondro Student", level: 1, role: "member", env: "SEED_PASSWORD_NGONDRO" },
+  { username: "dzogrim", name: "Dzogrim Student", level: 4, role: "member", env: "SEED_PASSWORD_DZOGRIM" },
+  { username: "admin",   name: "Administrator",   level: 4, role: "admin",  env: "SEED_PASSWORD_ADMIN"   },
 ];
 
 function exec(sql) {
@@ -48,9 +49,9 @@ for (const u of USERS) {
   const id = randomUUID();
   const hash = await hashPassword(password);
   const sql =
-    `INSERT INTO users (id, username, name, password_hash, access_level) ` +
-    `VALUES ('${id}', '${sqlEscape(u.username)}', '${sqlEscape(u.name)}', '${sqlEscape(hash)}', ${u.level}) ` +
-    `ON CONFLICT(username) DO UPDATE SET name=excluded.name, password_hash=excluded.password_hash, access_level=excluded.access_level, updated_at=unixepoch();`;
+    `INSERT INTO users (id, username, name, password_hash, access_level, role) ` +
+    `VALUES ('${id}', '${sqlEscape(u.username)}', '${sqlEscape(u.name)}', '${sqlEscape(hash)}', ${u.level}, '${sqlEscape(u.role)}') ` +
+    `ON CONFLICT(username) DO UPDATE SET name=excluded.name, password_hash=excluded.password_hash, access_level=excluded.access_level, role=excluded.role, updated_at=unixepoch();`;
   console.log(`Seeding ${u.username} (level ${u.level})…`);
   exec(sql);
 }

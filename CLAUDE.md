@@ -104,6 +104,7 @@ npm run db:apply        # apply D1 migrations locally
 SEED_PASSWORD_PUBLIC=...  \
 SEED_PASSWORD_NGONDRO=... \
 SEED_PASSWORD_DZOGRIM=... \
+SEED_PASSWORD_ADMIN=...   \
 npm run seed
 ```
 
@@ -220,6 +221,7 @@ cd floating-pecha-ui
 SEED_PASSWORD_PUBLIC=...  \
 SEED_PASSWORD_NGONDRO=... \
 SEED_PASSWORD_DZOGRIM=... \
+SEED_PASSWORD_ADMIN=...   \
 npm run seed -- --remote
 ```
 
@@ -247,3 +249,4 @@ Local secrets live in `floating-pecha-ui/.dev.vars` (gitignored, template at `.d
 - The `search/page.js` route is a standalone legacy search page. The primary search experience is now integrated into `archive/page.js` under the "Search Text" tab.
 - The `next.config.mjs` uses `output: 'standalone'` for Docker deployment.
 - All pages are client components (`"use client"`) since they rely heavily on browser APIs (scroll, audio, sessionStorage).
+- `/admin` is an admin-role-gated back office for member management (list, create, edit access level/role, reset password, delete). The `admin` seed account (role `admin`, level 4) is the initial administrator; its password is set via `SEED_PASSWORD_ADMIN`. Users with `role = 'member'` are redirected away from `/admin` and receive 403 on all `/api/admin/*` routes.
