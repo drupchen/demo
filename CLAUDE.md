@@ -24,7 +24,7 @@ khyentse-onang/
 │   │   │   └── Footer.js              # Simple copyright footer (Shechen Archives)
 │   │   ├── api/
 │   │   │   ├── auth/[...nextauth]/route.js  # Auth.js v5 handlers (D1-backed Credentials provider)
-│   │   │   ├── search/route.js              # Search API (temporarily 503 — migrating to Meilisearch)
+│   │   │   ├── search/route.js              # Search API — D1 SQLite FTS5 (trigram), access-filtered by session
 │   │   │   └── gallery/route.js             # Gallery route (reads pre-built static manifest)
 │   │   └── lib/
 │   │       └── theme.js               # Design system: fonts (Uchen/Inter), colors, sizes
@@ -69,7 +69,7 @@ Content is gated by numeric access levels (0–4). Level 0 = public. Higher leve
 - **Frontend**: Next.js 16 (App Router), React 19, Tailwind CSS 4
 - **Auth**: Auth.js v5 (`next-auth@5`) — Credentials provider, users in Cloudflare D1, bcryptjs password hashes
 - **Database**: Cloudflare D1 (SQLite at the edge), migrations under `floating-pecha-ui/migrations/`
-- **Search**: being migrated off OpenSearch to Meilisearch — `/api/search` returns 503 in the interim
+- **Search**: SQLite FTS5 inside D1 — no external engine for v1. `segments_fts` virtual table (trigram tokenizer), built by `scripts/build-search-index.mjs`, queried by `/api/search`. A dedicated engine (Meilisearch) is deferred to the faceted multi-entity phase — see `DECISIONS.md` (2026-06-14)
 - **Fonts**: Uchen (Tibetan), Inter (Latin) — loaded via `next/font/google`
 - **Data Pipeline**: Python with `python-docx`, `botok` (Tibetan tokenizer); the OpenSearch ingest script is unused for now
 - **Infrastructure**: Cloudflare Workers via the OpenNext adapter (`@opennextjs/cloudflare`), local dev via `wrangler dev`
@@ -108,6 +108,26 @@ npm run seed
 ```
 
 OpenSearch (docker-compose) is no longer required for the app to run.
+
+### Building the search index (D1 FTS5)
+
+Search is served from a SQLite FTS5 table inside D1 — no external engine. After
+the archive data is in place (`public/data/archive/`) and migrations are applied:
+
+```bash
+cd floating-pecha-ui
+npm run db:apply            # creates segments_fts (migration 0002) locally
+npm run search:index        # reconstruct segment text + load the local index
+npm run search:index:remote # same, against the deployed D1 (after db:apply:remote)
+```
+
+`scripts/build-search-index.mjs` rebuilds the index wholesale (DELETE + INSERT)
+from `catalog.json` + each instance's `manifest.json`/`*_compiled_sessions.json`,
+so it is safe to re-run whenever the data changes. Re-run it after every data
+update; it is **not** part of the deploy script. `/api/search` derives the user's
+access level from the authenticated session (the UI's `?level=` param is ignored
+for authorization). The trigram tokenizer needs queries of ≥3 codepoints; shorter
+queries fall back to a `LIKE` scan.
 
 ### Data Pipeline (one-time setup)
 ```bash
