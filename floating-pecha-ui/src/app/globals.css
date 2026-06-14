@@ -84,3 +84,12 @@ background-color: #ffd700 !important; /* Gold */
   opacity: 0;
   animation: textReveal 1.5s ease-out 3.5s forwards; /* Starts after text */
 }
+
+/* Search hit highlight — injected by /api/search via FTS5 highlight(). Gold
+   accent (theme primary) instead of the browser default yellow <mark>. */
+.rd-hit {
+  background: rgba(212, 175, 55, 0.28);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}

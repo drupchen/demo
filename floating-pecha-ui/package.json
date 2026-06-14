@@ -16,6 +16,8 @@
     "db:apply": "wrangler d1 migrations apply DB --local",
     "db:apply:remote": "wrangler d1 migrations apply DB --remote",
     "seed": "node scripts/seed-users.mjs",
+    "search:index": "node scripts/build-search-index.mjs",
+    "search:index:remote": "node scripts/build-search-index.mjs --remote",
     "media:upload": "node scripts/upload-media-to-r2.mjs"
   },
   "dependencies": {
