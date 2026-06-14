@@ -3,12 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { requireAdmin } from "@/lib/admin-auth";
 import { listUsers, createUser, getUserByUsername } from "@/lib/users";
 import { hashPassword } from "@/lib/passwords";
-
-const ROLES = new Set(["member", "admin"]);
-
-function validLevel(v) {
-  return Number.isInteger(v) && v >= 0 && v <= 4;
-}
+import { ROLES, validLevel } from "@/lib/roles";
 
 export async function GET() {
   const { response } = await requireAdmin();

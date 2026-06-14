@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getUserById, updateUser, deleteUser, countAdmins } from "@/lib/users";
-
-const ROLES = new Set(["member", "admin"]);
-const validLevel = (v) => Number.isInteger(v) && v >= 0 && v <= 4;
+import { ROLES, validLevel } from "@/lib/roles";
 
 export async function PATCH(request, { params }) {
   const { session, response } = await requireAdmin();
