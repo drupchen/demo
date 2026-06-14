@@ -136,6 +136,28 @@ export default function ArchiveHeader() {
               >
                 {session.user?.name} · Level {session.user?.accessLevel ?? 0}
               </span>
+              {session.user?.role === "admin" && (
+                <Link
+                  href="/admin"
+                  style={{
+                    fontSize: 11.5,
+                    letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    color: "#A8231B",
+                    textDecoration: "none",
+                    fontWeight: 500,
+                    transition: "color 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = "#D4AF37";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = "#A8231B";
+                  }}
+                >
+                  Admin
+                </Link>
+              )}
               <button
                 onClick={() => signOut()}
                 style={{
