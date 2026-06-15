@@ -14,6 +14,7 @@ import Footer from "@/app/components/Footer";
 import { getSizes, getThemeCssVars, inter, uchen } from "@/lib/theme";
 import { parseToMs, useAudioPlayer } from "@/lib/useAudioPlayer";
 import { useReaderPreferences } from "@/lib/useReaderPreferences";
+import { useTranscription } from "@/lib/useTranscription";
 import FloatingPopover from "./FloatingPopover";
 import InfoTab from "./InfoTab";
 import MiniPlayer from "./MiniPlayer";
@@ -345,6 +346,8 @@ function ReaderContent() {
   // Hooks
   const { prefs, updatePref, loaded } = useReaderPreferences();
   const audio = useAudioPlayer();
+  // Oral-transcription layer (absent for instances not yet transcribed).
+  const { hasTranscription, transTextByGid } = useTranscription(instanceId);
 
   // Data state
   const [manifest, setManifest] = useState([]);
@@ -1276,6 +1279,8 @@ function ReaderContent() {
             noSessionMessage={noSessionMessage}
             instanceId={instanceId}
             teachingTitle={teachingTitle}
+            transTextByGid={transTextByGid}
+            hasTranscription={hasTranscription}
           />
         )}
 

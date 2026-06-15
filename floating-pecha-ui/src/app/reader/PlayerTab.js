@@ -36,8 +36,12 @@ export default function PlayerTab({
   noSessionMessage,
   instanceId,
   teachingTitle,
+  transTextByGid,
+  hasTranscription,
 }) {
   const transcriptRef = useRef(null);
+  // Read-along: show the oral transcription beneath each segment's root text.
+  const [showTranscription, setShowTranscription] = useState(true);
   // Set true on a timeline click so the next scroll teleports instead of animating.
   const jumpRef = useRef(false);
   const [userScrolledAt, setUserScrolledAt] = useState(0);
@@ -383,10 +387,23 @@ export default function PlayerTab({
       <div className="px-5 py-4 border-b flex-shrink-0 r-border">
         {/* Current session label + audio version toggle (top-right) */}
         <div className="flex items-center justify-between gap-2 mb-2">
-          <div
-            className={`${inter.className} text-[10px] font-medium tracking-wider uppercase r-text-secondary`}
-          >
-            Current session: {shortSessionId}
+          <div className="flex items-center gap-2 min-w-0">
+            <div
+              className={`${inter.className} text-[10px] font-medium tracking-wider uppercase r-text-secondary whitespace-nowrap`}
+            >
+              Current session: {shortSessionId}
+            </div>
+            {hasTranscription && (
+              <button
+                onClick={() => setShowTranscription((prev) => !prev)}
+                className={`${inter.className} px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider transition-all flex-shrink-0 ${
+                  showTranscription ? "r-chip-active" : "r-chip-inactive"
+                }`}
+                title="Show the oral transcription beneath each segment"
+              >
+                Transcription
+              </button>
+            )}
           </div>
           {hasRestored && onTogglePreferRestored && (
             <div className="flex rounded-md overflow-hidden border r-border flex-shrink-0">
@@ -628,6 +645,25 @@ export default function PlayerTab({
               >
                 {formatDurationBadge(seg.durationMs)}
               </span>
+
+              {/* Read-along: the oral transcription for this segment */}
+              {showTranscription &&
+                hasTranscription &&
+                transTextByGid?.[seg.id] && (
+                  <span className="block mt-2 pt-2 border-t r-border">
+                    <span
+                      className={`${inter.className} block text-[9px] font-bold uppercase tracking-wider r-text-secondary mb-0.5`}
+                    >
+                      Transcription
+                    </span>
+                    <span
+                      className={`${uchen.className} block leading-relaxed r-text-secondary`}
+                      style={{ fontSize: "0.9em" }}
+                    >
+                      {transTextByGid[seg.id]}
+                    </span>
+                  </span>
+                )}
             </button>
           );
         })}
