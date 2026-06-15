@@ -10,6 +10,9 @@ export default function ReaderNavbar({
   onToggleSearch,
   onToggleContents,
   onOpenStudy,
+  onToggleTranscription,
+  transcriptionOn,
+  hasTranscription,
   sidebarOpen,
   contentsOpen,
   hasContents,
@@ -90,6 +93,16 @@ export default function ReaderNavbar({
             />
           )}
         </div>
+
+        {hasTranscription && onToggleTranscription && (
+          <button
+            onClick={onToggleTranscription}
+            className={`p-2 rounded-md transition-colors duration-200 text-xs font-medium tracking-wide ${transcriptionOn ? 'r-text-accent' : 'r-text-muted r-hover-accent'}`}
+            aria-label={transcriptionOn ? 'Hide transcription' : 'Show transcription'}
+          >
+            Transcription
+          </button>
+        )}
 
         {hasContents && (
           <button

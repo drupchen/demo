@@ -43,6 +43,9 @@ const COMMENTARY_COLORS = [
   "#9B6BCD",
 ];
 
+// Stable empty set so memoized paragraphs don't re-render on identity churn.
+const EMPTY_SET = new Set();
+
 /**
  * Calculate visual weight of a Tibetan string by ignoring vowels and subjoined characters.
  * U+0F71 to U+0F87 are vowels/combining marks. U+0F8D to U+0FBC are subjoined consonants.
@@ -163,6 +166,9 @@ const LazyParagraph = React.memo(function LazyParagraph({
   handleSyllableClick,
   uchen,
   sylIdToSections,
+  transcriptionMode,
+  transBlocksByAnchor,
+  passageSylIds,
 }) {
   const ref = useRef(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -247,12 +253,18 @@ const LazyParagraph = React.memo(function LazyParagraph({
       bgClass = "r-syl-hovered";
     }
 
+    // Transcription mode: mark the commented passage so the reader sees what the
+    // oral commentary beneath covers.
+    const isInPassage = transcriptionMode && passageSylIds?.has(syl.id);
+
     return (
       <span
         key={syl.id}
         id={syl.id}
         onClick={hasMedia ? () => handleSyllableClick(syl.id) : undefined}
         className={`${fontClass} r-syl inline relative ${colorClass} ${bgClass} ${extraClass} ${
+          isInPassage ? "r-syl-passage" : ""
+        } ${
           hasMedia && !isSelected ? "cursor-pointer r-hover-red" : ""
         } ${isInPlayingSegment || isHoveredSegment ? "rounded-sm" : ""}`}
         style={sizeStyle}
@@ -260,6 +272,28 @@ const LazyParagraph = React.memo(function LazyParagraph({
         {syl.text}
       </span>
     );
+  };
+
+  // Transcription block placed after a passage's last syllable.
+  const renderTransBlock = (segs, anchorId) => (
+    <div key={`tb-${anchorId}`} className="r-trans-block" contentEditable={false}>
+      <div className="r-trans-label">Transcription</div>
+      <div className={`${uchen.className} r-trans-text`}>
+        {segs.map((s) => (
+          <span key={s.gid} id={`tseg-${s.gid}`} className="r-tseg">
+            {s.text}{" "}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderSylWithBlock = (syl) => {
+    const span = renderSyl(syl);
+    if (transcriptionMode && transBlocksByAnchor?.[syl.id]) {
+      return [span, renderTransBlock(transBlocksByAnchor[syl.id], syl.id)];
+    }
+    return span;
   };
 
   // Build a flat list of items, breaking on commentary-set change OR a section
@@ -304,7 +338,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
             <SectionMarker key={`m-${n.id}`} node={n} />
           ));
         }
-        const syls = item.syls.map(renderSyl);
+        const syls = item.syls.map(renderSylWithBlock);
         if (item.groups.length === 0) {
           return <React.Fragment key={`s${i}`}>{syls}</React.Fragment>;
         }
@@ -347,7 +381,8 @@ function ReaderContent() {
   const { prefs, updatePref, loaded } = useReaderPreferences();
   const audio = useAudioPlayer();
   // Oral-transcription layer (absent for instances not yet transcribed).
-  const { hasTranscription, transTextByGid } = useTranscription(instanceId);
+  const { hasTranscription, transTextByGid, transSessions } =
+    useTranscription(instanceId);
 
   // Data state
   const [manifest, setManifest] = useState([]);
@@ -367,6 +402,11 @@ function ReaderContent() {
   // updates so the highlighted row doesn't flicker to intermediate sections.
   const suppressActiveUntilRef = useRef(0);
   const [searchOpen, setSearchOpen] = useState(!!urlQ);
+  // When on, the main reader interleaves the oral transcription beneath each
+  // commented passage and read-along follows the transcription segments.
+  const [transcriptionMode, setTranscriptionMode] = useState(false);
+  // The transcription segment currently under the playhead (read-along).
+  const [currentTransSegGid, setCurrentTransSegGid] = useState(null);
   const [activeTab, setActiveTab] = useState("player");
   const [activeSylId, setActiveSylId] = useState(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -539,6 +579,94 @@ function ReaderContent() {
       .filter((seg) => seg.source_session === activeCommentary)
       .sort((a, b) => parseToMs(a.start) - parseToMs(b.start));
   }, [sessions, activeCommentary]);
+
+  // ----------------------------------------
+  // Transcription mode: interleave + read-along data
+  // ----------------------------------------
+  // gid -> transcription segment {gid, startMs, endMs, text}
+  const transSegByGid = useMemo(() => {
+    const m = {};
+    transSessions.forEach((s) => {
+      const gid = s.global_seg_id || s.seg_id;
+      m[gid] = {
+        gid,
+        startMs: parseToMs(s.start),
+        endMs: s.end ? parseToMs(s.end) : parseToMs(s.start) + 8000,
+        text: transTextByGid[gid] || "",
+      };
+    });
+    return m;
+  }, [transSessions, transTextByGid]);
+
+  // For the active session: each commented passage's last syllable → its
+  // transcription segments (de-duped to a single home passage by start-time),
+  // plus the set of passage syllables to mark, and a flat time-sorted list.
+  const transcriptionView = useMemo(() => {
+    if (!transcriptionMode || !hasTranscription || activeCommentarySegments.length === 0) {
+      return { byAnchor: {}, passageSylIds: new Set(), flat: [] };
+    }
+    const ranges = activeCommentarySegments.map((p) => ({
+      start: parseToMs(p.start),
+      end: parseToMs(p.end),
+    }));
+    const passageSylIds = new Set();
+    activeCommentarySegments.forEach((p) =>
+      (p.syl_uuids || []).forEach((u) => passageSylIds.add(u)),
+    );
+    const assigned = new Set();
+    const homeByIdx = activeCommentarySegments.map(() => []);
+    activeCommentarySegments.forEach((p) => {
+      (p.transcription_seg_ids || []).forEach((gid) => {
+        if (assigned.has(gid)) return;
+        const ts = transSegByGid[gid];
+        if (!ts) return;
+        let home = ranges.findIndex((r) => ts.startMs >= r.start && ts.startMs < r.end);
+        if (home === -1) home = 0;
+        homeByIdx[home].push(gid);
+        assigned.add(gid);
+      });
+    });
+    const byAnchor = {};
+    const flat = [];
+    activeCommentarySegments.forEach((p, idx) => {
+      const anchor = (p.syl_uuids || []).slice(-1)[0];
+      if (!anchor) return;
+      const segs = homeByIdx[idx]
+        .map((gid) => transSegByGid[gid])
+        .filter(Boolean)
+        .sort((a, b) => a.startMs - b.startMs);
+      if (segs.length) {
+        byAnchor[anchor] = segs;
+        flat.push(...segs);
+      }
+    });
+    flat.sort((a, b) => a.startMs - b.startMs);
+    return { byAnchor, passageSylIds, flat };
+  }, [transcriptionMode, hasTranscription, activeCommentarySegments, transSegByGid]);
+
+  // Track the transcription segment under the playhead (read-along).
+  useEffect(() => {
+    if (!transcriptionMode || transcriptionView.flat.length === 0) {
+      if (currentTransSegGid !== null) setCurrentTransSegGid(null);
+      return;
+    }
+    const t = audio.currentTimeMs;
+    const seg =
+      transcriptionView.flat.find((s) => t >= s.startMs && t < s.endMs) ||
+      [...transcriptionView.flat].reverse().find((s) => s.startMs <= t);
+    const gid = seg ? seg.gid : null;
+    if (gid !== currentTransSegGid) setCurrentTransSegGid(gid);
+  }, [audio.currentTimeMs, transcriptionMode, transcriptionView, currentTransSegGid]);
+
+  // Toggle the read-along highlight class directly on the DOM (no re-render of
+  // the lazy paragraphs as the segment changes).
+  useEffect(() => {
+    if (!currentTransSegGid) return;
+    const el = document.getElementById(`tseg-${currentTransSegGid}`);
+    if (!el) return;
+    el.classList.add("r-tseg-active");
+    return () => el.classList.remove("r-tseg-active");
+  }, [currentTransSegGid]);
 
   // ----------------------------------------
   // Derived data: teachingCoverageSet
@@ -1279,8 +1407,6 @@ function ReaderContent() {
             noSessionMessage={noSessionMessage}
             instanceId={instanceId}
             teachingTitle={teachingTitle}
-            transTextByGid={transTextByGid}
-            hasTranscription={hasTranscription}
           />
         )}
 
@@ -1313,6 +1439,9 @@ function ReaderContent() {
         onToggleSearch={() => setSearchOpen((prev) => !prev)}
         onToggleContents={() => setTocOpen((v) => !v)}
         onOpenStudy={() => setStudyOpen(true)}
+        onToggleTranscription={() => setTranscriptionMode((v) => !v)}
+        transcriptionOn={transcriptionMode}
+        hasTranscription={hasTranscription}
         sidebarOpen={sidebarOpen}
         contentsOpen={tocOpen}
         hasContents={!!sapche}
@@ -1376,13 +1505,16 @@ function ReaderContent() {
                 sizes={sizes}
                 teachingCoverageSet={teachingCoverageSet}
                 activeSylId={activeSylId}
-                playingSegSylIds={playingSegSylIds}
-                hoveredSegSylIds={hoveredSegSylIds}
+                playingSegSylIds={transcriptionMode ? EMPTY_SET : playingSegSylIds}
+                hoveredSegSylIds={transcriptionMode ? EMPTY_SET : hoveredSegSylIds}
                 activeMatchSet={activeMatchSet}
                 allMatchesSet={allMatchesSet}
                 handleSyllableClick={handleSyllableClick}
                 uchen={uchen}
                 sylIdToSections={sylIdToSections}
+                transcriptionMode={transcriptionMode}
+                transBlocksByAnchor={transcriptionView.byAnchor}
+                passageSylIds={transcriptionView.passageSylIds}
               />
             ))}
           </div>
