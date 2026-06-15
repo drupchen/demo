@@ -155,6 +155,16 @@ export function useAudioPlayer() {
     }
   }, []);
 
+  // Live playhead time, read straight from the element (~full precision) rather
+  // than the throttled `timeupdate` state — used to drive read-along highlights
+  // with requestAnimationFrame. Honors the in-flight load+seek guard so it never
+  // reports the transient near-zero time while a track is loading.
+  const getCurrentTimeMs = useCallback(() => {
+    if (pendingSeekSecRef.current != null) return pendingSeekSecRef.current * 1000;
+    const el = audioRef.current;
+    return el ? el.currentTime * 1000 : 0;
+  }, []);
+
   const seekTo = useCallback((ms) => {
     const el = audioRef.current;
     if (el) {
@@ -269,6 +279,7 @@ export function useAudioPlayer() {
     play,
     pause,
     togglePlay,
+    getCurrentTimeMs,
     seekTo,
     loadSource,
     loadPlaylist,

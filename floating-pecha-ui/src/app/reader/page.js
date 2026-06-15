@@ -169,6 +169,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
   transcriptionMode,
   transBlocksByAnchor,
   passageSylIds,
+  onTransSegClick,
 }) {
   const ref = useRef(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -261,11 +262,17 @@ const LazyParagraph = React.memo(function LazyParagraph({
       <span
         key={syl.id}
         id={syl.id}
-        onClick={hasMedia ? () => handleSyllableClick(syl.id) : undefined}
+        onClick={
+          hasMedia && !transcriptionMode
+            ? () => handleSyllableClick(syl.id)
+            : undefined
+        }
         className={`${fontClass} r-syl inline relative ${colorClass} ${bgClass} ${extraClass} ${
           isInPassage ? "r-syl-passage" : ""
         } ${
-          hasMedia && !isSelected ? "cursor-pointer r-hover-red" : ""
+          hasMedia && !isSelected && !transcriptionMode
+            ? "cursor-pointer r-hover-red"
+            : ""
         } ${isInPlayingSegment || isHoveredSegment ? "rounded-sm" : ""}`}
         style={sizeStyle}
       >
@@ -280,7 +287,12 @@ const LazyParagraph = React.memo(function LazyParagraph({
       <div className="r-trans-label">Transcription</div>
       <div className={`${uchen.className} r-trans-text`}>
         {segs.map((s) => (
-          <span key={s.gid} id={`tseg-${s.gid}`} className="r-tseg">
+          <span
+            key={s.gid}
+            id={`tseg-${s.gid}`}
+            className="r-tseg r-tseg-clickable"
+            onClick={() => onTransSegClick(s.gid)}
+          >
             {s.text}{" "}
           </span>
         ))}
@@ -405,8 +417,6 @@ function ReaderContent() {
   // When on, the main reader interleaves the oral transcription beneath each
   // commented passage and read-along follows the transcription segments.
   const [transcriptionMode, setTranscriptionMode] = useState(false);
-  // The transcription segment currently under the playhead (read-along).
-  const [currentTransSegGid, setCurrentTransSegGid] = useState(null);
   const [activeTab, setActiveTab] = useState("player");
   const [activeSylId, setActiveSylId] = useState(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -644,29 +654,38 @@ function ReaderContent() {
     return { byAnchor, passageSylIds, flat };
   }, [transcriptionMode, hasTranscription, activeCommentarySegments, transSegByGid]);
 
-  // Track the transcription segment under the playhead (read-along).
+  // Read-along: follow the live audio playhead with requestAnimationFrame so the
+  // highlight switches on the true segment boundary, not on the throttled (~4 Hz)
+  // `timeupdate` event. Toggles the class directly on the DOM (no re-render).
   useEffect(() => {
-    if (!transcriptionMode || transcriptionView.flat.length === 0) {
-      if (currentTransSegGid !== null) setCurrentTransSegGid(null);
-      return;
-    }
-    const t = audio.currentTimeMs;
-    const seg =
-      transcriptionView.flat.find((s) => t >= s.startMs && t < s.endMs) ||
-      [...transcriptionView.flat].reverse().find((s) => s.startMs <= t);
-    const gid = seg ? seg.gid : null;
-    if (gid !== currentTransSegGid) setCurrentTransSegGid(gid);
-  }, [audio.currentTimeMs, transcriptionMode, transcriptionView, currentTransSegGid]);
-
-  // Toggle the read-along highlight class directly on the DOM (no re-render of
-  // the lazy paragraphs as the segment changes).
-  useEffect(() => {
-    if (!currentTransSegGid) return;
-    const el = document.getElementById(`tseg-${currentTransSegGid}`);
-    if (!el) return;
-    el.classList.add("r-tseg-active");
-    return () => el.classList.remove("r-tseg-active");
-  }, [currentTransSegGid]);
+    const flat = transcriptionView.flat;
+    if (!transcriptionMode || flat.length === 0) return;
+    const getTime = audio.getCurrentTimeMs;
+    let raf = 0;
+    let curGid = null;
+    const setActive = (gid) => {
+      if (gid === curGid) return;
+      if (curGid)
+        document.getElementById(`tseg-${curGid}`)?.classList.remove("r-tseg-active");
+      if (gid)
+        document.getElementById(`tseg-${gid}`)?.classList.add("r-tseg-active");
+      curGid = gid;
+    };
+    const tick = () => {
+      const t = getTime();
+      const seg =
+        flat.find((s) => t >= s.startMs && t < s.endMs) ||
+        [...flat].reverse().find((s) => s.startMs <= t);
+      setActive(seg ? seg.gid : null);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      if (curGid)
+        document.getElementById(`tseg-${curGid}`)?.classList.remove("r-tseg-active");
+    };
+  }, [transcriptionMode, transcriptionView, audio.getCurrentTimeMs]);
 
   // ----------------------------------------
   // Derived data: teachingCoverageSet
@@ -1117,6 +1136,20 @@ function ReaderContent() {
     [activeCommentary, audio],
   );
 
+  // Transcription mode: click a transcription segment to play from its start.
+  // The session media is one continuous file already loaded by the active
+  // commentary, so a seek within it is enough; read-along + root-text highlight
+  // follow audio.currentTimeMs.
+  const handleTransSegClick = useCallback(
+    (gid) => {
+      const seg = transSegByGid[gid];
+      if (!seg) return;
+      audio.seekTo(seg.startMs);
+      audio.play();
+    },
+    [transSegByGid, audio],
+  );
+
   const handleCommentarySelect = useCallback(
     (commentaryId, startSegment, autoPlay = true) => {
       setPopoverOpen(false);
@@ -1515,6 +1548,7 @@ function ReaderContent() {
                 transcriptionMode={transcriptionMode}
                 transBlocksByAnchor={transcriptionView.byAnchor}
                 passageSylIds={transcriptionView.passageSylIds}
+                onTransSegClick={handleTransSegClick}
               />
             ))}
           </div>

@@ -415,4 +415,10 @@
   background-color: var(--reader-accent-subtle, #FDF8EE);
   box-shadow: 0 0 0 2px var(--reader-accent-subtle, #FDF8EE);
 }
+/* In transcription mode the segments are the interactive target. */
+.r-tseg-clickable { cursor: pointer; }
+.r-tseg-clickable:hover {
+  color: var(--reader-text-primary, #1A1A1A);
+  background-color: var(--reader-accent-subtle, #FDF8EE);
+}
 .r-toc-reveal:hover { background:#e8e3d8; }
