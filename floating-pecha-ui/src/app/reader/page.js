@@ -1586,7 +1586,7 @@ function ReaderContent() {
               setPendingSelection(null);
             }}
           >
-            {/* Sticky note with a folded corner + a small plus */}
+            {/* Comment bubble (tail at bottom-left) */}
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="16"
@@ -1599,10 +1599,7 @@ function ReaderContent() {
               strokeLinejoin="round"
               aria-hidden="true"
             >
-              <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Z" />
-              <path d="M14 3v6h6" />
-              <line x1="8.5" y1="14" x2="13.5" y2="14" />
-              <line x1="11" y1="11.5" x2="11" y2="16.5" />
+              <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
             </svg>
           </button>
         )}
