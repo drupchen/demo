@@ -380,12 +380,13 @@
 
 /* Annotated span — light amber wash, distinct from audio-segment highlights. */
 .r-note-highlight {
-  background-color: rgba(212, 175, 55, 0.16);
+  background-color: rgba(212, 175, 55, 0.20);
   border-radius: 0.125rem;
   cursor: pointer;
+  box-shadow: inset 0 -2px 0 rgba(212, 175, 55, 0.55);
 }
 .r-note-highlight:hover {
-  background-color: rgba(212, 175, 55, 0.28);
+  background-color: rgba(212, 175, 55, 0.34);
 }
 
 /* Annotation mode: subtle reminder strip + text cursor over the reading area. */
@@ -394,17 +395,20 @@
 }
 .r-annotate-banner {
   position: fixed;
-  top: 4rem; /* below the 4rem navbar */
-  left: 0;
-  right: 0;
-  z-index: 50;
-  text-align: center;
+  top: 4.4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 45;
+  pointer-events: none;       /* never blocks the sidebar tabs */
+  white-space: nowrap;
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  padding: 4px 0;
-  background-color: rgba(212, 175, 55, 0.14);
+  padding: 4px 14px;
+  border-radius: 9999px;
+  background-color: rgba(212, 175, 55, 0.2);
   color: #8a6d1f;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.12);
 }
 
 /* Floating "+ Note" button anchored near a text selection. */
