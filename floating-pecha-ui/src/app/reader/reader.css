@@ -385,7 +385,9 @@
   cursor: pointer;
   box-shadow: inset 0 -2px 0 rgba(212, 175, 55, 0.55);
 }
-.r-note-highlight:hover {
+/* Hovering anywhere in an annotated passage highlights the whole passage
+   (applied to every syllable of the span via r-note-hover, not per-syllable). */
+.r-note-hover {
   background-color: rgba(212, 175, 55, 0.34);
 }
 

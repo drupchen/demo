@@ -170,6 +170,8 @@ const LazyParagraph = React.memo(function LazyParagraph({
   sylIdToSections,
   noteHighlightSet,
   onNoteSylClick,
+  onNoteSylHover,
+  hoveredNoteSylIds,
   annotateMode,
 }) {
   const ref = useRef(null);
@@ -227,6 +229,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
     const isActiveMatch = activeMatchSet.has(syl.id);
     const isAnyMatch = allMatchesSet.has(syl.id);
     const isNoted = noteHighlightSet?.has(syl.id);
+    const isNoteHovered = annotateMode && isNoted && hoveredNoteSylIds?.has(syl.id);
 
     const fontClass =
       syl.nature === "TEXT" || syl.nature === "PUNCT" || syl.nature === "SYM"
@@ -255,7 +258,8 @@ const LazyParagraph = React.memo(function LazyParagraph({
     } else if (isHoveredSegment) {
       bgClass = "r-syl-hovered";
     }
-    if (isNoted && annotateMode && !bgClass) extraClass = `${extraClass} r-note-highlight`;
+    if (isNoted && annotateMode && !bgClass)
+      extraClass = `${extraClass} r-note-highlight${isNoteHovered ? " r-note-hover" : ""}`;
 
     return (
       <span
@@ -265,6 +269,12 @@ const LazyParagraph = React.memo(function LazyParagraph({
           annotateMode
             ? (isNoted ? () => onNoteSylClick?.(syl.id) : undefined)
             : (hasMedia ? () => handleSyllableClick(syl.id) : undefined)
+        }
+        onMouseEnter={
+          annotateMode && isNoted ? () => onNoteSylHover?.(syl.id) : undefined
+        }
+        onMouseLeave={
+          annotateMode && isNoted ? () => onNoteSylHover?.(null) : undefined
         }
         className={`${fontClass} r-syl inline relative ${colorClass} ${bgClass} ${extraClass} ${
           !annotateMode && hasMedia && !isSelected ? "cursor-pointer r-hover-red" : ""
@@ -370,6 +380,8 @@ function ReaderContent() {
   // Unified note panel (create + view), positioned beside the passage/selection.
   // { x, y, sylId? , createAnchor? }  — exactly one of sylId / createAnchor is set.
   const [notePanel, setNotePanel] = useState(null);
+  // Syllables to highlight while hovering an annotated passage (annotation mode).
+  const [hoveredNoteSylIds, setHoveredNoteSylIds] = useState(new Set());
 
   const {
     notes,
@@ -1136,6 +1148,26 @@ function ReaderContent() {
     });
   }, []);
 
+  // Hovering any syllable of an annotated passage highlights the whole passage
+  // (union of every note span covering the hovered syllable).
+  const handleNoteSylHover = useCallback(
+    (sylId) => {
+      if (sylId == null) return setHoveredNoteSylIds(new Set());
+      const i = manifestIndexOf.get(sylId);
+      if (i == null) return setHoveredNoteSylIds(new Set());
+      const ids = new Set();
+      for (const n of notes) {
+        const a = manifestIndexOf.get(n.start_syl_id);
+        const b = manifestIndexOf.get(n.end_syl_id);
+        if (a != null && b != null && i >= a && i <= b) {
+          for (let j = a; j <= b; j++) ids.add(manifest[j].id);
+        }
+      }
+      setHoveredNoteSylIds(ids);
+    },
+    [notes, manifestIndexOf, manifest]
+  );
+
   const handleCommentarySelect = useCallback(
     (commentaryId, startSegment, autoPlay = true) => {
       setPopoverOpen(false);
@@ -1575,6 +1607,8 @@ function ReaderContent() {
                 sylIdToSections={sylIdToSections}
                 noteHighlightSet={noteHighlightSet}
                 onNoteSylClick={handleNoteSylClick}
+                onNoteSylHover={handleNoteSylHover}
+                hoveredNoteSylIds={hoveredNoteSylIds}
                 annotateMode={annotateMode}
               />
             ))}
