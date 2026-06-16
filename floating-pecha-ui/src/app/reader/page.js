@@ -1113,12 +1113,15 @@ function ReaderContent() {
       const { startSylId, endSylId } = orderAnchors(startId, endId, manifestIndexOf);
       const anchorText = sel.toString().slice(0, 280);
       const rect = range.getBoundingClientRect();
+      // Place the button BELOW the selection with a clear gap, so a rapid
+      // double/triple-click (which lands on the selected line) never hits the
+      // button and accidentally opens the composer with a partial selection.
       setPendingSelection({
         startSylId,
         endSylId,
         anchorText,
         x: rect.left + rect.width / 2,
-        y: rect.top - 8,
+        y: rect.bottom + 10,
       });
     };
     const onMouseDown = (e) => {
