@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { inter } from "@/lib/theme";
+import { inter, uchen } from "@/lib/theme";
 import VoiceRecorder from "./VoiceRecorder";
 
 /**
@@ -37,7 +37,7 @@ export default function NoteComposer({
       const kind = !editing && audioBlob ? "voice" : "text";
       await onSubmit({ kind, bodyText: text, audioBlob, audioDurationMs });
     } catch (err) {
-      setError(err.message || "Échec de l'enregistrement");
+      setError(err.message || "Failed to save");
       setBusy(false);
     }
   };
@@ -45,14 +45,15 @@ export default function NoteComposer({
   return (
     <div className={`${inter.className} flex flex-col gap-3`}>
       {anchorText && (
-        <div className="text-xs r-text-muted border-l-2 r-border pl-2 line-clamp-2">
+        <div className={`${uchen.className} r-text-muted border-l-2 r-border pl-2 line-clamp-2`}
+          style={{ fontSize: "1.25rem", lineHeight: 1.7 }}>
           {anchorText}
         </div>
       )}
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder={editing ? "Modifier la note…" : "Écrire une note… (ou enregistrer un vocal)"}
+        placeholder={editing ? "Edit note…" : "Write a note… (or record a voice memo)"}
         rows={4}
         className="w-full p-2 rounded-md border r-border bg-transparent text-sm r-text-1a resize-y"
       />
@@ -72,11 +73,11 @@ export default function NoteComposer({
       <div className="flex items-center justify-end gap-2">
         <button type="button" onClick={onCancel}
           className="px-3 py-1.5 text-xs r-text-muted r-hover-accent">
-          Annuler
+          Cancel
         </button>
         <button type="button" onClick={submit} disabled={!canSubmit || busy}
           className="px-3 py-1.5 rounded-md text-xs font-semibold r-text-accent border r-border disabled:opacity-40">
-          {busy ? "Enregistrement…" : "Enregistrer"}
+          {busy ? "Saving…" : "Save"}
         </button>
       </div>
     </div>

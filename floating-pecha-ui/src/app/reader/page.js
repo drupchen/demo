@@ -28,6 +28,7 @@ import { useSession } from "next-auth/react";
 import { useNotes } from "./useNotes";
 import { closestSylId, orderAnchors } from "@/lib/note-selection";
 import NoteComposer from "./NoteComposer";
+import NotePopover from "./NotePopover";
 import NotesTab from "./NotesTab";
 import "./reader.css";
 
@@ -261,15 +262,15 @@ const LazyParagraph = React.memo(function LazyParagraph({
         key={syl.id}
         id={syl.id}
         onClick={
-          hasMedia
-            ? () => handleSyllableClick(syl.id)
-            : isNoted
+          isNoted
             ? () => onNoteSylClick?.(syl.id)
+            : hasMedia
+            ? () => handleSyllableClick(syl.id)
             : undefined
         }
         className={`${fontClass} r-syl inline relative ${colorClass} ${bgClass} ${extraClass} ${
           hasMedia && !isSelected ? "cursor-pointer r-hover-red" : ""
-        } ${isInPlayingSegment || isHoveredSegment ? "rounded-sm" : ""}`}
+        } ${isNoted ? "cursor-pointer" : ""} ${isInPlayingSegment || isHoveredSegment ? "rounded-sm" : ""}`}
         style={sizeStyle}
       >
         {syl.text}
@@ -370,6 +371,7 @@ function ReaderContent() {
   const [pendingSelection, setPendingSelection] = useState(null);
   // When set, the composer panel is open for this anchor.
   const [composerAnchor, setComposerAnchor] = useState(null);
+  const [noteView, setNoteView] = useState(null); // { sylId, x, y }
 
   const {
     notes,
@@ -652,6 +654,17 @@ function ReaderContent() {
     }
     return set;
   }, [notes, manifestIndexOf, manifest]);
+
+  const noteViewNotes = useMemo(() => {
+    if (!noteView) return [];
+    const i = manifestIndexOf.get(noteView.sylId);
+    if (i == null) return [];
+    return notes.filter((n) => {
+      const a = manifestIndexOf.get(n.start_syl_id);
+      const b = manifestIndexOf.get(n.end_syl_id);
+      return a != null && b != null && i >= a && i <= b;
+    });
+  }, [noteView, notes, manifestIndexOf]);
 
   // ----------------------------------------
   // Derived data: cumulative syllable visual weights
@@ -1070,8 +1083,16 @@ function ReaderContent() {
         y: rect.top - 8,
       });
     };
+    const onMouseDown = (e) => {
+      if (e.target?.closest?.(".r-note-add-btn")) return; // keep button alive
+      setPendingSelection(null);
+    };
+    document.addEventListener("mousedown", onMouseDown);
     document.addEventListener("mouseup", onMouseUp);
-    return () => document.removeEventListener("mouseup", onMouseUp);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
   }, [annotateMode, manifestIndexOf]);
 
   const handleCreateNote = useCallback(
@@ -1101,15 +1122,24 @@ function ReaderContent() {
     [paragraphs]
   );
 
-  const handleNoteSylClick = useCallback(
-    (sylId) => {
-      if (noteHighlightSet.has(sylId)) {
-        setSidebarOpen(true);
-        setActiveTab("notes");
-      }
-    },
-    [noteHighlightSet]
-  );
+  const handleNoteSylClick = useCallback((sylId) => {
+    const el = document.getElementById(sylId);
+    const rect = el?.getBoundingClientRect();
+    setNoteView({
+      sylId,
+      x: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
+      y: rect ? rect.bottom + 6 : 120,
+    });
+  }, []);
+
+  const handleAddNoteToPassage = useCallback((note) => {
+    setNoteView(null);
+    setComposerAnchor({
+      startSylId: note.start_syl_id,
+      endSylId: note.end_syl_id,
+      anchorText: note.anchor_text || "",
+    });
+  }, []);
 
   const handleCommentarySelect = useCallback(
     (commentaryId, startSegment, autoPlay = true) => {
@@ -1465,7 +1495,7 @@ function ReaderContent() {
 
       {annotateMode && (
         <div className="r-annotate-banner">
-          Mode annotation — sélectionnez un passage pour ajouter une note
+          Annotation mode — select a passage to add a note
         </div>
       )}
 
@@ -1557,6 +1587,18 @@ function ReaderContent() {
             onCancel={() => { setComposerAnchor(null); setPendingSelection(null); }}
           />
         </div>
+      )}
+
+      {noteView && noteViewNotes.length > 0 && (
+        <NotePopover
+          notes={noteViewNotes}
+          x={noteView.x}
+          y={noteView.y}
+          onClose={() => setNoteView(null)}
+          onUpdateNote={updateNoteApi}
+          onDeleteNote={deleteNoteApi}
+          onAddNote={() => handleAddNoteToPassage(noteViewNotes[0])}
+        />
       )}
 
       {studyOpen && sapche && (
