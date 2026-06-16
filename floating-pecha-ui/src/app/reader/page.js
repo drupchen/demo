@@ -1101,6 +1101,16 @@ function ReaderContent() {
     [paragraphs]
   );
 
+  const handleNoteSylClick = useCallback(
+    (sylId) => {
+      if (noteHighlightSet.has(sylId)) {
+        setSidebarOpen(true);
+        setActiveTab("notes");
+      }
+    },
+    [noteHighlightSet]
+  );
+
   const handleCommentarySelect = useCallback(
     (commentaryId, startSegment, autoPlay = true) => {
       setPopoverOpen(false);
@@ -1528,15 +1538,7 @@ function ReaderContent() {
                 uchen={uchen}
                 sylIdToSections={sylIdToSections}
                 noteHighlightSet={noteHighlightSet}
-                onNoteSylClick={(sylId) => {
-                  const n = notes.find((nt) => {
-                    const a = manifestIndexOf.get(nt.start_syl_id);
-                    const b = manifestIndexOf.get(nt.end_syl_id);
-                    const i = manifestIndexOf.get(sylId);
-                    return a != null && b != null && i != null && i >= a && i <= b;
-                  });
-                  if (n) { setSidebarOpen(true); setActiveTab("notes"); }
-                }}
+                onNoteSylClick={handleNoteSylClick}
               />
             ))}
           </div>
