@@ -269,7 +269,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
             : undefined
         }
         className={`${fontClass} r-syl inline relative ${colorClass} ${bgClass} ${extraClass} ${
-          hasMedia && !isSelected ? "cursor-pointer r-hover-red" : ""
+          hasMedia && !isSelected && !isNoted ? "cursor-pointer r-hover-red" : ""
         } ${isNoted ? "cursor-pointer" : ""} ${isInPlayingSegment || isHoveredSegment ? "rounded-sm" : ""}`}
         style={sizeStyle}
       >
