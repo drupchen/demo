@@ -11,7 +11,7 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const instanceId = (searchParams.get("instance") || "").trim();
   if (!instanceId) {
-    return NextResponse.json({ error: "instance requis" }, { status: 400 });
+    return NextResponse.json({ error: "instance required" }, { status: 400 });
   }
 
   const { env } = getCloudflareContext();
@@ -75,7 +75,7 @@ export async function POST(request) {
   if (fields.kind === "voice") {
     const mime = audioFile.type || "";
     if (!mime.startsWith("audio/")) {
-      return NextResponse.json({ error: "Type audio invalide" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid audio type" }, { status: 400 });
     }
     const ext = extFor(audioFile.type);
     audioKey = `notes/${userId}/${randomUUID()}.${ext}`;
@@ -85,7 +85,7 @@ export async function POST(request) {
       });
     } catch (err) {
       console.error("Note audio upload failed:", err);
-      return NextResponse.json({ error: "Échec de l'upload audio" }, { status: 502 });
+      return NextResponse.json({ error: "Audio upload failed" }, { status: 502 });
     }
   }
 

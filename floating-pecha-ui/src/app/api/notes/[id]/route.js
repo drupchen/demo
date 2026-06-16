@@ -15,11 +15,11 @@ export async function PATCH(request, { params }) {
   const { env } = getCloudflareContext();
 
   const existing = await getNote(env.DB, id, session.user.id);
-  if (!existing) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // A text note must keep non-empty body; a voice caption may be cleared.
   if (existing.kind === "text" && !bodyText.trim()) {
-    return NextResponse.json({ error: "Note texte vide" }, { status: 400 });
+    return NextResponse.json({ error: "Empty text note" }, { status: 400 });
   }
 
   await updateNote(env.DB, id, session.user.id, { bodyText });
@@ -35,7 +35,7 @@ export async function DELETE(request, { params }) {
   const { env } = getCloudflareContext();
 
   const existing = await getNote(env.DB, id, session.user.id);
-  if (!existing) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // Remove the R2 object first; if it fails we still proceed to delete the row
   // (an orphaned object is harmless and can be swept later).

@@ -27,7 +27,7 @@ export function useNotes(instanceId, enabled) {
       const data = await res.json();
       setNotes(data.notes || []);
     } catch (err) {
-      setError(err.message || "Erreur de chargement");
+      setError(err.message || "Failed to load");
       setNotes([]);
     } finally {
       setLoading(false);

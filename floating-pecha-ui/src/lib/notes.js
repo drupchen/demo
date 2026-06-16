@@ -10,14 +10,14 @@ const KINDS = new Set(["text", "voice"]);
  * No size limits (product decision): only structural validity is enforced.
  */
 export function validateNoteInput({ instanceId, startSylId, endSylId, kind, bodyText, hasAudio }) {
-  if (!instanceId || !instanceId.trim()) return { ok: false, error: "instance_id requis" };
-  if (!startSylId || !endSylId) return { ok: false, error: "Ancre manquante" };
-  if (!KINDS.has(kind)) return { ok: false, error: "kind invalide" };
+  if (!instanceId || !instanceId.trim()) return { ok: false, error: "instance_id required" };
+  if (!startSylId || !endSylId) return { ok: false, error: "Missing anchor" };
+  if (!KINDS.has(kind)) return { ok: false, error: "Invalid kind" };
   if (kind === "text" && (!bodyText || !bodyText.trim())) {
-    return { ok: false, error: "Note texte vide" };
+    return { ok: false, error: "Empty text note" };
   }
   if (kind === "voice" && !hasAudio) {
-    return { ok: false, error: "Note vocale sans audio" };
+    return { ok: false, error: "Voice note without audio" };
   }
   return { ok: true };
 }

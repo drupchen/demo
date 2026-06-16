@@ -69,7 +69,7 @@ export default function ReaderNavbar({
           <button
             onClick={onToggleAnnotate}
             className={`p-2 rounded-md transition-colors duration-200 ${annotateMode ? "r-text-accent" : "r-text-muted r-hover-accent"}`}
-            aria-label={annotateMode ? "Quitter le mode annotation" : "Activer le mode annotation"}
+            aria-label={annotateMode ? "Exit annotation mode" : "Enter annotation mode"}
             aria-pressed={annotateMode}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

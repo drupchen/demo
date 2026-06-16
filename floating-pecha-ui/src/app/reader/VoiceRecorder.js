@@ -91,7 +91,7 @@ export default function VoiceRecorder({ onRecorded, onClear }) {
       {state === "idle" && (
         <button type="button" onClick={start}
           className="px-3 py-1.5 rounded-md text-xs font-semibold r-text-accent border r-border r-hover-accent">
-          ● Enregistrer
+          ● Record
         </button>
       )}
       {state === "recording" && (
@@ -106,13 +106,13 @@ export default function VoiceRecorder({ onRecorded, onClear }) {
           <audio src={previewUrl} controls className="h-8" />
           <button type="button" onClick={reset}
             className="text-xs r-text-muted r-hover-accent underline">
-            Refaire
+            Re-record
           </button>
         </>
       )}
       {state === "denied" && (
         <span className="text-xs" style={{ color: "#8B1D1D" }}>
-          Micro indisponible — utilisez une note texte.
+          Microphone unavailable — use a text note.
         </span>
       )}
     </div>

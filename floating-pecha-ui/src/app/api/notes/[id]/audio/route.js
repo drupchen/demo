@@ -12,12 +12,12 @@ export async function GET(request, { params }) {
 
   const note = await getNote(env.DB, id, session.user.id);
   if (!note || !note.audio_key) {
-    return NextResponse.json({ error: "Introuvable" }, { status: 404 });
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const object = await env.MEDIA.get(note.audio_key);
   if (!object) {
-    return NextResponse.json({ error: "Audio manquant" }, { status: 404 });
+    return NextResponse.json({ error: "Audio missing" }, { status: 404 });
   }
 
   const headers = new Headers();
