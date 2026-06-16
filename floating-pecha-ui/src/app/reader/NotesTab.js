@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { inter, uchen } from "@/lib/theme";
+import { formatNoteDate } from "@/lib/noteFormat";
 import NoteComposer from "./NoteComposer";
 
 /**
@@ -85,6 +86,9 @@ export default function NotesTab({
                   {note.body_text && (
                     <p className="text-sm r-text-1a whitespace-pre-wrap">{note.body_text}</p>
                   )}
+                  {note.created_at ? (
+                    <div className="text-[10px] r-text-muted">{formatNoteDate(note.created_at)}</div>
+                  ) : null}
                   <div className="flex items-center gap-3 text-[11px]">
                     {note.kind === "text" && (
                       <button type="button" onClick={() => setEditingId(note.id)}

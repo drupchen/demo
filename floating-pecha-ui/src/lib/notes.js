@@ -45,11 +45,12 @@ export async function createNote(
   { userId, instanceId, startSylId, endSylId, anchorText, kind, bodyText, audioKey, audioDurationMs }
 ) {
   const id = randomUUID();
+  const now = Math.floor(Date.now() / 1000);
   await db
     .prepare(
       `INSERT INTO notes
-         (id, user_id, instance_id, start_syl_id, end_syl_id, anchor_text, kind, body_text, audio_key, audio_duration_ms)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         (id, user_id, instance_id, start_syl_id, end_syl_id, anchor_text, kind, body_text, audio_key, audio_duration_ms, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       id,
@@ -61,7 +62,9 @@ export async function createNote(
       kind,
       bodyText ?? null,
       audioKey ?? null,
-      audioDurationMs ?? null
+      audioDurationMs ?? null,
+      now,
+      now
     )
     .run();
   return {
@@ -75,6 +78,8 @@ export async function createNote(
     body_text: bodyText ?? null,
     audio_key: audioKey ?? null,
     audio_duration_ms: audioDurationMs ?? null,
+    created_at: now,
+    updated_at: now,
     visibility: "private",
   };
 }
