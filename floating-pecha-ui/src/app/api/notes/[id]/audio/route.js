@@ -26,5 +26,8 @@ export async function GET(request, { params }) {
     object.httpMetadata?.contentType || "application/octet-stream"
   );
   headers.set("Cache-Control", "private, max-age=3600");
+  if (typeof object.size === "number") {
+    headers.set("Content-Length", String(object.size));
+  }
   return new Response(object.body, { headers });
 }

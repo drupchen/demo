@@ -73,6 +73,10 @@ export async function POST(request) {
   // never persist a voice note that points at a missing object.
   let audioKey = null;
   if (fields.kind === "voice") {
+    const mime = audioFile.type || "";
+    if (!mime.startsWith("audio/")) {
+      return NextResponse.json({ error: "Type audio invalide" }, { status: 400 });
+    }
     const ext = extFor(audioFile.type);
     audioKey = `notes/${userId}/${randomUUID()}.${ext}`;
     try {
