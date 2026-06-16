@@ -375,3 +375,49 @@
   background:#F2EFE8; color:#8B1D1D; border:1px solid #e0dccf; border-left:0;
   border-radius:0 6px 6px 0; cursor:pointer; }
 .r-toc-reveal:hover { background:#e8e3d8; }
+
+/* ---- Personal notes ---- */
+
+/* Annotated span — light amber wash, distinct from audio-segment highlights. */
+.r-note-highlight {
+  background-color: rgba(212, 175, 55, 0.16);
+  border-radius: 0.125rem;
+  cursor: pointer;
+}
+.r-note-highlight:hover {
+  background-color: rgba(212, 175, 55, 0.28);
+}
+
+/* Annotation mode: subtle reminder strip + text cursor over the reading area. */
+.r-annotate-mode {
+  cursor: text;
+}
+.r-annotate-banner {
+  position: fixed;
+  top: 4rem; /* below the 4rem navbar */
+  left: 0;
+  right: 0;
+  z-index: 50;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 4px 0;
+  background-color: rgba(212, 175, 55, 0.14);
+  color: #8a6d1f;
+}
+
+/* Floating "+ Note" button anchored near a text selection. */
+.r-note-add-btn {
+  position: fixed;
+  z-index: 70;
+  transform: translate(-50%, 0);
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #0a2347;
+  background: radial-gradient(circle at 38% 30%, #e9c56b, #ecb320 58%, #a28348);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
