@@ -1086,8 +1086,26 @@ function ReaderContent() {
       }
       const range = sel.getRangeAt(0);
       const isSyl = (id) => manifestIndexOf.has(id);
-      const startId = closestSylId(range.startContainer, isSyl);
-      const endId = closestSylId(range.endContainer, isSyl);
+      let startId = closestSylId(range.startContainer, isSyl);
+      let endId = closestSylId(range.endContainer, isSyl);
+      // Triple-click / line selection can land an endpoint on the paragraph
+      // node rather than a syllable span. Fall back to scanning the syllable
+      // spans the selection actually intersects.
+      if (!startId || !endId) {
+        const root = range.commonAncestorContainer;
+        const scope = root.nodeType === 1 ? root : root.parentElement;
+        let first = null;
+        let last = null;
+        scope?.querySelectorAll?.("[id]").forEach((el) => {
+          if (!manifestIndexOf.has(el.id)) return;
+          if (sel.containsNode(el, true)) {
+            if (!first) first = el.id;
+            last = el.id;
+          }
+        });
+        startId = startId || first;
+        endId = endId || last;
+      }
       if (!startId || !endId) {
         setPendingSelection(null);
         return;
