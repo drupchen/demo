@@ -1122,7 +1122,7 @@ function ReaderContent() {
         endSylId,
         anchorText,
         x: rect.left + rect.width / 2,
-        y: rect.top - 10,
+        y: rect.top - 18,
       });
     };
     const onMouseDown = (e) => {
