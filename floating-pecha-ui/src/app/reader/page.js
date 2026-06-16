@@ -1113,16 +1113,16 @@ function ReaderContent() {
       const { startSylId, endSylId } = orderAnchors(startId, endId, manifestIndexOf);
       const anchorText = sel.toString().slice(0, 280);
       const rect = range.getBoundingClientRect();
-      // Anchor the button at the selection's TOP-RIGHT corner (the conventional
-      // spot in Docs/Medium-style annotators). The CSS right-aligns it to this
-      // x and lifts it fully above (translate(-100%, -100%)), so it floats above
-      // and to the right — clear of the cursor and never overflowing the right.
+      // Anchor the button entirely to the RIGHT of the selection, vertically
+      // centered on it. The CSS places its left edge at x and centers it
+      // (translate(0, -50%)), so it sits beside the passage — clear of the
+      // cursor. Clamp x so it never runs off the right edge of the viewport.
       setPendingSelection({
         startSylId,
         endSylId,
         anchorText,
-        x: rect.right,
-        y: rect.top - 8,
+        x: Math.min(rect.right + 10, window.innerWidth - 44),
+        y: rect.top + rect.height / 2,
       });
     };
     const onMouseDown = (e) => {

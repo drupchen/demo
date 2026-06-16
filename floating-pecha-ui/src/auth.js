@@ -10,6 +10,10 @@ import { verifyPassword } from "@/lib/passwords";
 const DUMMY_HASH = "$2a$10$ItGWTLxsSWg5sRn4E3sK8elipiuGCQXTluiwE01FD7EZiHCaagVRu";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  // Infer the origin from the incoming request rather than requiring AUTH_URL.
+  // Lets sign-in work under `next dev` on any port (and on the Workers domain),
+  // not just the AUTH_URL configured for `npm run dev:cf`.
+  trustHost: true,
   session: { strategy: "jwt" },
   pages: {
     // Use our custom sign-in page instead of the Auth.js default chrome.
