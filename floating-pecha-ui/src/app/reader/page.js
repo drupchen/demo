@@ -1113,15 +1113,16 @@ function ReaderContent() {
       const { startSylId, endSylId } = orderAnchors(startId, endId, manifestIndexOf);
       const anchorText = sel.toString().slice(0, 280);
       const rect = range.getBoundingClientRect();
-      // Place the button BELOW the selection with a clear gap, so a rapid
-      // double/triple-click (which lands on the selected line) never hits the
-      // button and accidentally opens the composer with a partial selection.
+      // Anchor the button ABOVE the selection. The CSS translates it up by its
+      // own full height (translate(-50%, -100%)), so it floats entirely above
+      // the line — never under the cursor, so a rapid double/triple-click on
+      // the text can't hit it and open the composer with a partial selection.
       setPendingSelection({
         startSylId,
         endSylId,
         anchorText,
         x: rect.left + rect.width / 2,
-        y: rect.bottom + 10,
+        y: rect.top - 10,
       });
     };
     const onMouseDown = (e) => {

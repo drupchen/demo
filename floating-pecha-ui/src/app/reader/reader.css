@@ -417,7 +417,9 @@
 .r-note-add-btn {
   position: fixed;
   z-index: 70;
-  transform: translate(-50%, 0);
+  /* Anchored at the selection top; lifted fully above it (own height) so it
+     never sits under the cursor on a double/triple-click. */
+  transform: translate(-50%, -100%);
   padding: 4px 10px;
   border-radius: 9999px;
   font-size: 11px;
