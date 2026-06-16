@@ -417,9 +417,10 @@
 .r-note-add-btn {
   position: fixed;
   z-index: 70;
-  /* Anchored at the selection top; lifted fully above it (own height) so it
-     never sits under the cursor on a double/triple-click. */
-  transform: translate(-50%, -100%);
+  /* Anchored at the selection's top-right corner; right-aligned to that x and
+     lifted fully above, so it floats above-right, clear of the cursor and the
+     right viewport edge. */
+  transform: translate(-100%, -100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -432,7 +433,7 @@
   transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
 }
 .r-note-add-btn:hover {
-  transform: translate(-50%, -100%) scale(1.07);
+  transform: translate(-100%, -100%) scale(1.07);
   filter: brightness(1.06);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }

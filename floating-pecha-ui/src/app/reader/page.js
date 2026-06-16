@@ -1113,16 +1113,16 @@ function ReaderContent() {
       const { startSylId, endSylId } = orderAnchors(startId, endId, manifestIndexOf);
       const anchorText = sel.toString().slice(0, 280);
       const rect = range.getBoundingClientRect();
-      // Anchor the button ABOVE the selection. The CSS translates it up by its
-      // own full height (translate(-50%, -100%)), so it floats entirely above
-      // the line — never under the cursor, so a rapid double/triple-click on
-      // the text can't hit it and open the composer with a partial selection.
+      // Anchor the button at the selection's TOP-RIGHT corner (the conventional
+      // spot in Docs/Medium-style annotators). The CSS right-aligns it to this
+      // x and lifts it fully above (translate(-100%, -100%)), so it floats above
+      // and to the right — clear of the cursor and never overflowing the right.
       setPendingSelection({
         startSylId,
         endSylId,
         anchorText,
-        x: rect.left + rect.width / 2,
-        y: rect.top - 18,
+        x: rect.right,
+        y: rect.top - 8,
       });
     };
     const onMouseDown = (e) => {
@@ -1586,7 +1586,7 @@ function ReaderContent() {
               setPendingSelection(null);
             }}
           >
-            {/* Comment bubble (tail at bottom-left) */}
+            {/* Comment bubble (tail at bottom-left) with text lines inside */}
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="16"
@@ -1600,6 +1600,8 @@ function ReaderContent() {
               aria-hidden="true"
             >
               <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+              <line x1="8" y1="10" x2="16" y2="10" />
+              <line x1="8" y1="13.5" x2="13.5" y2="13.5" />
             </svg>
           </button>
         )}
