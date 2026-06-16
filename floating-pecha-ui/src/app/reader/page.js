@@ -27,7 +27,6 @@ import SectionMarker from "./SectionMarker";
 import { useSession } from "next-auth/react";
 import { useNotes } from "./useNotes";
 import { closestSylId, orderAnchors } from "@/lib/note-selection";
-import NoteComposer from "./NoteComposer";
 import NotePopover from "./NotePopover";
 import NotesTab from "./NotesTab";
 import "./reader.css";
@@ -171,6 +170,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
   sylIdToSections,
   noteHighlightSet,
   onNoteSylClick,
+  annotateMode,
 }) {
   const ref = useRef(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -255,22 +255,20 @@ const LazyParagraph = React.memo(function LazyParagraph({
     } else if (isHoveredSegment) {
       bgClass = "r-syl-hovered";
     }
-    if (isNoted && !bgClass) extraClass = `${extraClass} r-note-highlight`;
+    if (isNoted && annotateMode && !bgClass) extraClass = `${extraClass} r-note-highlight`;
 
     return (
       <span
         key={syl.id}
         id={syl.id}
         onClick={
-          isNoted
-            ? () => onNoteSylClick?.(syl.id)
-            : hasMedia
-            ? () => handleSyllableClick(syl.id)
-            : undefined
+          annotateMode
+            ? (isNoted ? () => onNoteSylClick?.(syl.id) : undefined)
+            : (hasMedia ? () => handleSyllableClick(syl.id) : undefined)
         }
         className={`${fontClass} r-syl inline relative ${colorClass} ${bgClass} ${extraClass} ${
-          hasMedia && !isSelected && !isNoted ? "cursor-pointer r-hover-red" : ""
-        } ${isNoted ? "cursor-pointer" : ""} ${isInPlayingSegment || isHoveredSegment ? "rounded-sm" : ""}`}
+          !annotateMode && hasMedia && !isSelected ? "cursor-pointer r-hover-red" : ""
+        } ${annotateMode && isNoted ? "cursor-pointer" : ""} ${isInPlayingSegment || isHoveredSegment ? "rounded-sm" : ""}`}
         style={sizeStyle}
       >
         {syl.text}
@@ -369,9 +367,9 @@ function ReaderContent() {
   const [annotateMode, setAnnotateMode] = useState(false);
   // Pending selection awaiting the "+ Note" button: { startSylId, endSylId, anchorText, x, y }
   const [pendingSelection, setPendingSelection] = useState(null);
-  // When set, the composer panel is open for this anchor.
-  const [composerAnchor, setComposerAnchor] = useState(null);
-  const [noteView, setNoteView] = useState(null); // { sylId, x, y }
+  // Unified note panel (create + view), positioned beside the passage/selection.
+  // { x, y, sylId? , createAnchor? }  — exactly one of sylId / createAnchor is set.
+  const [notePanel, setNotePanel] = useState(null);
 
   const {
     notes,
@@ -655,16 +653,26 @@ function ReaderContent() {
     return set;
   }, [notes, manifestIndexOf, manifest]);
 
-  const noteViewNotes = useMemo(() => {
-    if (!noteView) return [];
-    const i = manifestIndexOf.get(noteView.sylId);
+  const panelNotes = useMemo(() => {
+    if (!notePanel) return [];
+    const sylId = notePanel.sylId ?? notePanel.createAnchor?.startSylId;
+    const i = manifestIndexOf.get(sylId);
     if (i == null) return [];
     return notes.filter((n) => {
       const a = manifestIndexOf.get(n.start_syl_id);
       const b = manifestIndexOf.get(n.end_syl_id);
       return a != null && b != null && i >= a && i <= b;
     });
-  }, [noteView, notes, manifestIndexOf]);
+  }, [notePanel, notes, manifestIndexOf]);
+
+  const panelAnchor = useMemo(() => {
+    if (!notePanel) return null;
+    if (notePanel.createAnchor) return notePanel.createAnchor;
+    const head = panelNotes[0];
+    return head
+      ? { startSylId: head.start_syl_id, endSylId: head.end_syl_id, anchorText: head.anchor_text || "" }
+      : null;
+  }, [notePanel, panelNotes]);
 
   // ----------------------------------------
   // Derived data: cumulative syllable visual weights
@@ -1095,23 +1103,19 @@ function ReaderContent() {
     };
   }, [annotateMode, manifestIndexOf]);
 
-  const handleCreateNote = useCallback(
-    async ({ kind, bodyText, audioBlob, audioDurationMs }) => {
-      if (!composerAnchor) return;
+  const handleCreateInPanel = useCallback(
+    async (payload) => {
+      if (!panelAnchor) return;
       await createNoteApi({
-        startSylId: composerAnchor.startSylId,
-        endSylId: composerAnchor.endSylId,
-        anchorText: composerAnchor.anchorText,
-        kind,
-        bodyText,
-        audioBlob,
-        audioDurationMs,
+        startSylId: panelAnchor.startSylId,
+        endSylId: panelAnchor.endSylId,
+        anchorText: panelAnchor.anchorText,
+        ...payload,
       });
-      setComposerAnchor(null);
       setPendingSelection(null);
       window.getSelection()?.removeAllRanges();
     },
-    [composerAnchor, createNoteApi]
+    [panelAnchor, createNoteApi]
   );
 
   const handleGoToNote = useCallback(
@@ -1125,19 +1129,10 @@ function ReaderContent() {
   const handleNoteSylClick = useCallback((sylId) => {
     const el = document.getElementById(sylId);
     const rect = el?.getBoundingClientRect();
-    setNoteView({
+    setNotePanel({
       sylId,
       x: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
       y: rect ? rect.bottom + 6 : 120,
-    });
-  }, []);
-
-  const handleAddNoteToPassage = useCallback((note) => {
-    setNoteView(null);
-    setComposerAnchor({
-      startSylId: note.start_syl_id,
-      endSylId: note.end_syl_id,
-      anchorText: note.anchor_text || "",
     });
   }, []);
 
@@ -1516,13 +1511,24 @@ function ReaderContent() {
         showLeftReveal={!!sapche && !tocOpen}
         onRevealLeft={() => setTocOpen(true)}
       >
-        {pendingSelection && !composerAnchor && (
+        {pendingSelection && !notePanel && (
           <button
             type="button"
             className="r-note-add-btn"
             style={{ left: pendingSelection.x, top: pendingSelection.y }}
             onMouseDown={(e) => e.preventDefault()} // keep the selection alive
-            onClick={() => setComposerAnchor(pendingSelection)}
+            onClick={() => {
+              setNotePanel({
+                x: pendingSelection.x,
+                y: pendingSelection.y,
+                createAnchor: {
+                  startSylId: pendingSelection.startSylId,
+                  endSylId: pendingSelection.endSylId,
+                  anchorText: pendingSelection.anchorText,
+                },
+              });
+              setPendingSelection(null);
+            }}
           >
             + Note
           </button>
@@ -1569,6 +1575,7 @@ function ReaderContent() {
                 sylIdToSections={sylIdToSections}
                 noteHighlightSet={noteHighlightSet}
                 onNoteSylClick={handleNoteSylClick}
+                annotateMode={annotateMode}
               />
             ))}
           </div>
@@ -1577,27 +1584,16 @@ function ReaderContent() {
         <Footer className="mt-8" style={{ paddingBottom: "3.5rem" }} />
       </ReaderLayout>
 
-      {composerAnchor && (
-        <div
-          className="fixed z-70 right-6 bottom-20 w-80 max-w-[90vw] p-4 rounded-lg border r-border r-bg shadow-xl"
-        >
-          <NoteComposer
-            anchorText={composerAnchor.anchorText}
-            onSubmit={handleCreateNote}
-            onCancel={() => { setComposerAnchor(null); setPendingSelection(null); }}
-          />
-        </div>
-      )}
-
-      {noteView && noteViewNotes.length > 0 && (
+      {notePanel && (panelNotes.length > 0 || notePanel.createAnchor) && (
         <NotePopover
-          notes={noteViewNotes}
-          x={noteView.x}
-          y={noteView.y}
-          onClose={() => setNoteView(null)}
+          notes={panelNotes}
+          anchor={panelAnchor}
+          x={notePanel.x}
+          y={notePanel.y}
+          onClose={() => setNotePanel(null)}
+          onCreate={handleCreateInPanel}
           onUpdateNote={updateNoteApi}
           onDeleteNote={deleteNoteApi}
-          onAddNote={() => handleAddNoteToPassage(noteViewNotes[0])}
         />
       )}
 
