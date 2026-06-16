@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { inter, uchen } from "@/lib/theme";
 import { formatNoteDate } from "@/lib/noteFormat";
 import NoteComposer from "./NoteComposer";
+import DeleteButton from "./DeleteButton";
 
 /**
  * Floating popover anchored beside a passage/selection. Handles three states:
@@ -88,9 +89,7 @@ export default function NotePopover({ notes, anchor, x, y, onClose, onCreate, on
                         <button type="button" onClick={() => setEditingId(note.id)}
                           className="r-text-muted r-hover-accent underline">Edit</button>
                       )}
-                      <button type="button"
-                        onClick={() => { if (confirm("Delete this note?")) onDeleteNote(note.id); }}
-                        className="underline" style={{ color: "#8B1D1D" }}>Delete</button>
+                      <DeleteButton onDelete={() => onDeleteNote(note.id)} />
                     </span>
                   </div>
                 </>

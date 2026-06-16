@@ -4,6 +4,7 @@ import { useState } from "react";
 import { inter, uchen } from "@/lib/theme";
 import { formatNoteDate } from "@/lib/noteFormat";
 import NoteComposer from "./NoteComposer";
+import DeleteButton from "./DeleteButton";
 
 /**
  * Right-sidebar tab listing the user's notes for the current teaching, grouped
@@ -95,9 +96,7 @@ export default function NotesTab({
                       <button type="button" onClick={() => setEditingId(note.id)}
                         className="r-text-muted r-hover-accent underline">Edit</button>
                     )}
-                    <button type="button"
-                      onClick={() => { if (confirm("Delete this note?")) onDeleteNote(note.id); }}
-                      className="underline" style={{ color: "#8B1D1D" }}>Delete</button>
+                    <DeleteButton onDelete={() => onDeleteNote(note.id)} />
                     </span>
                   </div>
                 </>
