@@ -15,6 +15,9 @@ export default function ReaderNavbar({
   hasContents,
   prefs,
   onUpdatePref,
+  canAnnotate,
+  annotateMode,
+  onToggleAnnotate,
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef(null);
@@ -62,6 +65,19 @@ export default function ReaderNavbar({
       </div>
 
       <div className="flex items-center gap-1">
+        {canAnnotate && (
+          <button
+            onClick={onToggleAnnotate}
+            className={`p-2 rounded-md transition-colors duration-200 ${annotateMode ? "r-text-accent" : "r-text-muted r-hover-accent"}`}
+            aria-label={annotateMode ? "Quitter le mode annotation" : "Activer le mode annotation"}
+            aria-pressed={annotateMode}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            </svg>
+          </button>
+        )}
         <button
           onClick={onToggleSearch}
           className="p-2 rounded-md transition-colors duration-200 r-text-muted r-hover-accent"
