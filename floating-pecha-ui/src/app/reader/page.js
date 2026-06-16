@@ -13,11 +13,13 @@ import React, {
 import Footer from "@/app/components/Footer";
 import { getSizes, getThemeCssVars, inter, uchen } from "@/lib/theme";
 import { parseToMs, useAudioPlayer } from "@/lib/useAudioPlayer";
+import useIsMobile from "@/lib/useIsMobile";
 import { useReaderPreferences } from "@/lib/useReaderPreferences";
 import { useTranscription } from "@/lib/useTranscription";
 import FloatingPopover from "./FloatingPopover";
 import InfoTab from "./InfoTab";
 import MiniPlayer from "./MiniPlayer";
+import MobileAudioBar from "./MobileAudioBar";
 import PlayerTab from "./PlayerTab";
 import ReaderLayout from "./ReaderLayout";
 import ReaderNavbar from "./ReaderNavbar";
@@ -439,6 +441,8 @@ function ReaderContent() {
   // Hooks
   const { prefs, updatePref, loaded } = useReaderPreferences();
   const audio = useAudioPlayer();
+  // Below Tailwind's md breakpoint we switch to a stacked, off-canvas layout.
+  const isMobile = useIsMobile();
   // Oral-transcription layer (absent for instances not yet transcribed).
   const { hasTranscription, transTextByGid, transSessions, transSegSylsByGid } =
     useTranscription(instanceId);
@@ -519,6 +523,15 @@ function ReaderContent() {
       setActiveSylId(urlSylId);
     }
   }, [urlSession, urlSylId]);
+
+  // On mobile the TOC and player are off-canvas overlays, so they must start
+  // closed (the desktop default of an open inline TOC would cover the screen).
+  useEffect(() => {
+    if (isMobile) {
+      setTocOpen(false);
+      setSidebarOpen(false);
+    }
+  }, [isMobile]);
 
   // ----------------------------------------
   // Data loading
@@ -1500,6 +1513,22 @@ function ReaderContent() {
   // ----------------------------------------
   const sidebarContent = (
     <div className="flex flex-col h-full">
+      {isMobile && (
+        <div className="relative flex items-center px-3 pt-2 pb-1">
+          <div className="mx-auto h-1 w-10 rounded-full bg-black/15" />
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close player"
+            className="absolute right-2 flex items-center justify-center w-9 h-9 rounded-full r-text-muted active:bg-black/10"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      )}
       <div className="flex border-b r-border">
         {TABS.map((tab) => {
           const isActive = activeTab === tab.key;
@@ -1588,6 +1617,9 @@ function ReaderContent() {
 
       <ReaderLayout
         ref={scrollContainerRef}
+        isMobile={isMobile}
+        onCloseLeft={() => setTocOpen(false)}
+        onCloseSidebar={() => setSidebarOpen(false)}
         sidebarOpen={sidebarOpen}
         sidebar={sidebarContent}
         leftSidebar={sapche ? (
@@ -1621,7 +1653,7 @@ function ReaderContent() {
         <div
           ref={rootTextRef}
           className="max-w-4xl mx-auto"
-          style={{ padding: "3rem" }}
+          style={{ padding: isMobile ? "1.25rem 1rem 5rem" : "3rem" }}
         >
           <div className={`${uchen.className} text-justify`}>
             {paragraphs.map((paraSyls, pIdx) => (
@@ -1671,17 +1703,32 @@ function ReaderContent() {
         />
       )}
 
-      <MiniPlayer
-        manifest={manifest}
-        sessions={sessions}
-        allTeachingGroups={allTeachingGroups}
-        activeTeachingFilter={activeTeachingFilter}
-        getCommentaryGroup={getCommentaryGroup}
-        commentaryColorMap={commentaryColorMap}
-        viewportRange={viewportRange}
-        onNavigateToPosition={handleNavigateToPosition}
-        syllableWeights={syllableWeights}
-      />
+      {/* Desktop: hover-driven text-coverage navigation strip. */}
+      {!isMobile && (
+        <MiniPlayer
+          manifest={manifest}
+          sessions={sessions}
+          allTeachingGroups={allTeachingGroups}
+          activeTeachingFilter={activeTeachingFilter}
+          getCommentaryGroup={getCommentaryGroup}
+          commentaryColorMap={commentaryColorMap}
+          viewportRange={viewportRange}
+          onNavigateToPosition={handleNavigateToPosition}
+          syllableWeights={syllableWeights}
+        />
+      )}
+
+      {/* Mobile: thumb-zone audio bar (only when audio is loaded). */}
+      {isMobile && !sidebarOpen && (
+        <MobileAudioBar
+          audio={audio}
+          title={teachingTitle || activeCommentary}
+          onExpand={() => {
+            setActiveTab("player");
+            setSidebarOpen(true);
+          }}
+        />
+      )}
     </main>
   );
 }

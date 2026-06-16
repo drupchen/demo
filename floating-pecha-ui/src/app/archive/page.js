@@ -109,7 +109,7 @@ function ArchiveContent() {
         flexDirection: 'column',
       }}
     >
-      <div style={{ width: '100%', maxWidth: 960, margin: '0 auto', padding: '64px 24px 80px', flexGrow: 1 }}>
+      <div className="rd-archive-body" style={{ width: '100%', maxWidth: 960, margin: '0 auto', padding: '64px 24px 80px', flexGrow: 1 }}>
 
         {/* HERO */}
         <header style={{ marginBottom: 56, textAlign: 'center' }}>
@@ -448,6 +448,14 @@ function ArchiveContent() {
         }
         .rd-arrow {
           transition: stroke 0.35s, transform 0.35s cubic-bezier(0.22, 0.61, 0.30, 1);
+        }
+        @media (max-width: 767px) {
+          .rd-archive-body {
+            padding: 36px 16px 64px !important;
+          }
+          .rd-card {
+            padding: 20px 18px !important;
+          }
         }
       `}</style>
     </main>

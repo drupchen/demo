@@ -8,6 +8,12 @@ export const metadata = {
     'A digital archive of the recorded teachings of Dilgo Khyentse Rinpoche — preserved, aligned to their texts, and opened to all who wish to listen.',
 };
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+};
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en">

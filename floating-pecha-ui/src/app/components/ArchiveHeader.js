@@ -42,6 +42,7 @@ export default function ArchiveHeader() {
       }}
     >
       <div
+        className="rd-header-inner"
         style={{
           display: "flex",
           alignItems: "center",
@@ -216,6 +217,11 @@ export default function ArchiveHeader() {
         </div>
       </div>
       <style jsx>{`
+        @media (max-width: 767px) {
+          .rd-header-inner {
+            padding: 12px 18px !important;
+          }
+        }
         @media (min-width: 768px) {
           .rd-meta {
             display: inline !important;

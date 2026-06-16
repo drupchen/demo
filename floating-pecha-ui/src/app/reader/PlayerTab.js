@@ -442,7 +442,7 @@ export default function PlayerTab({
         <div className="flex items-center gap-4 mb-3">
           <button
             onClick={audio.togglePlay}
-            className="w-10 h-10 rounded-full text-white flex items-center justify-center transition-colors flex-shrink-0 r-bg-accent"
+            className="w-11 h-11 rounded-full text-white flex items-center justify-center transition-colors flex-shrink-0 r-bg-accent"
             aria-label={audio.isPlaying ? "Pause" : "Play"}
           >
             {audio.isPlaying ? (

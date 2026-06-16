@@ -28,7 +28,7 @@ export default function ReaderNavbar({
 
   return (
     <nav className={`${outfit.className} fixed top-0 z-60 w-full h-16 border-b px-6 md:px-10 flex items-center justify-between r-bg r-border`}>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 md:gap-4">
         {/* Small brand seal — anchors the reader in the same visual lineage as the landing */}
         <Link
           href="/"
@@ -53,12 +53,12 @@ export default function ReaderNavbar({
             <line x1="19" y1="12" x2="5" y2="12" />
             <polyline points="12 19 5 12 12 5" />
           </svg>
-          <span>Catalog</span>
+          <span className="hidden md:inline">Catalog</span>
         </Link>
       </div>
 
       {/* Center: always-visible search */}
-      <div className="flex-1 flex items-center justify-center px-4 min-w-0">
+      <div className="flex-1 flex items-center justify-center px-2 md:px-4 min-w-0">
         {center}
       </div>
 
