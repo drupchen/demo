@@ -66,8 +66,11 @@ await test("createNote inserts a row scoped to the user and returns it", async (
   assert.equal(note.kind, "text");
   assert.equal(note.body_text, "hello");
   assert.ok(note.id, "id is generated");
+  assert.ok(note.created_at, "created_at is stamped on the returned note");
+  assert.equal(note.updated_at, note.created_at, "updated_at matches created_at on create");
   const call = db.calls[0];
   assert.match(call.sql, /INSERT INTO notes/);
+  assert.match(call.sql, /created_at, updated_at/);
   assert.equal(call.args[1], "user-1"); // id, user_id, ...
 });
 
