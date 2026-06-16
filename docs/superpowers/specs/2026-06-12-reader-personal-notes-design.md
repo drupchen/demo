@@ -107,8 +107,10 @@ another user's notes.
 prepared D1 statements (`listNotes`, `createNote`, `getNote`, `updateNote`,
 `deleteNote`). Routes stay thin.
 
-**Server-side validation:** `body_text` ≤ ~10,000 chars; audio ≤ ~5 MB;
-`kind` ∈ {text, voice}; non-empty `instance_id` and anchors.
+**Server-side validation:** `kind` ∈ {text, voice}; non-empty `instance_id`
+and anchors; a text note has non-empty `body_text`; a voice note has an audio
+file. **No size limits** on text or audio (user decision). R2 streams large
+objects fine; a guardrail can be added later if long recordings prove costly.
 
 ## UI & Interaction
 
@@ -157,7 +159,7 @@ prepared D1 statements (`listNotes`, `createNote`, `getNote`, `updateNote`,
   webm). The R2 key extension follows the actual MIME type.
 - **UI:** mic button → recording state (timer + simple waveform/pulse), stop
   button, preview (`<audio>` on the local blob URL) before saving, re-record
-  option. Soft ~5 min client limit, hard-capped at the server limit (5 MB).
+  option. No duration limit (user decision); the timer is informational only.
 - **Mic permission:** if the user denies access, show a clear message and fall
   back to text-only notes (no blocking).
 - **Submission:** the `Blob` goes into the `FormData` of `POST /api/notes`. No
@@ -179,8 +181,8 @@ prepared D1 statements (`listNotes`, `createNote`, `getNote`, `updateNote`,
 Existing `node` suite (`tests/*.test.mjs`):
 - `notes.js` data-access: create/list/get/update/delete with mocked D1 →
   isolation by `user_id` (a user cannot see another user's notes).
-- Route validation: 401 without a session; rejects invalid `kind`, oversized
-  body, oversized audio.
+- Route validation: 401 without a session; rejects invalid `kind`, a text note
+  with empty `body_text`, a voice note with no audio file.
 - Selection → `start/end syl_id` resolution: a pure, testable function (DOM
   range → ids) tested with a fake span tree.
 - Deletion: confirms the associated R2 object is removed.
