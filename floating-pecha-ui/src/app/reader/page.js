@@ -24,6 +24,11 @@ import SapcheSidebar from "./SapcheSidebar";
 import SapcheStudyView from "./SapcheStudyView";
 import SearchBar from "./SearchBar";
 import SectionMarker from "./SectionMarker";
+import { useSession } from "next-auth/react";
+import { useNotes } from "./useNotes";
+import { closestSylId, orderAnchors } from "@/lib/note-selection";
+import NoteComposer from "./NoteComposer";
+import NotesTab from "./NotesTab";
 import "./reader.css";
 
 // ==========================================
@@ -32,6 +37,7 @@ import "./reader.css";
 const TABS = [
   { key: "player", label: "Player" },
   { key: "info", label: "Info" },
+  { key: "notes", label: "Notes" },
 ];
 
 const COMMENTARY_COLORS = [
@@ -162,6 +168,8 @@ const LazyParagraph = React.memo(function LazyParagraph({
   handleSyllableClick,
   uchen,
   sylIdToSections,
+  noteHighlightSet,
+  onNoteSylClick,
 }) {
   const ref = useRef(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -217,6 +225,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
     const isHoveredSegment = hoveredSegSylIds.has(syl.id);
     const isActiveMatch = activeMatchSet.has(syl.id);
     const isAnyMatch = allMatchesSet.has(syl.id);
+    const isNoted = noteHighlightSet?.has(syl.id);
 
     const fontClass =
       syl.nature === "TEXT" || syl.nature === "PUNCT" || syl.nature === "SYM"
@@ -245,12 +254,19 @@ const LazyParagraph = React.memo(function LazyParagraph({
     } else if (isHoveredSegment) {
       bgClass = "r-syl-hovered";
     }
+    if (isNoted && !bgClass) extraClass = `${extraClass} r-note-highlight`;
 
     return (
       <span
         key={syl.id}
         id={syl.id}
-        onClick={hasMedia ? () => handleSyllableClick(syl.id) : undefined}
+        onClick={
+          hasMedia
+            ? () => handleSyllableClick(syl.id)
+            : isNoted
+            ? () => onNoteSylClick?.(syl.id)
+            : undefined
+        }
         className={`${fontClass} r-syl inline relative ${colorClass} ${bgClass} ${extraClass} ${
           hasMedia && !isSelected ? "cursor-pointer r-hover-red" : ""
         } ${isInPlayingSegment || isHoveredSegment ? "rounded-sm" : ""}`}
@@ -345,6 +361,22 @@ function ReaderContent() {
   // Hooks
   const { prefs, updatePref, loaded } = useReaderPreferences();
   const audio = useAudioPlayer();
+
+  const { data: session } = useSession();
+  const loggedIn = !!session?.user?.id;
+
+  const [annotateMode, setAnnotateMode] = useState(false);
+  // Pending selection awaiting the "+ Note" button: { startSylId, endSylId, anchorText, x, y }
+  const [pendingSelection, setPendingSelection] = useState(null);
+  // When set, the composer panel is open for this anchor.
+  const [composerAnchor, setComposerAnchor] = useState(null);
+
+  const {
+    notes,
+    createNote: createNoteApi,
+    updateNote: updateNoteApi,
+    deleteNote: deleteNoteApi,
+  } = useNotes(instanceId, loggedIn);
 
   // Data state
   const [manifest, setManifest] = useState([]);
@@ -601,6 +633,25 @@ function ReaderContent() {
     if (current.length > 0) result.push(current);
     return result;
   }, [manifest]);
+
+  // sylId -> manifest index, for ordering anchors and sorting notes by position.
+  const manifestIndexOf = useMemo(() => {
+    const m = new Map();
+    manifest.forEach((s, i) => m.set(s.id, i));
+    return m;
+  }, [manifest]);
+
+  // Set of every syllable id covered by a note's [start..end] span.
+  const noteHighlightSet = useMemo(() => {
+    const set = new Set();
+    for (const note of notes) {
+      const a = manifestIndexOf.get(note.start_syl_id);
+      const b = manifestIndexOf.get(note.end_syl_id);
+      if (a == null || b == null) continue; // anchor broken — shown in tab only
+      for (let i = a; i <= b; i++) set.add(manifest[i].id);
+    }
+    return set;
+  }, [notes, manifestIndexOf, manifest]);
 
   // ----------------------------------------
   // Derived data: cumulative syllable visual weights
@@ -970,6 +1021,7 @@ function ReaderContent() {
   // ----------------------------------------
   const handleSyllableClick = useCallback(
     (sylId) => {
+      if (annotateMode) return; // selection drives annotation; ignore audio click
       setActiveSylId((prev) => {
         if (prev === sylId) {
           setPopoverOpen(false);
@@ -983,7 +1035,70 @@ function ReaderContent() {
         setActiveCommentary(null);
       }
     },
-    [activeCommentary, audio],
+    [activeCommentary, audio, annotateMode],
+  );
+
+  // While annotation mode is on, watch for a finished text selection and show
+  // the "+ Note" button near it.
+  useEffect(() => {
+    if (!annotateMode) {
+      setPendingSelection(null);
+      return;
+    }
+    const onMouseUp = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+        setPendingSelection(null);
+        return;
+      }
+      const range = sel.getRangeAt(0);
+      const isSyl = (id) => manifestIndexOf.has(id);
+      const startId = closestSylId(range.startContainer, isSyl);
+      const endId = closestSylId(range.endContainer, isSyl);
+      if (!startId || !endId) {
+        setPendingSelection(null);
+        return;
+      }
+      const { startSylId, endSylId } = orderAnchors(startId, endId, manifestIndexOf);
+      const anchorText = sel.toString().slice(0, 280);
+      const rect = range.getBoundingClientRect();
+      setPendingSelection({
+        startSylId,
+        endSylId,
+        anchorText,
+        x: rect.left + rect.width / 2,
+        y: rect.top - 8,
+      });
+    };
+    document.addEventListener("mouseup", onMouseUp);
+    return () => document.removeEventListener("mouseup", onMouseUp);
+  }, [annotateMode, manifestIndexOf]);
+
+  const handleCreateNote = useCallback(
+    async ({ kind, bodyText, audioBlob, audioDurationMs }) => {
+      if (!composerAnchor) return;
+      await createNoteApi({
+        startSylId: composerAnchor.startSylId,
+        endSylId: composerAnchor.endSylId,
+        anchorText: composerAnchor.anchorText,
+        kind,
+        bodyText,
+        audioBlob,
+        audioDurationMs,
+      });
+      setComposerAnchor(null);
+      setPendingSelection(null);
+      window.getSelection()?.removeAllRanges();
+    },
+    [composerAnchor, createNoteApi]
+  );
+
+  const handleGoToNote = useCallback(
+    (note) => {
+      setActiveTab("notes");
+      scrollToSyllable(note.start_syl_id, paragraphs);
+    },
+    [paragraphs]
   );
 
   const handleCommentarySelect = useCallback(
@@ -1289,6 +1404,17 @@ function ReaderContent() {
             getCommentaryGroup={getCommentaryGroup}
           />
         )}
+
+        {activeTab === "notes" && (
+          <NotesTab
+            notes={notes}
+            loggedIn={loggedIn}
+            manifestIndexOf={manifestIndexOf}
+            onGoToNote={handleGoToNote}
+            onUpdateNote={updateNoteApi}
+            onDeleteNote={deleteNoteApi}
+          />
+        )}
       </div>
     </div>
   );
@@ -1298,7 +1424,9 @@ function ReaderContent() {
   // ----------------------------------------
   return (
     <main
-      className="min-h-screen flex flex-col r-bg r-text-1a overflow-x-hidden"
+      className={`min-h-screen flex flex-col r-bg r-text-1a overflow-x-hidden${
+        annotateMode ? " r-annotate-mode" : ""
+      }`}
       style={getThemeCssVars(prefs)}
     >
       <audio {...audio.audioProps} />
@@ -1313,6 +1441,9 @@ function ReaderContent() {
         hasContents={!!sapche}
         prefs={prefs}
         onUpdatePref={updatePref}
+        canAnnotate={loggedIn}
+        annotateMode={annotateMode}
+        onToggleAnnotate={() => setAnnotateMode((v) => !v)}
       />
 
       <SearchBar
@@ -1321,6 +1452,12 @@ function ReaderContent() {
         onMatchSetsChange={handleMatchSetsChange}
         initialQuery={urlQ || ""}
       />
+
+      {annotateMode && (
+        <div className="r-annotate-banner">
+          Mode annotation — sélectionnez un passage pour ajouter une note
+        </div>
+      )}
 
       <ReaderLayout
         ref={scrollContainerRef}
@@ -1339,6 +1476,18 @@ function ReaderContent() {
         showLeftReveal={!!sapche && !tocOpen}
         onRevealLeft={() => setTocOpen(true)}
       >
+        {pendingSelection && !composerAnchor && (
+          <button
+            type="button"
+            className="r-note-add-btn"
+            style={{ left: pendingSelection.x, top: pendingSelection.y }}
+            onMouseDown={(e) => e.preventDefault()} // keep the selection alive
+            onClick={() => setComposerAnchor(pendingSelection)}
+          >
+            + Note
+          </button>
+        )}
+
         {/* Floating Context Popover */}
         <FloatingPopover
           activeSylId={activeSylId}
@@ -1378,6 +1527,16 @@ function ReaderContent() {
                 handleSyllableClick={handleSyllableClick}
                 uchen={uchen}
                 sylIdToSections={sylIdToSections}
+                noteHighlightSet={noteHighlightSet}
+                onNoteSylClick={(sylId) => {
+                  const n = notes.find((nt) => {
+                    const a = manifestIndexOf.get(nt.start_syl_id);
+                    const b = manifestIndexOf.get(nt.end_syl_id);
+                    const i = manifestIndexOf.get(sylId);
+                    return a != null && b != null && i != null && i >= a && i <= b;
+                  });
+                  if (n) { setSidebarOpen(true); setActiveTab("notes"); }
+                }}
               />
             ))}
           </div>
@@ -1385,6 +1544,18 @@ function ReaderContent() {
 
         <Footer className="mt-8" style={{ paddingBottom: "3.5rem" }} />
       </ReaderLayout>
+
+      {composerAnchor && (
+        <div
+          className="fixed z-70 right-6 bottom-20 w-80 max-w-[90vw] p-4 rounded-lg border r-border r-bg shadow-xl"
+        >
+          <NoteComposer
+            anchorText={composerAnchor.anchorText}
+            onSubmit={handleCreateNote}
+            onCancel={() => { setComposerAnchor(null); setPendingSelection(null); }}
+          />
+        </div>
+      )}
 
       {studyOpen && sapche && (
         <SapcheStudyView
