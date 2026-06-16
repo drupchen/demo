@@ -420,10 +420,11 @@
   /* Anchored at the selection top; lifted fully above it (own height) so it
      never sits under the cursor on a double/triple-click. */
   transform: translate(-50%, -100%);
-  padding: 4px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px;
   border-radius: 9999px;
-  font-size: 11px;
-  font-weight: 600;
   color: #0a2347;
   background: radial-gradient(circle at 38% 30%, #e9c56b, #ecb320 58%, #a28348);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);

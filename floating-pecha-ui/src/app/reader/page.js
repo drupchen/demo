@@ -1570,6 +1570,8 @@ function ReaderContent() {
             type="button"
             className="r-note-add-btn"
             style={{ left: pendingSelection.x, top: pendingSelection.y }}
+            aria-label="Add note"
+            title="Add note"
             onMouseDown={(e) => e.preventDefault()} // keep the selection alive
             onClick={() => {
               setNotePanel({
@@ -1584,7 +1586,24 @@ function ReaderContent() {
               setPendingSelection(null);
             }}
           >
-            + Note
+            {/* Sticky note with a folded corner + a small plus */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Z" />
+              <path d="M14 3v6h6" />
+              <line x1="8.5" y1="14" x2="13.5" y2="14" />
+              <line x1="11" y1="11.5" x2="11" y2="16.5" />
+            </svg>
           </button>
         )}
 
