@@ -39,16 +39,24 @@ const ReaderLayout = forwardRef(function ReaderLayout(
       {showLeftReveal && (
         <button
           type="button"
-          className="r-toc-reveal"
           onClick={onRevealLeft}
           title="Show contents"
           aria-label="Show contents"
+          className="h-full w-8 flex-shrink-0 border-r r-sidebar r-text-muted r-hover-accent hover:bg-black/5 transition-colors flex items-start justify-center pt-3"
         >
-          contents »
+          <svg
+            xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" strokeWidth="2"
+            strokeLinecap="round" strokeLinejoin="round"
+            style={{ transform: "scaleX(-1)" }}
+          >
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <line x1="15" y1="3" x2="15" y2="21" />
+          </svg>
         </button>
       )}
 
-      <div ref={ref} className="flex-1 overflow-y-auto">
+      <div ref={ref} data-reader-scroll className="flex-1 overflow-y-auto">
         {children}
       </div>
 

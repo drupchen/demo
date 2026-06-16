@@ -81,22 +81,41 @@ function scrollToSyllable(sylId, paragraphs, instant = false) {
   const behavior = instant ? "instant" : "smooth";
   const el = document.getElementById(sylId);
   if (el) {
-    el.scrollIntoView({ behavior, block: "center" });
+    scrollElToReadAnchor(el, behavior);
     return;
   }
   const pIdx = paragraphs.findIndex((p) => p.some((syl) => syl.id === sylId));
   if (pIdx < 0) return;
   const paraEl = document.querySelector(`[data-pidx="${pIdx}"]`);
   if (!paraEl) return;
-  paraEl.scrollIntoView({ behavior: "instant", block: "center" });
+  // Bring the placeholder into view to trigger its IntersectionObserver render,
+  // then anchor the exact syllable once it exists.
+  paraEl.scrollIntoView({ behavior: "instant", block: "start" });
   let attempts = 0;
   const check = setInterval(() => {
     const sylEl = document.getElementById(sylId);
     if (sylEl || ++attempts > 40) {
       clearInterval(check);
-      if (sylEl) sylEl.scrollIntoView({ behavior, block: "center" });
+      if (sylEl) scrollElToReadAnchor(sylEl, behavior);
     }
   }, 50);
+}
+
+// Vertical anchor for the "currently read" line during read-along: this many
+// text lines below the top of the scroll container (was previously centered).
+const READALONG_TOP_LINES = 3;
+
+function scrollElToReadAnchor(el, behavior = "smooth") {
+  const container = document.querySelector("[data-reader-scroll]");
+  if (!container || !el) return false;
+  const lh = parseFloat(getComputedStyle(el).lineHeight) || 36;
+  const top =
+    el.getBoundingClientRect().top -
+    container.getBoundingClientRect().top +
+    container.scrollTop -
+    READALONG_TOP_LINES * lh;
+  container.scrollTo({ top: Math.max(0, top), behavior });
+  return true;
 }
 
 /** Extract commentary group prefix from session ID (e.g. "A1_xxx" → "A") */
@@ -140,10 +159,20 @@ function findWeightAtY(y, paragraphEls, paragraphWeightBounds) {
   if (!bounds) return 0;
 
   const paraRect = paraEl.getBoundingClientRect();
-  const paraFrac = Math.max(
-    0,
-    Math.min(1, (y - paraRect.top) / Math.max(1, paraRect.height)),
-  );
+  // Transcription mode inserts transcript blocks inside the paragraph; their
+  // height carries no text weight, so spread the paragraph's weight over its
+  // main-text height only (discount any .r-trans-block heights).
+  let blocksTotal = 0;
+  let blocksAboveY = 0;
+  for (const tb of paraEl.querySelectorAll(".r-trans-block")) {
+    const r = tb.getBoundingClientRect();
+    blocksTotal += r.height;
+    if (r.bottom <= y) blocksAboveY += r.height;
+    else if (r.top < y) blocksAboveY += y - r.top; // straddles y
+  }
+  const mainHeight = Math.max(1, paraRect.height - blocksTotal);
+  const mainAbove = Math.max(0, y - paraRect.top - blocksAboveY);
+  const paraFrac = Math.max(0, Math.min(1, mainAbove / mainHeight));
   return bounds.wStart + paraFrac * (bounds.wEnd - bounds.wStart);
 }
 
@@ -163,12 +192,15 @@ const LazyParagraph = React.memo(function LazyParagraph({
   hoveredSegSylIds,
   activeMatchSet,
   allMatchesSet,
+  transActiveMatchSet,
+  transAllMatchSet,
   handleSyllableClick,
   uchen,
   sylIdToSections,
   transcriptionMode,
   transBlocksByAnchor,
-  passageSylIds,
+  transSegSylsByGid,
+  activePassageSylIds,
   onTransSegClick,
 }) {
   const ref = useRef(null);
@@ -231,14 +263,19 @@ const LazyParagraph = React.memo(function LazyParagraph({
         ? uchen.className
         : "font-sans";
 
-    let colorClass = isCoveredByFilter
-      ? "r-text"
-      : "r-text-disabled r-syl-dimmed";
-    if (!hasMedia && isCoveredByFilter) colorClass = "r-text-muted";
+    // In transcription mode the transcript is the body; the root text is shown
+    // in a distinct vermilion (not dimmed by audio coverage).
+    let colorClass;
+    if (transcriptionMode) {
+      colorClass = "r-text-root";
+    } else {
+      colorClass = isCoveredByFilter ? "r-text" : "r-text-disabled r-syl-dimmed";
+      if (!hasMedia && isCoveredByFilter) colorClass = "r-text-muted";
+    }
     let bgClass = "";
     let extraClass = "";
 
-    if (isSelected) {
+    if (isSelected && !transcriptionMode) {
       colorClass = "r-text-accent";
       extraClass = "font-bold";
     }
@@ -254,9 +291,9 @@ const LazyParagraph = React.memo(function LazyParagraph({
       bgClass = "r-syl-hovered";
     }
 
-    // Transcription mode: mark the commented passage so the reader sees what the
-    // oral commentary beneath covers.
-    const isInPassage = transcriptionMode && passageSylIds?.has(syl.id);
+    // Transcription mode: shade only the main-text passage of the currently
+    // selected/playing transcript segment.
+    const isInPassage = transcriptionMode && activePassageSylIds?.has(syl.id);
 
     return (
       <span
@@ -284,8 +321,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
   // Transcription block placed after a passage's last syllable.
   const renderTransBlock = (segs, anchorId) => (
     <div key={`tb-${anchorId}`} className="r-trans-block" contentEditable={false}>
-      <div className="r-trans-label">Transcription</div>
-      <div className={`${uchen.className} r-trans-text`}>
+      <div className={`${uchen.className} r-trans-text`} style={sizes.BIG}>
         {segs.map((s) => (
           <span
             key={s.gid}
@@ -293,7 +329,18 @@ const LazyParagraph = React.memo(function LazyParagraph({
             className="r-tseg r-tseg-clickable"
             onClick={() => onTransSegClick(s.gid)}
           >
-            {s.text}{" "}
+            {(transSegSylsByGid[s.gid] || []).map((syl) => {
+              const cls = transActiveMatchSet?.has(syl.id)
+                ? "r-match-active"
+                : transAllMatchSet?.has(syl.id)
+                  ? "r-match"
+                  : "";
+              return (
+                <span key={syl.id} id={syl.id} className={cls}>
+                  {syl.text}
+                </span>
+              );
+            })}
           </span>
         ))}
       </div>
@@ -393,7 +440,7 @@ function ReaderContent() {
   const { prefs, updatePref, loaded } = useReaderPreferences();
   const audio = useAudioPlayer();
   // Oral-transcription layer (absent for instances not yet transcribed).
-  const { hasTranscription, transTextByGid, transSessions } =
+  const { hasTranscription, transTextByGid, transSessions, transSegSylsByGid } =
     useTranscription(instanceId);
 
   // Data state
@@ -413,10 +460,12 @@ function ReaderContent() {
   // While a sapche click is settling the scroll, ignore scroll-driven active
   // updates so the highlighted row doesn't flicker to intermediate sections.
   const suppressActiveUntilRef = useRef(0);
-  const [searchOpen, setSearchOpen] = useState(!!urlQ);
   // When on, the main reader interleaves the oral transcription beneath each
   // commented passage and read-along follows the transcription segments.
   const [transcriptionMode, setTranscriptionMode] = useState(false);
+  // The transcript segment currently under the playhead / selected. Drives the
+  // active transcript highlight and the shaded root-text passage.
+  const [activeTransGid, setActiveTransGid] = useState(null);
   const [activeTab, setActiveTab] = useState("player");
   const [activeSylId, setActiveSylId] = useState(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -431,9 +480,11 @@ function ReaderContent() {
   // "No session on current location" message for teaching chip clicks
   const [noSessionMessage, setNoSessionMessage] = useState(null);
 
-  // Search match highlighting
+  // Search match highlighting (main text + transcript layers)
   const [activeMatchSet, setActiveMatchSet] = useState(new Set());
   const [allMatchesSet, setAllMatchesSet] = useState(new Set());
+  const [transActiveMatchSet, setTransActiveMatchSet] = useState(new Set());
+  const [transAllMatchSet, setTransAllMatchSet] = useState(new Set());
 
   // Dual-scroll: playing segment highlight + auto-scroll
   const [playingSegSylIds, setPlayingSegSylIds] = useState(new Set());
@@ -654,6 +705,19 @@ function ReaderContent() {
     return { byAnchor, passageSylIds, flat };
   }, [transcriptionMode, hasTranscription, activeCommentarySegments, transSegByGid]);
 
+  // Main-text syllables of the active transcript segment's passage — the only
+  // passage shaded in transcription mode.
+  const activePassageSylIds = useMemo(() => {
+    if (!transcriptionMode || !activeTransGid) return EMPTY_SET;
+    const set = new Set();
+    for (const p of activeCommentarySegments) {
+      if ((p.transcription_seg_ids || []).includes(activeTransGid)) {
+        (p.syl_uuids || []).forEach((u) => set.add(u));
+      }
+    }
+    return set;
+  }, [transcriptionMode, activeTransGid, activeCommentarySegments]);
+
   // Read-along: follow the live audio playhead with requestAnimationFrame so the
   // highlight switches on the true segment boundary, not on the throttled (~4 Hz)
   // `timeupdate` event. Toggles the class directly on the DOM (no re-render).
@@ -670,6 +734,8 @@ function ReaderContent() {
       if (gid)
         document.getElementById(`tseg-${gid}`)?.classList.add("r-tseg-active");
       curGid = gid;
+      // Coarse state update (once per segment) to drive the shaded root passage.
+      setActiveTransGid(gid);
     };
     const tick = () => {
       const t = getTime();
@@ -896,9 +962,11 @@ function ReaderContent() {
     if (!container || !sapcheNodes.length) return;
     const update = () => {
       if (Date.now() < suppressActiveUntilRef.current) return; // settling a click
-      // Match the teleport's top-alignment: a section is "active" once its
-      // marker reaches ~the scroll-margin line below the reading area's top.
-      const top = container.getBoundingClientRect().top + 28;
+      // Use the same read anchor as the follow/teleport scroll: a section is
+      // "active" once its marker reaches ~3 text lines below the reading top.
+      const sample = container.querySelector(".r-syl");
+      const lh = (sample && parseFloat(getComputedStyle(sample).lineHeight)) || 36;
+      const top = container.getBoundingClientRect().top + READALONG_TOP_LINES * lh;
       let active = null;
       for (const n of sapcheNodes) {
         const el =
@@ -963,6 +1031,7 @@ function ReaderContent() {
   // A timeline click teleports via handleSegmentClick, so skip the smooth follow
   // scroll while the jumped-to segment is the current one.
   useEffect(() => {
+    if (transcriptionMode) return; // transcript mode follows the transcript (below)
     if (playingSegSylIds.size === 0) return;
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -971,9 +1040,18 @@ function ReaderContent() {
     if (Date.now() - rootTextScrolledAt < 8000) return;
     const el = document.getElementById(firstId);
     if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      scrollElToReadAnchor(el, "smooth");
     }
-  }, [playingSegSylIds, rootTextScrolledAt]);
+  }, [playingSegSylIds, rootTextScrolledAt, transcriptionMode]);
+
+  // Transcription mode: keep the active transcript segment at the read anchor
+  // (the transcript is the star here, not the main text).
+  useEffect(() => {
+    if (!transcriptionMode || !activeTransGid) return;
+    if (Date.now() - rootTextScrolledAt < 8000) return; // respect user scroll
+    const el = document.getElementById(`tseg-${activeTransGid}`);
+    if (el) scrollElToReadAnchor(el, "smooth");
+  }, [transcriptionMode, activeTransGid, rootTextScrolledAt]);
 
   // Scroll-lock detection for root text panel
   useEffect(() => {
@@ -1045,7 +1123,7 @@ function ReaderContent() {
       container.removeEventListener("scroll", updateViewport);
       ro.disconnect();
     };
-  }, [manifest, paragraphWeightBounds]); // re-attach when manifest loads or weight bounds change
+  }, [manifest, paragraphWeightBounds, transcriptionMode]); // re-attach + recompute when weights change or transcript blocks toggle
 
   // ----------------------------------------
   // Navigate to position in text (from coverage bar click)
@@ -1144,8 +1222,9 @@ function ReaderContent() {
     (gid) => {
       const seg = transSegByGid[gid];
       if (!seg) return;
+      // Seek only: a playing element keeps playing from here (plays this
+      // segment); a paused one just moves the selection here, awaiting Play.
       audio.seekTo(seg.startMs);
-      audio.play();
     },
     [transSegByGid, audio],
   );
@@ -1304,7 +1383,7 @@ function ReaderContent() {
         return;
       }
       const el = document.getElementById(firstSylId);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (el) scrollElToReadAnchor(el, "smooth");
     },
     [paragraphs],
   );
@@ -1313,6 +1392,26 @@ function ReaderContent() {
     setActiveMatchSet(activeSet);
     setAllMatchesSet(allSet);
   }, []);
+
+  const handleTransMatchSetsChange = useCallback((activeSet, allSet) => {
+    setTransActiveMatchSet(activeSet);
+    setTransAllMatchSet(allSet);
+  }, []);
+
+  // Displayed transcription syllables, flat + document-ordered, for the
+  // in-reader transcript search. Each carries its segment gid and the passage
+  // anchor syllable so SearchBar can highlight/order/scroll to it.
+  const transcriptSyllables = useMemo(() => {
+    const out = [];
+    for (const [anchorId, segs] of Object.entries(transcriptionView.byAnchor)) {
+      for (const s of segs) {
+        for (const syl of transSegSylsByGid[s.gid] || []) {
+          out.push({ id: syl.id, text: syl.text, gid: s.gid, anchorId });
+        }
+      }
+    }
+    return out;
+  }, [transcriptionView, transSegSylsByGid]);
 
   const onToggleCollapse = useCallback((id) => {
     setCollapsedIds((prev) => {
@@ -1436,6 +1535,9 @@ function ReaderContent() {
             sidebarSizes={sidebarSizes}
             preferRestored={preferRestored}
             onTogglePreferRestored={() => setPreferRestored((prev) => !prev)}
+            hasTranscription={hasTranscription}
+            transcriptionOn={transcriptionMode}
+            onToggleTranscription={() => setTranscriptionMode((v) => !v)}
             getCommentaryGroup={getCommentaryGroup}
             noSessionMessage={noSessionMessage}
             instanceId={instanceId}
@@ -1469,24 +1571,19 @@ function ReaderContent() {
 
       <ReaderNavbar
         onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
-        onToggleSearch={() => setSearchOpen((prev) => !prev)}
-        onToggleContents={() => setTocOpen((v) => !v)}
-        onOpenStudy={() => setStudyOpen(true)}
-        onToggleTranscription={() => setTranscriptionMode((v) => !v)}
-        transcriptionOn={transcriptionMode}
-        hasTranscription={hasTranscription}
         sidebarOpen={sidebarOpen}
-        contentsOpen={tocOpen}
-        hasContents={!!sapche}
         prefs={prefs}
         onUpdatePref={updatePref}
-      />
-
-      <SearchBar
-        manifest={manifest}
-        visible={searchOpen}
-        onMatchSetsChange={handleMatchSetsChange}
-        initialQuery={urlQ || ""}
+        center={
+          <SearchBar
+            manifest={manifest}
+            onMatchSetsChange={handleMatchSetsChange}
+            onTransMatchSetsChange={handleTransMatchSetsChange}
+            transcriptActive={transcriptionMode && hasTranscription}
+            transcriptSyllables={transcriptSyllables}
+            initialQuery={urlQ || ""}
+          />
+        }
       />
 
       <ReaderLayout
@@ -1524,7 +1621,7 @@ function ReaderContent() {
         <div
           ref={rootTextRef}
           className="max-w-4xl mx-auto"
-          style={{ padding: searchOpen ? "5rem 3rem 3rem 3rem" : "3rem" }}
+          style={{ padding: "3rem" }}
         >
           <div className={`${uchen.className} text-justify`}>
             {paragraphs.map((paraSyls, pIdx) => (
@@ -1542,12 +1639,15 @@ function ReaderContent() {
                 hoveredSegSylIds={transcriptionMode ? EMPTY_SET : hoveredSegSylIds}
                 activeMatchSet={activeMatchSet}
                 allMatchesSet={allMatchesSet}
+                transActiveMatchSet={transActiveMatchSet}
+                transAllMatchSet={transAllMatchSet}
                 handleSyllableClick={handleSyllableClick}
                 uchen={uchen}
                 sylIdToSections={sylIdToSections}
                 transcriptionMode={transcriptionMode}
                 transBlocksByAnchor={transcriptionView.byAnchor}
-                passageSylIds={transcriptionView.passageSylIds}
+                transSegSylsByGid={transSegSylsByGid}
+                activePassageSylIds={activePassageSylIds}
                 onTransSegClick={handleTransSegClick}
               />
             ))}

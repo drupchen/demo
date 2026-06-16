@@ -7,15 +7,8 @@ import ReadingSettings from './ReadingSettings';
 
 export default function ReaderNavbar({
   onToggleSidebar,
-  onToggleSearch,
-  onToggleContents,
-  onOpenStudy,
-  onToggleTranscription,
-  transcriptionOn,
-  hasTranscription,
+  center,
   sidebarOpen,
-  contentsOpen,
-  hasContents,
   prefs,
   onUpdatePref,
 }) {
@@ -64,18 +57,12 @@ export default function ReaderNavbar({
         </Link>
       </div>
 
-      <div className="flex items-center gap-1">
-        <button
-          onClick={onToggleSearch}
-          className="p-2 rounded-md transition-colors duration-200 r-text-muted r-hover-accent"
-          aria-label="Toggle search"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-        </button>
+      {/* Center: always-visible search */}
+      <div className="flex-1 flex items-center justify-center px-4 min-w-0">
+        {center}
+      </div>
 
+      <div className="flex items-center gap-1">
         <div className="relative" ref={settingsRef}>
           <button
             onClick={() => setSettingsOpen(prev => !prev)}
@@ -93,36 +80,6 @@ export default function ReaderNavbar({
             />
           )}
         </div>
-
-        {hasTranscription && onToggleTranscription && (
-          <button
-            onClick={onToggleTranscription}
-            className={`p-2 rounded-md transition-colors duration-200 text-xs font-medium tracking-wide ${transcriptionOn ? 'r-text-accent' : 'r-text-muted r-hover-accent'}`}
-            aria-label={transcriptionOn ? 'Hide transcription' : 'Show transcription'}
-          >
-            Transcription
-          </button>
-        )}
-
-        {hasContents && (
-          <button
-            onClick={onToggleContents}
-            className={`p-2 rounded-md transition-colors duration-200 text-xs font-medium tracking-wide ${contentsOpen ? 'r-text-accent' : 'r-text-muted r-hover-accent'}`}
-            aria-label={contentsOpen ? 'Close contents' : 'Open contents'}
-          >
-            Contents
-          </button>
-        )}
-
-        {hasContents && onOpenStudy && (
-          <button
-            onClick={onOpenStudy}
-            className="p-2 rounded-md transition-colors duration-200 text-xs font-medium tracking-wide r-text-muted r-hover-accent"
-            aria-label="Open sapche study view"
-          >
-            Study
-          </button>
-        )}
 
         <button
           onClick={onToggleSidebar}

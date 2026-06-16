@@ -65,7 +65,9 @@ export default function InfoTab({ instanceId, activeCommentary, activeCommentary
     for (let i = 0; i < numBlocks; i++) {
       const start = i * chunkSize;
       const end = Math.min(start + chunkSize, manifest.length);
-      const chunkSyls = manifest.slice(start, end);
+      // Exclude newline syllables (rendered as <br>) so blank-line-heavy chunks
+      // don't read low — matches the coverageStats percentage filter above.
+      const chunkSyls = manifest.slice(start, end).filter(s => s.text !== '\n');
 
       // Calculate coverage ratio for this chunk
       let coveredCount = 0;

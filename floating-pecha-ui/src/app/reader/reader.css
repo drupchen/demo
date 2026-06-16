@@ -29,6 +29,12 @@
   color: var(--reader-accent, #D4AF37);
 }
 
+/* Root (main) text in transcription mode — traditional pecha vermilion, so it
+   stays distinct from the black transcript body. */
+.r-text-root {
+  color: var(--theme-hover-red, #8B1D1D);
+}
+
 .r-text-white {
   color: #FFFFFF;
 }
@@ -369,41 +375,25 @@
   white-space: nowrap;
 }
 
-/* Reveal tab shown when the sidebar is hidden */
-.r-toc-reveal { position:absolute; top:50%; left:0; transform:translateY(-50%); z-index:30;
-  writing-mode:vertical-rl; padding:12px 4px; font-size:11px; letter-spacing:0.1em;
-  background:#F2EFE8; color:#8B1D1D; border:1px solid #e0dccf; border-left:0;
-  border-radius:0 6px 6px 0; cursor:pointer; }
 
 /* ── Transcription mode: passage mark + interleaved read-along ───────────── */
-/* The commented main-text passage being covered by the oral transcription. */
+/* The main-text passage of the active transcript segment — very light red so it
+   reads as the root-text portion, distinct from the transcript segment's
+   (gold/cream) selection highlight. */
 .r-syl-passage {
-  background-color: var(--reader-accent-subtle, #FDF8EE);
+  background-color: rgba(139, 29, 29, 0.08);
 }
 
-/* The transcription block placed beneath a passage. */
+/* The transcription, flowing as prominent body text beneath a passage (no box).
+   Size/line-height come from the inline `sizes` style so it matches the main
+   text; color is the primary ink (the root text is the distinct one). */
 .r-trans-block {
   display: block;
   clear: both;
   margin: 0.6em 0 1.1em 0;
-  padding: 0.5em 0.9em;
-  border-left: 3px solid var(--reader-accent, #D4AF37);
-  background-color: var(--reader-bg-elevated, #F5F5F5);
-  border-radius: 0 6px 6px 0;
-}
-.r-trans-label {
-  font-family: var(--font-inter, sans-serif);
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: var(--reader-text-secondary, #6B7280);
-  margin-bottom: 0.25em;
 }
 .r-trans-text {
-  font-size: 1.35rem;
-  line-height: 1.7;
-  color: var(--reader-text-secondary, #6B7280);
+  color: var(--reader-text-primary, #1A1A1A);
 }
 /* Each transcription segment; the one under the playhead is highlighted. */
 .r-tseg {
@@ -421,4 +411,3 @@
   color: var(--reader-text-primary, #1A1A1A);
   background-color: var(--reader-accent-subtle, #FDF8EE);
 }
-.r-toc-reveal:hover { background:#e8e3d8; }

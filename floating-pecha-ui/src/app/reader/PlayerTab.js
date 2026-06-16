@@ -32,6 +32,9 @@ export default function PlayerTab({
   sidebarSizes,
   preferRestored,
   onTogglePreferRestored,
+  hasTranscription,
+  transcriptionOn,
+  onToggleTranscription,
   getCommentaryGroup,
   noSessionMessage,
   instanceId,
@@ -388,26 +391,50 @@ export default function PlayerTab({
           >
             Current session: {shortSessionId}
           </div>
-          {hasRestored && onTogglePreferRestored && (
-            <div className="flex rounded-md overflow-hidden border r-border flex-shrink-0">
-              <button
-                onClick={() => preferRestored && onTogglePreferRestored()}
-                className={`${inter.className} px-2.5 py-1 text-[10px] font-bold transition-all ${
-                  !preferRestored ? "r-btn-active" : "r-text-secondary"
-                }`}
-              >
-                Original
-              </button>
-              <button
-                onClick={() => !preferRestored && onTogglePreferRestored()}
-                className={`${inter.className} px-2.5 py-1 text-[10px] font-bold transition-all ${
-                  preferRestored ? "r-btn-active" : "r-text-secondary"
-                }`}
-              >
-                Restored
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => hasTranscription && onToggleTranscription?.()}
+              disabled={!hasTranscription}
+              aria-pressed={transcriptionOn}
+              title={
+                !hasTranscription
+                  ? "No transcription available"
+                  : transcriptionOn
+                    ? "Hide transcription"
+                    : "Show transcription"
+              }
+              className={`${inter.className} px-2.5 py-1 text-[10px] font-bold rounded-md border r-border transition-all ${
+                !hasTranscription
+                  ? "r-text-disabled opacity-50 cursor-not-allowed"
+                  : transcriptionOn
+                    ? "r-btn-active"
+                    : "r-text-secondary"
+              }`}
+            >
+              Transcription
+            </button>
+
+            {hasRestored && onTogglePreferRestored && (
+              <div className="flex rounded-md overflow-hidden border r-border">
+                <button
+                  onClick={() => preferRestored && onTogglePreferRestored()}
+                  className={`${inter.className} px-2.5 py-1 text-[10px] font-bold transition-all ${
+                    !preferRestored ? "r-btn-active" : "r-text-secondary"
+                  }`}
+                >
+                  Original
+                </button>
+                <button
+                  onClick={() => !preferRestored && onTogglePreferRestored()}
+                  className={`${inter.className} px-2.5 py-1 text-[10px] font-bold transition-all ${
+                    preferRestored ? "r-btn-active" : "r-text-secondary"
+                  }`}
+                >
+                  Restored
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Play/Pause + Time — bar and times are one combo, vertically centered
