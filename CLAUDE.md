@@ -87,14 +87,29 @@ All colors and sizes are centralized. Pages use CSS custom properties via `getTh
 ## Development
 
 ```bash
-# Start the app on the Workers runtime (auth + D1 work here)
+# Fast iteration with hot reload (recommended) — auth + D1 + R2 all work here
 cd floating-pecha-ui
 npm install
-cp .dev.vars.example .dev.vars   # then set AUTH_SECRET to a real random string
+cp .dev.vars.example .dev.vars   # set AUTH_SECRET to a real random string
+# Make next dev load AUTH_SECRET (it does NOT read .dev.vars):
+grep '^AUTH_SECRET=' .dev.vars > .env.local   # .env.local is gitignored
+npm run dev                      # http://localhost:3000 (next picks 3001+ if busy)
+```
+
+**Prefer `npm run dev` for iteration** — instant HMR, no rebuild. It has full
+functionality because: `next.config.mjs` calls `initOpenNextCloudflareForDev()`
+(D1 `DB` + R2 `MEDIA` bindings, reading local `.wrangler/state`), `AUTH_SECRET`
+lives in `.env.local` (next dev loads `.env*`, not `.dev.vars`), and
+`trustHost: true` in `src/auth.js` lets sign-in infer the origin on any port.
+
+```bash
+# Final pre-deploy check on the real Workers runtime (slow: full OpenNext build)
 npm run dev:cf                   # http://localhost:8787 — first build takes 1–2 min
 ```
 
-`npm run dev` still runs a plain `next dev`, but **auth and D1 require `npm run dev:cf`** because the D1 binding is only injected under wrangler. Without a real `AUTH_SECRET` in `.dev.vars`, sign-in silently fails on `/api/auth/csrf`.
+Use `npm run dev:cf` only to validate against the actual Workers runtime before
+deploying; it rebuilds on every change (no hot reload). It reads `.dev.vars`
+directly (so `AUTH_SECRET` there is enough; `.env.local` is not needed for it).
 
 ### Seeding accounts (first time)
 
