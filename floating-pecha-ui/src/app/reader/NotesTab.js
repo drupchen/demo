@@ -86,10 +86,11 @@ export default function NotesTab({
                   {note.body_text && (
                     <p className="text-sm r-text-1a whitespace-pre-wrap">{note.body_text}</p>
                   )}
-                  {note.created_at ? (
-                    <div className="text-[10px] r-text-muted">{formatNoteDate(note.created_at)}</div>
-                  ) : null}
-                  <div className="flex items-center gap-3 text-[11px]">
+                  <div className="flex items-center justify-between gap-3 text-[11px]">
+                    <span className="text-[10px] r-text-muted">
+                      {note.created_at ? formatNoteDate(note.created_at) : ""}
+                    </span>
+                    <span className="flex items-center gap-3">
                     {note.kind === "text" && (
                       <button type="button" onClick={() => setEditingId(note.id)}
                         className="r-text-muted r-hover-accent underline">Edit</button>
@@ -97,6 +98,7 @@ export default function NotesTab({
                     <button type="button"
                       onClick={() => { if (confirm("Delete this note?")) onDeleteNote(note.id); }}
                       className="underline" style={{ color: "#8B1D1D" }}>Delete</button>
+                    </span>
                   </div>
                 </>
               )}

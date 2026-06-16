@@ -686,6 +686,15 @@ function ReaderContent() {
       : null;
   }, [notePanel, panelNotes]);
 
+  // A view-panel (opened on an annotated syllable, no createAnchor) whose notes
+  // were all deleted must fully close — otherwise notePanel stays set and the
+  // "+ Note" pill (gated on !notePanel) never reappears, blocking new notes.
+  useEffect(() => {
+    if (notePanel && !notePanel.createAnchor && panelNotes.length === 0) {
+      setNotePanel(null);
+    }
+  }, [notePanel, panelNotes]);
+
   // ----------------------------------------
   // Derived data: cumulative syllable visual weights
   // ----------------------------------------
