@@ -1121,8 +1121,8 @@ function ReaderContent() {
         startSylId,
         endSylId,
         anchorText,
-        x: Math.min(rect.right + 10, window.innerWidth - 44),
-        y: rect.top + rect.height / 2,
+        x: Math.min(rect.right, window.innerWidth - 44),
+        y: rect.top + rect.height / 2 - 30,
       });
     };
     const onMouseDown = (e) => {
