@@ -7,12 +7,8 @@ import ReadingSettings from './ReadingSettings';
 
 export default function ReaderNavbar({
   onToggleSidebar,
-  onToggleSearch,
-  onToggleContents,
-  onOpenStudy,
+  center,
   sidebarOpen,
-  contentsOpen,
-  hasContents,
   prefs,
   onUpdatePref,
   canAnnotate,
@@ -35,7 +31,7 @@ export default function ReaderNavbar({
 
   return (
     <nav className={`${outfit.className} fixed top-0 z-60 w-full h-16 border-b px-6 md:px-10 flex items-center justify-between r-bg r-border`}>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 md:gap-4">
         {/* Small brand seal — anchors the reader in the same visual lineage as the landing */}
         <Link
           href="/"
@@ -60,8 +56,13 @@ export default function ReaderNavbar({
             <line x1="19" y1="12" x2="5" y2="12" />
             <polyline points="12 19 5 12 12 5" />
           </svg>
-          <span>Catalog</span>
+          <span className="hidden md:inline">Catalog</span>
         </Link>
+      </div>
+
+      {/* Center: always-visible search */}
+      <div className="flex-1 flex items-center justify-center px-2 md:px-4 min-w-0">
+        {center}
       </div>
 
       <div className="flex items-center gap-1">
@@ -75,17 +76,6 @@ export default function ReaderNavbar({
             Notes
           </button>
         )}
-        <button
-          onClick={onToggleSearch}
-          className="p-2 rounded-md transition-colors duration-200 r-text-muted r-hover-accent"
-          aria-label="Toggle search"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-        </button>
-
         <div className="relative" ref={settingsRef}>
           <button
             onClick={() => setSettingsOpen(prev => !prev)}
@@ -104,29 +94,11 @@ export default function ReaderNavbar({
           )}
         </div>
 
-        {hasContents && (
-          <button
-            onClick={onToggleContents}
-            className={`p-2 rounded-md transition-colors duration-200 text-xs font-medium tracking-wide ${contentsOpen ? 'r-text-accent' : 'r-text-muted r-hover-accent'}`}
-            aria-label={contentsOpen ? 'Close contents' : 'Open contents'}
-          >
-            Contents
-          </button>
-        )}
-
-        {hasContents && onOpenStudy && (
-          <button
-            onClick={onOpenStudy}
-            className="p-2 rounded-md transition-colors duration-200 text-xs font-medium tracking-wide r-text-muted r-hover-accent"
-            aria-label="Open sapche study view"
-          >
-            Study
-          </button>
-        )}
-
+        {/* Sidebar toggle — desktop only. On mobile the player sheet opens on
+            recording-select and is controlled via the mini-player. */}
         <button
           onClick={onToggleSidebar}
-          className={`p-2 rounded-md transition-colors duration-200 ${sidebarOpen ? 'r-text-accent' : 'r-text-muted r-hover-accent'}`}
+          className={`hidden md:flex items-center justify-center p-2 rounded-md transition-colors duration-200 ${sidebarOpen ? 'r-text-accent' : 'r-text-muted r-hover-accent'}`}
           aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

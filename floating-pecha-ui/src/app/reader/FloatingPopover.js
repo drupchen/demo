@@ -140,7 +140,9 @@ export default function FloatingPopover({
                         <button
                             key={commentaryId}
                             onClick={() => {
-                                onCommentarySelect(commentaryId, segments[0]);
+                                // Select + open the sidebar, but wait for Play
+                                // (autoPlay = false) — auto-starting is intrusive.
+                                onCommentarySelect(commentaryId, segments[0], false);
                             }}
                             className="w-full text-left p-3 rounded-xl border border-black/5 bg-white transition-all group hover:border-[#D4AF37] hover:shadow-md"
                         >

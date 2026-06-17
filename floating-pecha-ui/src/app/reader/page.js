@@ -13,10 +13,13 @@ import React, {
 import Footer from "@/app/components/Footer";
 import { getSizes, getThemeCssVars, inter, uchen } from "@/lib/theme";
 import { parseToMs, useAudioPlayer } from "@/lib/useAudioPlayer";
+import useIsMobile from "@/lib/useIsMobile";
 import { useReaderPreferences } from "@/lib/useReaderPreferences";
+import { useTranscription } from "@/lib/useTranscription";
 import FloatingPopover from "./FloatingPopover";
 import InfoTab from "./InfoTab";
 import MiniPlayer from "./MiniPlayer";
+import MobileAudioBar from "./MobileAudioBar";
 import PlayerTab from "./PlayerTab";
 import ReaderLayout from "./ReaderLayout";
 import ReaderNavbar from "./ReaderNavbar";
@@ -47,6 +50,9 @@ const COMMENTARY_COLORS = [
   "#50B897",
   "#9B6BCD",
 ];
+
+// Stable empty set so memoized paragraphs don't re-render on identity churn.
+const EMPTY_SET = new Set();
 
 /**
  * Calculate visual weight of a Tibetan string by ignoring vowels and subjoined characters.
@@ -83,22 +89,41 @@ function scrollToSyllable(sylId, paragraphs, instant = false) {
   const behavior = instant ? "instant" : "smooth";
   const el = document.getElementById(sylId);
   if (el) {
-    el.scrollIntoView({ behavior, block: "center" });
+    scrollElToReadAnchor(el, behavior);
     return;
   }
   const pIdx = paragraphs.findIndex((p) => p.some((syl) => syl.id === sylId));
   if (pIdx < 0) return;
   const paraEl = document.querySelector(`[data-pidx="${pIdx}"]`);
   if (!paraEl) return;
-  paraEl.scrollIntoView({ behavior: "instant", block: "center" });
+  // Bring the placeholder into view to trigger its IntersectionObserver render,
+  // then anchor the exact syllable once it exists.
+  paraEl.scrollIntoView({ behavior: "instant", block: "start" });
   let attempts = 0;
   const check = setInterval(() => {
     const sylEl = document.getElementById(sylId);
     if (sylEl || ++attempts > 40) {
       clearInterval(check);
-      if (sylEl) sylEl.scrollIntoView({ behavior, block: "center" });
+      if (sylEl) scrollElToReadAnchor(sylEl, behavior);
     }
   }, 50);
+}
+
+// Vertical anchor for the "currently read" line during read-along: this many
+// text lines below the top of the scroll container (was previously centered).
+const READALONG_TOP_LINES = 3;
+
+function scrollElToReadAnchor(el, behavior = "smooth") {
+  const container = document.querySelector("[data-reader-scroll]");
+  if (!container || !el) return false;
+  const lh = parseFloat(getComputedStyle(el).lineHeight) || 36;
+  const top =
+    el.getBoundingClientRect().top -
+    container.getBoundingClientRect().top +
+    container.scrollTop -
+    READALONG_TOP_LINES * lh;
+  container.scrollTo({ top: Math.max(0, top), behavior });
+  return true;
 }
 
 /** Extract commentary group prefix from session ID (e.g. "A1_xxx" → "A") */
@@ -142,10 +167,20 @@ function findWeightAtY(y, paragraphEls, paragraphWeightBounds) {
   if (!bounds) return 0;
 
   const paraRect = paraEl.getBoundingClientRect();
-  const paraFrac = Math.max(
-    0,
-    Math.min(1, (y - paraRect.top) / Math.max(1, paraRect.height)),
-  );
+  // Transcription mode inserts transcript blocks inside the paragraph; their
+  // height carries no text weight, so spread the paragraph's weight over its
+  // main-text height only (discount any .r-trans-block heights).
+  let blocksTotal = 0;
+  let blocksAboveY = 0;
+  for (const tb of paraEl.querySelectorAll(".r-trans-block")) {
+    const r = tb.getBoundingClientRect();
+    blocksTotal += r.height;
+    if (r.bottom <= y) blocksAboveY += r.height;
+    else if (r.top < y) blocksAboveY += y - r.top; // straddles y
+  }
+  const mainHeight = Math.max(1, paraRect.height - blocksTotal);
+  const mainAbove = Math.max(0, y - paraRect.top - blocksAboveY);
+  const paraFrac = Math.max(0, Math.min(1, mainAbove / mainHeight));
   return bounds.wStart + paraFrac * (bounds.wEnd - bounds.wStart);
 }
 
@@ -165,6 +200,8 @@ const LazyParagraph = React.memo(function LazyParagraph({
   hoveredSegSylIds,
   activeMatchSet,
   allMatchesSet,
+  transActiveMatchSet,
+  transAllMatchSet,
   handleSyllableClick,
   uchen,
   sylIdToSections,
@@ -173,6 +210,11 @@ const LazyParagraph = React.memo(function LazyParagraph({
   onNoteSylHover,
   hoveredNoteSylIds,
   annotateMode,
+  transcriptionMode,
+  transBlocksByAnchor,
+  transSegSylsByGid,
+  activePassageSylIds,
+  onTransSegClick,
 }) {
   const ref = useRef(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -236,14 +278,19 @@ const LazyParagraph = React.memo(function LazyParagraph({
         ? uchen.className
         : "font-sans";
 
-    let colorClass = isCoveredByFilter
-      ? "r-text"
-      : "r-text-disabled r-syl-dimmed";
-    if (!hasMedia && isCoveredByFilter) colorClass = "r-text-muted";
+    // In transcription mode the transcript is the body; the root text is shown
+    // in a distinct vermilion (not dimmed by audio coverage).
+    let colorClass;
+    if (transcriptionMode) {
+      colorClass = "r-text-root";
+    } else {
+      colorClass = isCoveredByFilter ? "r-text" : "r-text-disabled r-syl-dimmed";
+      if (!hasMedia && isCoveredByFilter) colorClass = "r-text-muted";
+    }
     let bgClass = "";
     let extraClass = "";
 
-    if (isSelected) {
+    if (isSelected && !transcriptionMode) {
       colorClass = "r-text-accent";
       extraClass = "font-bold";
     }
@@ -261,6 +308,10 @@ const LazyParagraph = React.memo(function LazyParagraph({
     if (isNoted && annotateMode && !bgClass)
       extraClass = `${extraClass} r-note-highlight${isNoteHovered ? " r-note-hover" : ""}`;
 
+    // Transcription mode: shade only the main-text passage of the currently
+    // selected/playing transcript segment.
+    const isInPassage = transcriptionMode && activePassageSylIds?.has(syl.id);
+
     return (
       <span
         key={syl.id}
@@ -268,7 +319,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
         onClick={
           annotateMode
             ? (isNoted ? () => onNoteSylClick?.(syl.id) : undefined)
-            : (hasMedia ? () => handleSyllableClick(syl.id) : undefined)
+            : (hasMedia && !transcriptionMode ? () => handleSyllableClick(syl.id) : undefined)
         }
         onMouseEnter={
           annotateMode && isNoted ? () => onNoteSylHover?.(syl.id) : undefined
@@ -277,13 +328,54 @@ const LazyParagraph = React.memo(function LazyParagraph({
           annotateMode && isNoted ? () => onNoteSylHover?.(null) : undefined
         }
         className={`${fontClass} r-syl inline relative ${colorClass} ${bgClass} ${extraClass} ${
-          !annotateMode && hasMedia && !isSelected ? "cursor-pointer r-hover-red" : ""
+          isInPassage ? "r-syl-passage" : ""
+        } ${
+          !annotateMode && !transcriptionMode && hasMedia && !isSelected
+            ? "cursor-pointer r-hover-red"
+            : ""
         } ${annotateMode && isNoted ? "cursor-pointer" : ""} ${isInPlayingSegment || isHoveredSegment ? "rounded-sm" : ""}`}
         style={sizeStyle}
       >
         {syl.text}
       </span>
     );
+  };
+
+  // Transcription block placed after a passage's last syllable.
+  const renderTransBlock = (segs, anchorId) => (
+    <div key={`tb-${anchorId}`} className="r-trans-block" contentEditable={false}>
+      <div className={`${uchen.className} r-trans-text`} style={sizes.BIG}>
+        {segs.map((s) => (
+          <span
+            key={s.gid}
+            id={`tseg-${s.gid}`}
+            className="r-tseg r-tseg-clickable"
+            onClick={() => onTransSegClick(s.gid)}
+          >
+            {(transSegSylsByGid[s.gid] || []).map((syl) => {
+              const cls = transActiveMatchSet?.has(syl.id)
+                ? "r-match-active"
+                : transAllMatchSet?.has(syl.id)
+                  ? "r-match"
+                  : "";
+              return (
+                <span key={syl.id} id={syl.id} className={cls}>
+                  {syl.text}
+                </span>
+              );
+            })}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderSylWithBlock = (syl) => {
+    const span = renderSyl(syl);
+    if (transcriptionMode && transBlocksByAnchor?.[syl.id]) {
+      return [span, renderTransBlock(transBlocksByAnchor[syl.id], syl.id)];
+    }
+    return span;
   };
 
   // Build a flat list of items, breaking on commentary-set change OR a section
@@ -328,7 +420,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
             <SectionMarker key={`m-${n.id}`} node={n} />
           ));
         }
-        const syls = item.syls.map(renderSyl);
+        const syls = item.syls.map(renderSylWithBlock);
         if (item.groups.length === 0) {
           return <React.Fragment key={`s${i}`}>{syls}</React.Fragment>;
         }
@@ -370,6 +462,11 @@ function ReaderContent() {
   // Hooks
   const { prefs, updatePref, loaded } = useReaderPreferences();
   const audio = useAudioPlayer();
+  // Below Tailwind's md breakpoint we switch to a stacked, off-canvas layout.
+  const isMobile = useIsMobile();
+  // Oral-transcription layer (absent for instances not yet transcribed).
+  const { hasTranscription, transTextByGid, transSessions, transSegSylsByGid } =
+    useTranscription(instanceId);
 
   const { data: session } = useSession();
   const loggedIn = !!session?.user?.id;
@@ -407,7 +504,12 @@ function ReaderContent() {
   // While a sapche click is settling the scroll, ignore scroll-driven active
   // updates so the highlighted row doesn't flicker to intermediate sections.
   const suppressActiveUntilRef = useRef(0);
-  const [searchOpen, setSearchOpen] = useState(!!urlQ);
+  // When on, the main reader interleaves the oral transcription beneath each
+  // commented passage and read-along follows the transcription segments.
+  const [transcriptionMode, setTranscriptionMode] = useState(false);
+  // The transcript segment currently under the playhead / selected. Drives the
+  // active transcript highlight and the shaded root-text passage.
+  const [activeTransGid, setActiveTransGid] = useState(null);
   const [activeTab, setActiveTab] = useState("player");
   const [activeSylId, setActiveSylId] = useState(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -422,9 +524,11 @@ function ReaderContent() {
   // "No session on current location" message for teaching chip clicks
   const [noSessionMessage, setNoSessionMessage] = useState(null);
 
-  // Search match highlighting
+  // Search match highlighting (main text + transcript layers)
   const [activeMatchSet, setActiveMatchSet] = useState(new Set());
   const [allMatchesSet, setAllMatchesSet] = useState(new Set());
+  const [transActiveMatchSet, setTransActiveMatchSet] = useState(new Set());
+  const [transAllMatchSet, setTransAllMatchSet] = useState(new Set());
 
   // Dual-scroll: playing segment highlight + auto-scroll
   const [playingSegSylIds, setPlayingSegSylIds] = useState(new Set());
@@ -459,6 +563,15 @@ function ReaderContent() {
       setActiveSylId(urlSylId);
     }
   }, [urlSession, urlSylId]);
+
+  // On mobile the TOC and player are off-canvas overlays, so they must start
+  // closed (the desktop default of an open inline TOC would cover the screen).
+  useEffect(() => {
+    if (isMobile) {
+      setTocOpen(false);
+      setSidebarOpen(false);
+    }
+  }, [isMobile]);
 
   // ----------------------------------------
   // Data loading
@@ -580,6 +693,125 @@ function ReaderContent() {
       .filter((seg) => seg.source_session === activeCommentary)
       .sort((a, b) => parseToMs(a.start) - parseToMs(b.start));
   }, [sessions, activeCommentary]);
+
+  // Sorted segment start times for the currently-loaded audio — drives the
+  // mobile mini-bar's prev/next-segment arrows.
+  const audioSegStartsMs = useMemo(
+    () => activeCommentarySegments.map((s) => parseToMs(s.start)).sort((a, b) => a - b),
+    [activeCommentarySegments],
+  );
+
+  // ----------------------------------------
+  // Transcription mode: interleave + read-along data
+  // ----------------------------------------
+  // gid -> transcription segment {gid, startMs, endMs, text}
+  const transSegByGid = useMemo(() => {
+    const m = {};
+    transSessions.forEach((s) => {
+      const gid = s.global_seg_id || s.seg_id;
+      m[gid] = {
+        gid,
+        startMs: parseToMs(s.start),
+        endMs: s.end ? parseToMs(s.end) : parseToMs(s.start) + 8000,
+        text: transTextByGid[gid] || "",
+      };
+    });
+    return m;
+  }, [transSessions, transTextByGid]);
+
+  // For the active session: each commented passage's last syllable → its
+  // transcription segments (de-duped to a single home passage by start-time),
+  // plus the set of passage syllables to mark, and a flat time-sorted list.
+  const transcriptionView = useMemo(() => {
+    if (!transcriptionMode || !hasTranscription || activeCommentarySegments.length === 0) {
+      return { byAnchor: {}, passageSylIds: new Set(), flat: [] };
+    }
+    const ranges = activeCommentarySegments.map((p) => ({
+      start: parseToMs(p.start),
+      end: parseToMs(p.end),
+    }));
+    const passageSylIds = new Set();
+    activeCommentarySegments.forEach((p) =>
+      (p.syl_uuids || []).forEach((u) => passageSylIds.add(u)),
+    );
+    const assigned = new Set();
+    const homeByIdx = activeCommentarySegments.map(() => []);
+    activeCommentarySegments.forEach((p) => {
+      (p.transcription_seg_ids || []).forEach((gid) => {
+        if (assigned.has(gid)) return;
+        const ts = transSegByGid[gid];
+        if (!ts) return;
+        let home = ranges.findIndex((r) => ts.startMs >= r.start && ts.startMs < r.end);
+        if (home === -1) home = 0;
+        homeByIdx[home].push(gid);
+        assigned.add(gid);
+      });
+    });
+    const byAnchor = {};
+    const flat = [];
+    activeCommentarySegments.forEach((p, idx) => {
+      const anchor = (p.syl_uuids || []).slice(-1)[0];
+      if (!anchor) return;
+      const segs = homeByIdx[idx]
+        .map((gid) => transSegByGid[gid])
+        .filter(Boolean)
+        .sort((a, b) => a.startMs - b.startMs);
+      if (segs.length) {
+        byAnchor[anchor] = segs;
+        flat.push(...segs);
+      }
+    });
+    flat.sort((a, b) => a.startMs - b.startMs);
+    return { byAnchor, passageSylIds, flat };
+  }, [transcriptionMode, hasTranscription, activeCommentarySegments, transSegByGid]);
+
+  // Main-text syllables of the active transcript segment's passage — the only
+  // passage shaded in transcription mode.
+  const activePassageSylIds = useMemo(() => {
+    if (!transcriptionMode || !activeTransGid) return EMPTY_SET;
+    const set = new Set();
+    for (const p of activeCommentarySegments) {
+      if ((p.transcription_seg_ids || []).includes(activeTransGid)) {
+        (p.syl_uuids || []).forEach((u) => set.add(u));
+      }
+    }
+    return set;
+  }, [transcriptionMode, activeTransGid, activeCommentarySegments]);
+
+  // Read-along: follow the live audio playhead with requestAnimationFrame so the
+  // highlight switches on the true segment boundary, not on the throttled (~4 Hz)
+  // `timeupdate` event. Toggles the class directly on the DOM (no re-render).
+  useEffect(() => {
+    const flat = transcriptionView.flat;
+    if (!transcriptionMode || flat.length === 0) return;
+    const getTime = audio.getCurrentTimeMs;
+    let raf = 0;
+    let curGid = null;
+    const setActive = (gid) => {
+      if (gid === curGid) return;
+      if (curGid)
+        document.getElementById(`tseg-${curGid}`)?.classList.remove("r-tseg-active");
+      if (gid)
+        document.getElementById(`tseg-${gid}`)?.classList.add("r-tseg-active");
+      curGid = gid;
+      // Coarse state update (once per segment) to drive the shaded root passage.
+      setActiveTransGid(gid);
+    };
+    const tick = () => {
+      const t = getTime();
+      const seg =
+        flat.find((s) => t >= s.startMs && t < s.endMs) ||
+        [...flat].reverse().find((s) => s.startMs <= t);
+      setActive(seg ? seg.gid : null);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      if (curGid)
+        document.getElementById(`tseg-${curGid}`)?.classList.remove("r-tseg-active");
+    };
+  }, [transcriptionMode, transcriptionView, audio.getCurrentTimeMs]);
 
   // ----------------------------------------
   // Derived data: teachingCoverageSet
@@ -839,9 +1071,11 @@ function ReaderContent() {
     if (!container || !sapcheNodes.length) return;
     const update = () => {
       if (Date.now() < suppressActiveUntilRef.current) return; // settling a click
-      // Match the teleport's top-alignment: a section is "active" once its
-      // marker reaches ~the scroll-margin line below the reading area's top.
-      const top = container.getBoundingClientRect().top + 28;
+      // Use the same read anchor as the follow/teleport scroll: a section is
+      // "active" once its marker reaches ~3 text lines below the reading top.
+      const sample = container.querySelector(".r-syl");
+      const lh = (sample && parseFloat(getComputedStyle(sample).lineHeight)) || 36;
+      const top = container.getBoundingClientRect().top + READALONG_TOP_LINES * lh;
       let active = null;
       for (const n of sapcheNodes) {
         const el =
@@ -906,6 +1140,7 @@ function ReaderContent() {
   // A timeline click teleports via handleSegmentClick, so skip the smooth follow
   // scroll while the jumped-to segment is the current one.
   useEffect(() => {
+    if (transcriptionMode) return; // transcript mode follows the transcript (below)
     if (playingSegSylIds.size === 0) return;
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -914,9 +1149,18 @@ function ReaderContent() {
     if (Date.now() - rootTextScrolledAt < 8000) return;
     const el = document.getElementById(firstId);
     if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      scrollElToReadAnchor(el, "smooth");
     }
-  }, [playingSegSylIds, rootTextScrolledAt]);
+  }, [playingSegSylIds, rootTextScrolledAt, transcriptionMode]);
+
+  // Transcription mode: keep the active transcript segment at the read anchor
+  // (the transcript is the star here, not the main text).
+  useEffect(() => {
+    if (!transcriptionMode || !activeTransGid) return;
+    if (Date.now() - rootTextScrolledAt < 8000) return; // respect user scroll
+    const el = document.getElementById(`tseg-${activeTransGid}`);
+    if (el) scrollElToReadAnchor(el, "smooth");
+  }, [transcriptionMode, activeTransGid, rootTextScrolledAt]);
 
   // Scroll-lock detection for root text panel
   useEffect(() => {
@@ -988,7 +1232,7 @@ function ReaderContent() {
       container.removeEventListener("scroll", updateViewport);
       ro.disconnect();
     };
-  }, [manifest, paragraphWeightBounds]); // re-attach when manifest loads or weight bounds change
+  }, [manifest, paragraphWeightBounds, transcriptionMode]); // re-attach + recompute when weights change or transcript blocks toggle
 
   // ----------------------------------------
   // Navigate to position in text (from coverage bar click)
@@ -1199,6 +1443,21 @@ function ReaderContent() {
     [notes, manifestIndexOf, manifest]
   );
 
+  // Transcription mode: click a transcription segment to play from its start.
+  // The session media is one continuous file already loaded by the active
+  // commentary, so a seek within it is enough; read-along + root-text highlight
+  // follow audio.currentTimeMs.
+  const handleTransSegClick = useCallback(
+    (gid) => {
+      const seg = transSegByGid[gid];
+      if (!seg) return;
+      // Seek only: a playing element keeps playing from here (plays this
+      // segment); a paused one just moves the selection here, awaiting Play.
+      audio.seekTo(seg.startMs);
+    },
+    [transSegByGid, audio],
+  );
+
   const handleCommentarySelect = useCallback(
     (commentaryId, startSegment, autoPlay = true) => {
       setPopoverOpen(false);
@@ -1353,15 +1612,69 @@ function ReaderContent() {
         return;
       }
       const el = document.getElementById(firstSylId);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (el) scrollElToReadAnchor(el, "smooth");
     },
     [paragraphs],
+  );
+
+  // Mobile mini-bar prev/next: step the playhead between segment starts.
+  // The active-segment highlight and read-along follow cascade from the
+  // resulting currentTimeMs change via the existing effects.
+  const handleStepSegment = useCallback(
+    (dir) => {
+      // In transcription mode the audio follows the transcript segments, so step
+      // over those (already time-sorted); otherwise the commentary segments.
+      const transFlat = transcriptionView.flat;
+      const starts =
+        transcriptionMode && transFlat.length
+          ? transFlat.map((s) => s.startMs)
+          : audioSegStartsMs;
+      if (!starts.length) return;
+      const now = audio.getCurrentTimeMs();
+      let target;
+      if (dir > 0) {
+        target = starts.find((t) => t > now + 50);
+        if (target == null) return; // already at/after the last segment
+      } else {
+        let c = -1;
+        for (let i = 0; i < starts.length; i++) {
+          if (starts[i] <= now + 50) c = i;
+          else break;
+        }
+        if (c < 0) return;
+        // Restart the current segment if we're well into it, else step back.
+        target = now - starts[c] > 2000 ? starts[c] : starts[Math.max(0, c - 1)];
+      }
+      audio.seekTo(target);
+      audio.play();
+    },
+    [transcriptionMode, transcriptionView, audioSegStartsMs, audio],
   );
 
   const handleMatchSetsChange = useCallback((activeSet, allSet) => {
     setActiveMatchSet(activeSet);
     setAllMatchesSet(allSet);
   }, []);
+
+  const handleTransMatchSetsChange = useCallback((activeSet, allSet) => {
+    setTransActiveMatchSet(activeSet);
+    setTransAllMatchSet(allSet);
+  }, []);
+
+  // Displayed transcription syllables, flat + document-ordered, for the
+  // in-reader transcript search. Each carries its segment gid and the passage
+  // anchor syllable so SearchBar can highlight/order/scroll to it.
+  const transcriptSyllables = useMemo(() => {
+    const out = [];
+    for (const [anchorId, segs] of Object.entries(transcriptionView.byAnchor)) {
+      for (const s of segs) {
+        for (const syl of transSegSylsByGid[s.gid] || []) {
+          out.push({ id: syl.id, text: syl.text, gid: s.gid, anchorId });
+        }
+      }
+    }
+    return out;
+  }, [transcriptionView, transSegSylsByGid]);
 
   const onToggleCollapse = useCallback((id) => {
     setCollapsedIds((prev) => {
@@ -1380,6 +1693,9 @@ function ReaderContent() {
 
   const handleSapcheSelect = useCallback((node) => {
     if (!node.startSylId) return;
+    // On mobile the TOC is an overlay drawer — close it so the navigated text is
+    // visible (and the reveal strip returns).
+    if (isMobile) setTocOpen(false);
     setRootTextScrolledAt(Date.now());
     // Show the clicked row immediately and pause scroll-driven highlight changes
     // while the scroll settles, so the sidebar doesn't flicker to other rows.
@@ -1417,7 +1733,7 @@ function ReaderContent() {
       }
     };
     requestAnimationFrame(pin);
-  }, [paragraphs]);
+  }, [paragraphs, isMobile]);
 
   const startResize = useCallback((e) => {
     e.preventDefault();
@@ -1450,6 +1766,21 @@ function ReaderContent() {
   // ----------------------------------------
   const sidebarContent = (
     <div className="flex flex-col h-full">
+      {isMobile && (
+        <button
+          type="button"
+          data-sheet-drag-handle
+          onClick={() => setSidebarOpen(false)}
+          aria-label="Minimize player (keeps playing)"
+          title="Minimize — keeps playing"
+          className="flex w-full flex-col items-center gap-1 pt-2.5 pb-2 r-text-muted active:bg-black/[0.03] transition-colors touch-none"
+        >
+          <span className="h-1 w-10 rounded-full bg-black/15" />
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+      )}
       <div className="flex border-b r-border">
         {TABS.map((tab) => {
           const isActive = activeTab === tab.key;
@@ -1485,6 +1816,9 @@ function ReaderContent() {
             sidebarSizes={sidebarSizes}
             preferRestored={preferRestored}
             onTogglePreferRestored={() => setPreferRestored((prev) => !prev)}
+            hasTranscription={hasTranscription}
+            transcriptionOn={transcriptionMode}
+            onToggleTranscription={() => setTranscriptionMode((v) => !v)}
             getCommentaryGroup={getCommentaryGroup}
             noSessionMessage={noSessionMessage}
             instanceId={instanceId}
@@ -1522,33 +1856,31 @@ function ReaderContent() {
   // ----------------------------------------
   return (
     <main
-      className={`min-h-screen flex flex-col r-bg r-text-1a overflow-x-hidden${
-        annotateMode ? " r-annotate-mode" : ""
-      }`}
+      className={`flex flex-col r-bg r-text-1a ${
+        isMobile ? "h-[100dvh] overflow-hidden" : "min-h-screen overflow-x-hidden"
+      }${annotateMode ? " r-annotate-mode" : ""}`}
       style={getThemeCssVars(prefs)}
     >
       <audio {...audio.audioProps} />
 
       <ReaderNavbar
         onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
-        onToggleSearch={() => setSearchOpen((prev) => !prev)}
-        onToggleContents={() => setTocOpen((v) => !v)}
-        onOpenStudy={() => setStudyOpen(true)}
         sidebarOpen={sidebarOpen}
-        contentsOpen={tocOpen}
-        hasContents={!!sapche}
         prefs={prefs}
         onUpdatePref={updatePref}
         canAnnotate={loggedIn}
         annotateMode={annotateMode}
         onToggleAnnotate={() => setAnnotateMode((v) => !v)}
-      />
-
-      <SearchBar
-        manifest={manifest}
-        visible={searchOpen}
-        onMatchSetsChange={handleMatchSetsChange}
-        initialQuery={urlQ || ""}
+        center={
+          <SearchBar
+            manifest={manifest}
+            onMatchSetsChange={handleMatchSetsChange}
+            onTransMatchSetsChange={handleTransMatchSetsChange}
+            transcriptActive={transcriptionMode && hasTranscription}
+            transcriptSyllables={transcriptSyllables}
+            initialQuery={urlQ || ""}
+          />
+        }
       />
 
       {annotateMode && (
@@ -1559,6 +1891,9 @@ function ReaderContent() {
 
       <ReaderLayout
         ref={scrollContainerRef}
+        isMobile={isMobile}
+        onCloseLeft={() => setTocOpen(false)}
+        onCloseSidebar={() => setSidebarOpen(false)}
         sidebarOpen={sidebarOpen}
         sidebar={sidebarContent}
         leftSidebar={sapche ? (
@@ -1633,7 +1968,7 @@ function ReaderContent() {
         <div
           ref={rootTextRef}
           className="max-w-4xl mx-auto"
-          style={{ padding: searchOpen ? "5rem 3rem 3rem 3rem" : "3rem" }}
+          style={{ padding: isMobile ? "1.25rem 1rem 5rem" : "3rem" }}
         >
           <div className={`${uchen.className} text-justify`}>
             {paragraphs.map((paraSyls, pIdx) => (
@@ -1647,10 +1982,12 @@ function ReaderContent() {
                 sizes={sizes}
                 teachingCoverageSet={teachingCoverageSet}
                 activeSylId={activeSylId}
-                playingSegSylIds={playingSegSylIds}
-                hoveredSegSylIds={hoveredSegSylIds}
+                playingSegSylIds={transcriptionMode ? EMPTY_SET : playingSegSylIds}
+                hoveredSegSylIds={transcriptionMode ? EMPTY_SET : hoveredSegSylIds}
                 activeMatchSet={activeMatchSet}
                 allMatchesSet={allMatchesSet}
+                transActiveMatchSet={transActiveMatchSet}
+                transAllMatchSet={transAllMatchSet}
                 handleSyllableClick={handleSyllableClick}
                 uchen={uchen}
                 sylIdToSections={sylIdToSections}
@@ -1659,6 +1996,11 @@ function ReaderContent() {
                 onNoteSylHover={handleNoteSylHover}
                 hoveredNoteSylIds={hoveredNoteSylIds}
                 annotateMode={annotateMode}
+                transcriptionMode={transcriptionMode}
+                transBlocksByAnchor={transcriptionView.byAnchor}
+                transSegSylsByGid={transSegSylsByGid}
+                activePassageSylIds={activePassageSylIds}
+                onTransSegClick={handleTransSegClick}
               />
             ))}
           </div>
@@ -1689,22 +2031,44 @@ function ReaderContent() {
             setStudyOpen(false);
             handleSapcheSelect(node);
           }}
-          onClose={() => setStudyOpen(false)}
+          onClose={() => {
+            setStudyOpen(false);
+            // On mobile, dismissing study returns to the text (not the overlay
+            // drawer) so the reveal strip is reachable again.
+            if (isMobile) setTocOpen(false);
+          }}
           previewFor={(node) => sectionPreviews.get(node.id) || null}
         />
       )}
 
-      <MiniPlayer
-        manifest={manifest}
-        sessions={sessions}
-        allTeachingGroups={allTeachingGroups}
-        activeTeachingFilter={activeTeachingFilter}
-        getCommentaryGroup={getCommentaryGroup}
-        commentaryColorMap={commentaryColorMap}
-        viewportRange={viewportRange}
-        onNavigateToPosition={handleNavigateToPosition}
-        syllableWeights={syllableWeights}
-      />
+      {/* Desktop: hover-driven text-coverage navigation strip. */}
+      {!isMobile && (
+        <MiniPlayer
+          manifest={manifest}
+          sessions={sessions}
+          allTeachingGroups={allTeachingGroups}
+          activeTeachingFilter={activeTeachingFilter}
+          getCommentaryGroup={getCommentaryGroup}
+          commentaryColorMap={commentaryColorMap}
+          viewportRange={viewportRange}
+          onNavigateToPosition={handleNavigateToPosition}
+          syllableWeights={syllableWeights}
+        />
+      )}
+
+      {/* Mobile: thumb-zone audio bar (only when audio is loaded). */}
+      {isMobile && !sidebarOpen && (
+        <MobileAudioBar
+          audio={audio}
+          title={teachingTitle || activeCommentary}
+          onPrevSegment={() => handleStepSegment(-1)}
+          onNextSegment={() => handleStepSegment(1)}
+          onExpand={() => {
+            setActiveTab("player");
+            setSidebarOpen(true);
+          }}
+        />
+      )}
     </main>
   );
 }

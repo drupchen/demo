@@ -29,6 +29,12 @@
   color: var(--reader-accent, #D4AF37);
 }
 
+/* Root (main) text in transcription mode — traditional pecha vermilion, so it
+   stays distinct from the black transcript body. */
+.r-text-root {
+  color: var(--theme-hover-red, #8B1D1D);
+}
+
 .r-text-white {
   color: #FFFFFF;
 }
@@ -435,4 +441,40 @@
   transform: translate(0, -50%) scale(1.07);
   filter: brightness(1.06);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Transcription mode: passage mark + interleaved read-along ───────────── */
+/* The main-text passage of the active transcript segment — very light red so it
+   reads as the root-text portion, distinct from the transcript segment's
+   (gold/cream) selection highlight. */
+.r-syl-passage {
+  background-color: rgba(139, 29, 29, 0.08);
+}
+
+/* The transcription, flowing as prominent body text beneath a passage (no box).
+   Size/line-height come from the inline `sizes` style so it matches the main
+   text; color is the primary ink (the root text is the distinct one). */
+.r-trans-block {
+  display: block;
+  clear: both;
+  margin: 0.6em 0 1.1em 0;
+}
+.r-trans-text {
+  color: var(--reader-text-primary, #1A1A1A);
+}
+/* Each transcription segment; the one under the playhead is highlighted. */
+.r-tseg {
+  transition: color 0.15s, background-color 0.15s;
+  border-radius: 3px;
+}
+.r-tseg-active {
+  color: var(--reader-text-primary, #1A1A1A);
+  background-color: var(--reader-accent-subtle, #FDF8EE);
+  box-shadow: 0 0 0 2px var(--reader-accent-subtle, #FDF8EE);
+}
+/* In transcription mode the segments are the interactive target. */
+.r-tseg-clickable { cursor: pointer; }
+.r-tseg-clickable:hover {
+  color: var(--reader-text-primary, #1A1A1A);
+  background-color: var(--reader-accent-subtle, #FDF8EE);
 }
