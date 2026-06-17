@@ -50,6 +50,8 @@ export async function POST(request) {
       kind: (form.get("kind") || "").toString(),
       bodyText: (form.get("body_text") || "").toString(),
       audioDurationMs: Number(form.get("audio_duration_ms")) || null,
+      startOffset: form.get("start_offset") != null && form.get("start_offset") !== "" ? Number(form.get("start_offset")) : null,
+      endOffset: form.get("end_offset") != null && form.get("end_offset") !== "" ? Number(form.get("end_offset")) : null,
     };
   } else {
     const body = await request.json().catch(() => null);
@@ -62,6 +64,8 @@ export async function POST(request) {
       kind: (body.kind || "").toString(),
       bodyText: (body.body_text || "").toString(),
       audioDurationMs: Number(body.audio_duration_ms) || null,
+      startOffset: body.start_offset != null ? Number(body.start_offset) : null,
+      endOffset: body.end_offset != null ? Number(body.end_offset) : null,
     };
   }
 
@@ -99,6 +103,8 @@ export async function POST(request) {
     bodyText: fields.bodyText || null,
     audioKey,
     audioDurationMs: fields.audioDurationMs,
+    startOffset: fields.startOffset,
+    endOffset: fields.endOffset,
   });
 
   return NextResponse.json({ note }, { status: 201 });

@@ -29,7 +29,7 @@ import SearchBar from "./SearchBar";
 import SectionMarker from "./SectionMarker";
 import { useSession } from "next-auth/react";
 import { useNotes } from "./useNotes";
-import { closestSylId, orderAnchors } from "@/lib/note-selection";
+import { closestSylId } from "@/lib/note-selection";
 import NotePopover from "./NotePopover";
 import NotesTab from "./NotesTab";
 import "./reader.css";
@@ -206,6 +206,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
   uchen,
   sylIdToSections,
   noteHighlightSet,
+  noteHighlightRanges,
   onNoteSylClick,
   onNoteSylHover,
   hoveredNoteSylIds,
@@ -305,12 +306,35 @@ const LazyParagraph = React.memo(function LazyParagraph({
     } else if (isHoveredSegment) {
       bgClass = "r-syl-hovered";
     }
-    if (isNoted && annotateMode && !bgClass)
-      extraClass = `${extraClass} r-note-highlight${isNoteHovered ? " r-note-hover" : ""}`;
-
     // Transcription mode: shade only the main-text passage of the currently
     // selected/playing transcript segment.
     const isInPassage = transcriptionMode && activePassageSylIds?.has(syl.id);
+
+    // Personal-note highlight (annotation mode only): render the EXACT selected
+    // character range. A whole-syllable highlight colours the span; a partial
+    // one (the selection started or ended mid-syllable) wraps just the selected
+    // slice so the highlight matches the selection character-for-character.
+    let noteChildren = syl.text;
+    let noteWholeClass = "";
+    if (isNoted && annotateMode && !bgClass) {
+      const hl = noteHighlightRanges?.get(syl.id);
+      const len = syl.text.length;
+      const from = hl ? Math.max(0, Math.min(hl.from, len)) : 0;
+      const to = hl ? Math.max(from, Math.min(hl.to, len)) : len;
+      const hoverCls = isNoteHovered ? " r-note-hover" : "";
+      if (!hl || (from <= 0 && to >= len)) {
+        noteWholeClass = `r-note-highlight${hoverCls}`;
+      } else if (to > from) {
+        noteChildren = (
+          <>
+            {syl.text.slice(0, from)}
+            <span className={`r-note-highlight${hoverCls}`}>{syl.text.slice(from, to)}</span>
+            {syl.text.slice(to)}
+          </>
+        );
+      }
+      // to === from → empty range (a boundary syllable): render nothing special.
+    }
 
     return (
       <span
@@ -327,7 +351,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
         onMouseLeave={
           annotateMode && isNoted ? () => onNoteSylHover?.(null) : undefined
         }
-        className={`${fontClass} r-syl inline relative ${colorClass} ${bgClass} ${extraClass} ${
+        className={`${fontClass} r-syl inline relative ${colorClass} ${bgClass} ${extraClass} ${noteWholeClass} ${
           isInPassage ? "r-syl-passage" : ""
         } ${
           !annotateMode && !transcriptionMode && hasMedia && !isSelected
@@ -336,7 +360,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
         } ${annotateMode && isNoted ? "cursor-pointer" : ""} ${isInPlayingSegment || isHoveredSegment ? "rounded-sm" : ""}`}
         style={sizeStyle}
       >
-        {syl.text}
+        {noteChildren}
       </span>
     );
   };
@@ -885,16 +909,41 @@ function ReaderContent() {
     return m;
   }, [manifest]);
 
-  // Set of every syllable id covered by a note's [start..end] span.
-  const noteHighlightSet = useMemo(() => {
+  // Note coverage: `noteHighlightSet` is every syllable id any note touches (for
+  // click/hover detection). `noteHighlightRanges` maps each syllable id to the
+  // exact character slice { from, to } to paint — full for interior syllables,
+  // partial for the start/end syllables of a note (offset-aware). Notes created
+  // before the offset columns existed (start_offset/end_offset null) fall back
+  // to whole-syllable highlighting. Overlapping notes union to the widest slice.
+  const { noteHighlightSet, noteHighlightRanges } = useMemo(() => {
     const set = new Set();
+    const ranges = new Map(); // sylId -> { from, to }
+    const widen = (sylId, from, to) => {
+      const cur = ranges.get(sylId);
+      ranges.set(
+        sylId,
+        cur ? { from: Math.min(cur.from, from), to: Math.max(cur.to, to) } : { from, to }
+      );
+    };
     for (const note of notes) {
       const a = manifestIndexOf.get(note.start_syl_id);
       const b = manifestIndexOf.get(note.end_syl_id);
       if (a == null || b == null) continue; // anchor broken — shown in tab only
-      for (let i = a; i <= b; i++) set.add(manifest[i].id);
+      const hasOffsets = note.start_offset != null && note.end_offset != null;
+      for (let i = a; i <= b; i++) {
+        const syl = manifest[i];
+        set.add(syl.id);
+        const len = (syl.text || "").length;
+        let from = 0;
+        let to = len;
+        if (hasOffsets) {
+          if (i === a) from = Math.max(0, Math.min(note.start_offset, len));
+          if (i === b) to = Math.max(0, Math.min(note.end_offset, len));
+        }
+        widen(syl.id, from, to);
+      }
     }
-    return set;
+    return { noteHighlightSet: set, noteHighlightRanges: ranges };
   }, [notes, manifestIndexOf, manifest]);
 
   const panelNotes = useMemo(() => {
@@ -914,7 +963,13 @@ function ReaderContent() {
     if (notePanel.createAnchor) return notePanel.createAnchor;
     const head = panelNotes[0];
     return head
-      ? { startSylId: head.start_syl_id, endSylId: head.end_syl_id, anchorText: head.anchor_text || "" }
+      ? {
+          startSylId: head.start_syl_id,
+          endSylId: head.end_syl_id,
+          startOffset: head.start_offset,
+          endOffset: head.end_offset,
+          anchorText: head.anchor_text || "",
+        }
       : null;
   }, [notePanel, panelNotes]);
 
@@ -1339,31 +1394,53 @@ function ReaderContent() {
       }
       const range = sel.getRangeAt(0);
       const isSyl = (id) => manifestIndexOf.has(id);
-      let startId = closestSylId(range.startContainer, isSyl);
-      let endId = closestSylId(range.endContainer, isSyl);
-      // Triple-click / line selection can land an endpoint on the paragraph
-      // node rather than a syllable span. Fall back to scanning the syllable
-      // spans the selection actually intersects.
-      if (!startId || !endId) {
-        const root = range.commonAncestorContainer;
-        const scope = root.nodeType === 1 ? root : root.parentElement;
-        let first = null;
-        let last = null;
-        scope?.querySelectorAll?.("[id]").forEach((el) => {
-          if (!manifestIndexOf.has(el.id)) return;
-          if (sel.containsNode(el, true)) {
-            if (!first) first = el.id;
-            last = el.id;
-          }
-        });
-        startId = startId || first;
-        endId = endId || last;
-      }
-      if (!startId || !endId) {
+
+      // Capture each endpoint as a syllable id PLUS the character offset within
+      // that syllable, so a note can highlight exactly what was selected — even
+      // a partial syllable when the drag starts or ends mid-syllable. In the
+      // common case an endpoint sits in a syllable's text node and the range
+      // offset is already the character index. Browsers snap selection endpoints
+      // to grapheme boundaries, so slicing the syllable text at these offsets
+      // reproduces the visible selection character-for-character.
+      const resolveEndpoint = (container, offset) => {
+        if (container.nodeType === 3) {
+          const id = closestSylId(container, isSyl);
+          return id ? { id, offset } : null;
+        }
+        // Element endpoint: the syllable span itself, or a paragraph (triple-
+        // click / line selection). Map to a syllable boundary (start or end).
+        if (container.id && isSyl(container.id)) {
+          const len = (container.textContent || "").length;
+          return { id: container.id, offset: offset <= 0 ? 0 : len };
+        }
+        const child = container.childNodes?.[offset] || container.childNodes?.[offset - 1];
+        const el = child?.nodeType === 1 ? child : child?.parentElement;
+        const id = el ? closestSylId(el, isSyl) : null;
+        if (id) {
+          const span = document.getElementById(id);
+          return { id, offset: offset <= 0 ? 0 : (span?.textContent.length ?? 0) };
+        }
+        return null;
+      };
+
+      let startPt = resolveEndpoint(range.startContainer, range.startOffset);
+      let endPt = resolveEndpoint(range.endContainer, range.endOffset);
+      if (!startPt || !endPt) {
         setPendingSelection(null);
         return;
       }
-      const { startSylId, endSylId } = orderAnchors(startId, endId, manifestIndexOf);
+      // Normalise to document order (a selection can run backwards).
+      const si = manifestIndexOf.get(startPt.id);
+      const ei = manifestIndexOf.get(endPt.id);
+      if (si > ei || (si === ei && startPt.offset > endPt.offset)) {
+        const tmp = startPt;
+        startPt = endPt;
+        endPt = tmp;
+      }
+      const startSylId = startPt.id;
+      const endSylId = endPt.id;
+      const startOffset = startPt.offset;
+      const endOffset = endPt.offset;
       const anchorText = sel.toString().slice(0, 280);
       const rect = range.getBoundingClientRect();
       // Anchor the button entirely to the RIGHT of the selection, vertically
@@ -1373,6 +1450,8 @@ function ReaderContent() {
       setPendingSelection({
         startSylId,
         endSylId,
+        startOffset,
+        endOffset,
         anchorText,
         x: Math.min(rect.right, window.innerWidth - 44),
         y: rect.top + rect.height / 2 - 30,
@@ -1396,6 +1475,8 @@ function ReaderContent() {
       await createNoteApi({
         startSylId: panelAnchor.startSylId,
         endSylId: panelAnchor.endSylId,
+        startOffset: panelAnchor.startOffset,
+        endOffset: panelAnchor.endOffset,
         anchorText: panelAnchor.anchorText,
         ...payload,
       });
@@ -1924,6 +2005,8 @@ function ReaderContent() {
                 createAnchor: {
                   startSylId: pendingSelection.startSylId,
                   endSylId: pendingSelection.endSylId,
+                  startOffset: pendingSelection.startOffset,
+                  endOffset: pendingSelection.endOffset,
                   anchorText: pendingSelection.anchorText,
                 },
               });
@@ -1992,6 +2075,7 @@ function ReaderContent() {
                 uchen={uchen}
                 sylIdToSections={sylIdToSections}
                 noteHighlightSet={noteHighlightSet}
+                noteHighlightRanges={noteHighlightRanges}
                 onNoteSylClick={handleNoteSylClick}
                 onNoteSylHover={handleNoteSylHover}
                 hoveredNoteSylIds={hoveredNoteSylIds}

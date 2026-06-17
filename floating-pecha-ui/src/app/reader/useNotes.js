@@ -40,7 +40,9 @@ export function useNotes(instanceId, enabled) {
 
   /**
    * Create a note. `payload` is { startSylId, endSylId, anchorText, kind,
-   * bodyText, audioBlob, audioDurationMs }. Returns the created note or throws.
+   * bodyText, audioBlob, audioDurationMs, startOffset, endOffset }.
+   * startOffset/endOffset are optional character offsets within the start/end
+   * syllable for character-exact highlighting. Returns the created note or throws.
    */
   const createNote = useCallback(
     async (payload) => {
@@ -54,6 +56,8 @@ export function useNotes(instanceId, enabled) {
         form.set("kind", "voice");
         form.set("body_text", payload.bodyText || "");
         form.set("audio_duration_ms", String(payload.audioDurationMs || 0));
+        if (payload.startOffset != null) form.set("start_offset", String(payload.startOffset));
+        if (payload.endOffset != null) form.set("end_offset", String(payload.endOffset));
         const ext = (payload.audioBlob.type || "").includes("webm") ? "webm" : "m4a";
         form.set("audio", payload.audioBlob, `note.${ext}`);
         res = await fetch("/api/notes", { method: "POST", body: form });
@@ -68,6 +72,8 @@ export function useNotes(instanceId, enabled) {
             anchor_text: payload.anchorText || "",
             kind: "text",
             body_text: payload.bodyText || "",
+            start_offset: payload.startOffset ?? null,
+            end_offset: payload.endOffset ?? null,
           }),
         });
       }

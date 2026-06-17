@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 const COLS =
-  "id, user_id, instance_id, start_syl_id, end_syl_id, anchor_text, kind, body_text, audio_key, audio_duration_ms, visibility, created_at, updated_at";
+  "id, user_id, instance_id, start_syl_id, end_syl_id, anchor_text, kind, body_text, audio_key, audio_duration_ms, start_offset, end_offset, visibility, created_at, updated_at";
 
 const KINDS = new Set(["text", "voice"]);
 
@@ -42,15 +42,15 @@ export async function getNote(db, id, userId) {
 
 export async function createNote(
   db,
-  { userId, instanceId, startSylId, endSylId, anchorText, kind, bodyText, audioKey, audioDurationMs }
+  { userId, instanceId, startSylId, endSylId, anchorText, kind, bodyText, audioKey, audioDurationMs, startOffset, endOffset }
 ) {
   const id = randomUUID();
   const now = Math.floor(Date.now() / 1000);
   await db
     .prepare(
       `INSERT INTO notes
-         (id, user_id, instance_id, start_syl_id, end_syl_id, anchor_text, kind, body_text, audio_key, audio_duration_ms, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         (id, user_id, instance_id, start_syl_id, end_syl_id, anchor_text, kind, body_text, audio_key, audio_duration_ms, start_offset, end_offset, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       id,
@@ -63,6 +63,8 @@ export async function createNote(
       bodyText ?? null,
       audioKey ?? null,
       audioDurationMs ?? null,
+      startOffset ?? null,
+      endOffset ?? null,
       now,
       now
     )
@@ -78,6 +80,8 @@ export async function createNote(
     body_text: bodyText ?? null,
     audio_key: audioKey ?? null,
     audio_duration_ms: audioDurationMs ?? null,
+    start_offset: startOffset ?? null,
+    end_offset: endOffset ?? null,
     created_at: now,
     updated_at: now,
     visibility: "private",
