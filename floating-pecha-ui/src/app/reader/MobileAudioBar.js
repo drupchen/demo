@@ -3,17 +3,25 @@
 import { useCallback } from "react";
 import { inter } from "@/lib/theme";
 
-const SKIP_MS = 10000;
-
 /**
  * Thumb-zone audio bar for mobile. Purely a view over the shared
  * `useAudioPlayer` instance — it adds no playback state of its own:
- * title left, rewind / play-pause / forward on the right, and a thin
- * edge-to-edge progress/seek bar pinned to the bottom edge.
+ * title left, previous-segment / play-pause / next-segment on the right,
+ * and a thin edge-to-edge progress/seek bar pinned to the bottom edge.
+ *
+ * Segment stepping (prev/next) is delegated to the parent via
+ * `onPrevSegment` / `onNextSegment`, matching the rest of the player which
+ * navigates by segment rather than by seconds.
  *
  * Tapping the title area expands the full PlayerTab sheet via `onExpand`.
  */
-export default function MobileAudioBar({ audio, title, onExpand }) {
+export default function MobileAudioBar({
+  audio,
+  title,
+  onPrevSegment,
+  onNextSegment,
+  onExpand,
+}) {
   const { isPlaying, currentTimeMs, durationMs, audioSrc } = audio;
 
   const pct =
@@ -61,12 +69,12 @@ export default function MobileAudioBar({ audio, title, onExpand }) {
           </span>
         </button>
 
-        {/* Rewind 10s */}
+        {/* Previous segment */}
         <button
           type="button"
-          onClick={() => audio.seekTo(Math.max(0, currentTimeMs - SKIP_MS))}
+          onClick={onPrevSegment}
           className={btn}
-          aria-label="Rewind 10 seconds"
+          aria-label="Previous segment"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="11 19 4 12 11 5" />
@@ -93,16 +101,12 @@ export default function MobileAudioBar({ audio, title, onExpand }) {
           )}
         </button>
 
-        {/* Forward 10s */}
+        {/* Next segment */}
         <button
           type="button"
-          onClick={() =>
-            audio.seekTo(
-              durationMs ? Math.min(durationMs, currentTimeMs + SKIP_MS) : currentTimeMs + SKIP_MS
-            )
-          }
+          onClick={onNextSegment}
           className={btn}
-          aria-label="Forward 10 seconds"
+          aria-label="Next segment"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="13 19 20 12 13 5" />

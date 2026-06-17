@@ -654,6 +654,13 @@ function ReaderContent() {
       .sort((a, b) => parseToMs(a.start) - parseToMs(b.start));
   }, [sessions, activeCommentary]);
 
+  // Sorted segment start times for the currently-loaded audio — drives the
+  // mobile mini-bar's prev/next-segment arrows.
+  const audioSegStartsMs = useMemo(
+    () => activeCommentarySegments.map((s) => parseToMs(s.start)).sort((a, b) => a - b),
+    [activeCommentarySegments],
+  );
+
   // ----------------------------------------
   // Transcription mode: interleave + read-along data
   // ----------------------------------------
@@ -1401,6 +1408,40 @@ function ReaderContent() {
     [paragraphs],
   );
 
+  // Mobile mini-bar prev/next: step the playhead between segment starts.
+  // The active-segment highlight and read-along follow cascade from the
+  // resulting currentTimeMs change via the existing effects.
+  const handleStepSegment = useCallback(
+    (dir) => {
+      // In transcription mode the audio follows the transcript segments, so step
+      // over those (already time-sorted); otherwise the commentary segments.
+      const transFlat = transcriptionView.flat;
+      const starts =
+        transcriptionMode && transFlat.length
+          ? transFlat.map((s) => s.startMs)
+          : audioSegStartsMs;
+      if (!starts.length) return;
+      const now = audio.getCurrentTimeMs();
+      let target;
+      if (dir > 0) {
+        target = starts.find((t) => t > now + 50);
+        if (target == null) return; // already at/after the last segment
+      } else {
+        let c = -1;
+        for (let i = 0; i < starts.length; i++) {
+          if (starts[i] <= now + 50) c = i;
+          else break;
+        }
+        if (c < 0) return;
+        // Restart the current segment if we're well into it, else step back.
+        target = now - starts[c] > 2000 ? starts[c] : starts[Math.max(0, c - 1)];
+      }
+      audio.seekTo(target);
+      audio.play();
+    },
+    [transcriptionMode, transcriptionView, audioSegStartsMs, audio],
+  );
+
   const handleMatchSetsChange = useCallback((activeSet, allSet) => {
     setActiveMatchSet(activeSet);
     setAllMatchesSet(allSet);
@@ -1443,6 +1484,9 @@ function ReaderContent() {
 
   const handleSapcheSelect = useCallback((node) => {
     if (!node.startSylId) return;
+    // On mobile the TOC is an overlay drawer — close it so the navigated text is
+    // visible (and the reveal strip returns).
+    if (isMobile) setTocOpen(false);
     setRootTextScrolledAt(Date.now());
     // Show the clicked row immediately and pause scroll-driven highlight changes
     // while the scroll settles, so the sidebar doesn't flicker to other rows.
@@ -1480,7 +1524,7 @@ function ReaderContent() {
       }
     };
     requestAnimationFrame(pin);
-  }, [paragraphs]);
+  }, [paragraphs, isMobile]);
 
   const startResize = useCallback((e) => {
     e.preventDefault();
@@ -1514,20 +1558,19 @@ function ReaderContent() {
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {isMobile && (
-        <div className="relative flex items-center px-3 pt-2 pb-1">
-          <div className="mx-auto h-1 w-10 rounded-full bg-black/15" />
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(false)}
-            aria-label="Close player"
-            className="absolute right-2 flex items-center justify-center w-9 h-9 rounded-full r-text-muted active:bg-black/10"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
+        <button
+          type="button"
+          data-sheet-drag-handle
+          onClick={() => setSidebarOpen(false)}
+          aria-label="Minimize player (keeps playing)"
+          title="Minimize — keeps playing"
+          className="flex w-full flex-col items-center gap-1 pt-2.5 pb-2 r-text-muted active:bg-black/[0.03] transition-colors touch-none"
+        >
+          <span className="h-1 w-10 rounded-full bg-black/15" />
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
       )}
       <div className="flex border-b r-border">
         {TABS.map((tab) => {
@@ -1593,7 +1636,9 @@ function ReaderContent() {
   // ----------------------------------------
   return (
     <main
-      className="min-h-screen flex flex-col r-bg r-text-1a overflow-x-hidden"
+      className={`flex flex-col r-bg r-text-1a ${
+        isMobile ? "h-[100dvh] overflow-hidden" : "min-h-screen overflow-x-hidden"
+      }`}
       style={getThemeCssVars(prefs)}
     >
       <audio {...audio.audioProps} />
@@ -1698,7 +1743,12 @@ function ReaderContent() {
             setStudyOpen(false);
             handleSapcheSelect(node);
           }}
-          onClose={() => setStudyOpen(false)}
+          onClose={() => {
+            setStudyOpen(false);
+            // On mobile, dismissing study returns to the text (not the overlay
+            // drawer) so the reveal strip is reachable again.
+            if (isMobile) setTocOpen(false);
+          }}
           previewFor={(node) => sectionPreviews.get(node.id) || null}
         />
       )}
@@ -1723,6 +1773,8 @@ function ReaderContent() {
         <MobileAudioBar
           audio={audio}
           title={teachingTitle || activeCommentary}
+          onPrevSegment={() => handleStepSegment(-1)}
+          onNextSegment={() => handleStepSegment(1)}
           onExpand={() => {
             setActiveTab("player");
             setSidebarOpen(true);
