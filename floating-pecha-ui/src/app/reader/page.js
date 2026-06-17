@@ -39,8 +39,8 @@ import "./reader.css";
 // ==========================================
 const TABS = [
   { key: "player", label: "Player" },
-  { key: "info", label: "Info" },
   { key: "notes", label: "Notes" },
+  { key: "info", label: "Info" },
 ];
 
 const COMMENTARY_COLORS = [
