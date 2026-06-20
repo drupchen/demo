@@ -1065,10 +1065,10 @@ export default function ContenuPage() {
 }
 ```
 
-- [ ] **Step 4: Verify component + page parse**
+- [ ] **Step 4: Verify component + page lint-parse (JSX — `node --check` can't parse JSX, use eslint)**
 
-Run: `cd floating-pecha-ui && node --check src/app/admin/components/ContentUpload.js && node --check src/app/admin/contenu/page.js`
-Expected: exit 0. (Note: `@/` import resolution is a Next concern, not checked here — `node --check` only validates syntax.)
+Run: `cd floating-pecha-ui && npx eslint src/app/admin/components/ContentUpload.js src/app/admin/contenu/page.js`
+Expected: exit 0 (no errors). Fix any eslint errors before committing; eslint-config-next parses JSX so this validates syntax too.
 
 - [ ] **Step 5: Commit**
 
@@ -1118,10 +1118,10 @@ const ICONS = {
 };
 ```
 
-- [ ] **Step 3: Verify it parses**
+- [ ] **Step 3: Verify it lint-parses (JSX — use eslint, not `node --check`)**
 
-Run: `cd floating-pecha-ui && node --check src/app/admin/components/AdminShell.js`
-Expected: exit 0.
+Run: `cd floating-pecha-ui && npx eslint src/app/admin/components/AdminShell.js`
+Expected: exit 0 (no errors).
 
 - [ ] **Step 4: Commit**
 
