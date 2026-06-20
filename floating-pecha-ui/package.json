@@ -24,7 +24,6 @@
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.18.1",
-    "@opensearch-project/opensearch": "^3.5.1",
     "bcryptjs": "^2.4.3",
     "fflate": "^0.8.3",
     "next": "16.1.6",
