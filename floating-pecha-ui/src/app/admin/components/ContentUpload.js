@@ -64,8 +64,21 @@ function buildRows(parsed) {
   return { catalogText: parsed.catalogText, catalogValid: catV.ok, catalogErrors: catV.errors, rows };
 }
 
-const cell = { padding: "8px 10px", fontSize: 13, color: COLORS.TEXT_SECONDARY };
-const th = { ...cell, fontWeight: 600, color: COLORS.TEXT_SECONDARY, textAlign: "left" };
+// Table styling shared with MembersTable: white surface card, subtle shadow,
+// uppercase muted headers on the canvas-gray header row.
+const surfaceCard = {
+  background: ADMIN_CHROME.SURFACE,
+  border: `1px solid ${ADMIN_CHROME.SURFACE_BORDER}`,
+  borderRadius: 10,
+  overflow: "hidden",
+  boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+};
+const th = {
+  padding: "10px 16px", textAlign: "left", fontSize: 11, fontWeight: 600,
+  letterSpacing: "0.08em", textTransform: "uppercase",
+  color: ADMIN_CHROME.NAV_ITEM_DISABLED, whiteSpace: "nowrap",
+};
+const cell = { padding: "12px 16px", fontSize: 13.5, color: ADMIN_CHROME.NAV_ITEM_TEXT };
 
 export default function ContentUpload() {
   // Published content (existing in R2)
@@ -197,19 +210,19 @@ export default function ContentUpload() {
         ) : published.length === 0 ? (
           <p style={{ fontSize: 13, color: COLORS.TEXT_SECONDARY }}>Aucun contenu publié pour l’instant.</p>
         ) : (
-          <div style={{ border: `1px solid ${ADMIN_CHROME.SURFACE_BORDER}`, borderRadius: 10, overflow: "hidden" }}>
+          <div style={surfaceCard}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ background: ADMIN_CHROME.CANVAS_BG }}>
+                <tr style={{ background: ADMIN_CHROME.CANVAS_BG, borderBottom: `1px solid ${ADMIN_CHROME.SURFACE_BORDER}` }}>
                   <th style={th}>Instance</th>
                   <th style={th}>Fichiers</th>
                   <th style={{ ...th, textAlign: "right" }}>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {published.map((p) => (
-                  <tr key={p.instanceId} style={{ borderTop: `1px solid ${ADMIN_CHROME.SURFACE_BORDER}` }}>
-                    <td style={{ ...cell, fontFamily: "monospace", color: COLORS.TEXT_PRIMARY }}>{p.instanceId}</td>
+                {published.map((p, i) => (
+                  <tr key={p.instanceId} style={{ borderTop: i === 0 ? "none" : `1px solid ${ADMIN_CHROME.SURFACE_BORDER}` }}>
+                    <td style={{ ...cell, fontFamily: "monospace", color: ADMIN_CHROME.NAV_ITEM_ACTIVE_TEXT }}>{p.instanceId}</td>
                     <td style={cell}>{p.files.length} fichier{p.files.length > 1 ? "s" : ""}</td>
                     <td style={{ ...cell, textAlign: "right" }}>
                       {confirmId === p.instanceId ? (
@@ -290,10 +303,10 @@ export default function ContentUpload() {
                 catalog.json invalide — publication bloquée. {state.catalogErrors.join(" · ")}
               </p>
             )}
-            <div style={{ border: `1px solid ${ADMIN_CHROME.SURFACE_BORDER}`, borderRadius: 10, overflow: "hidden", marginTop: 18 }}>
+            <div style={{ ...surfaceCard, marginTop: 18 }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
-                  <tr style={{ background: ADMIN_CHROME.CANVAS_BG }}>
+                  <tr style={{ background: ADMIN_CHROME.CANVAS_BG, borderBottom: `1px solid ${ADMIN_CHROME.SURFACE_BORDER}` }}>
                     <th style={th}>Instance</th>
                     <th style={th}>Niveau</th>
                     <th style={th}>Validation</th>
@@ -301,9 +314,9 @@ export default function ContentUpload() {
                   </tr>
                 </thead>
                 <tbody>
-                  {state.rows.map((r) => (
-                    <tr key={r.instanceId} style={{ borderTop: `1px solid ${ADMIN_CHROME.SURFACE_BORDER}` }}>
-                      <td style={{ ...cell, fontFamily: "monospace", color: COLORS.TEXT_PRIMARY }}>{r.instanceId}</td>
+                  {state.rows.map((r, i) => (
+                    <tr key={r.instanceId} style={{ borderTop: i === 0 ? "none" : `1px solid ${ADMIN_CHROME.SURFACE_BORDER}` }}>
+                      <td style={{ ...cell, fontFamily: "monospace", color: ADMIN_CHROME.NAV_ITEM_ACTIVE_TEXT }}>{r.instanceId}</td>
                       <td style={cell}>{r.accessLevel}</td>
                       <td style={{ ...cell, color: r.verdict.ok && r.inCatalog ? ADMIN_CHROME.SUCCESS_TEXT : COLORS.HOVER_RED }}>
                         {!r.inCatalog ? "absente du catalog" : r.verdict.ok ? "OK" : r.verdict.errors.join(" · ")}
