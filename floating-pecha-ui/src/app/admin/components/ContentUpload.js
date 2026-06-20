@@ -33,14 +33,32 @@ function parseZip(uint8) {
 function safeParse(t) { try { return JSON.parse(t); } catch { return null; } }
 
 // Build per-instance rows with a client-side validation verdict.
-function buildRows(parsed) {
-  const cat = parsed.catalogText ? safeParse(parsed.catalogText) : null;
-  const catV = cat ? validateCatalog(cat) : { ok: false, errors: ["catalog.json absent du ZIP"], instances: [] };
-  const levelById = new Map(catV.instances.map((i) => [i.instanceId, i]));
+// Two modes:
+//  - snapshot: ZIP contains catalog.json → levels/titles come from it, catalog
+//    is replaced on publish.
+//  - instance: no catalog.json → it's an update to already-published teachings;
+//    levels/titles come from `publishedMeta` (the live catalog) and the catalog
+//    is left untouched. Instances unknown to the catalog are rejected.
+function buildRows(parsed, publishedMeta) {
+  const hasCatalog = !!parsed.catalogText;
+  let catalogValid, catalogErrors, metaById;
+  if (hasCatalog) {
+    const cat = safeParse(parsed.catalogText);
+    const catV = cat
+      ? validateCatalog(cat)
+      : { ok: false, errors: ["catalog.json illisible (JSON invalide)"], instances: [] };
+    catalogValid = catV.ok;
+    catalogErrors = catV.errors;
+    metaById = new Map(catV.instances.map((i) => [i.instanceId, i]));
+  } else {
+    catalogValid = true; // nothing to validate in instance mode
+    catalogErrors = [];
+    metaById = publishedMeta; // instanceId -> { accessLevel, teachingTitle }
+  }
+
   const rows = [];
   for (const [instanceId, { files }] of parsed.instances) {
-    const required = requiredInstanceFiles(instanceId);
-    const missing = required.filter((n) => typeof files[n] !== "string");
+    const missing = requiredInstanceFiles(instanceId).filter((n) => typeof files[n] !== "string");
     let verdict;
     if (missing.length) {
       verdict = { ok: false, errors: [`Fichiers manquants: ${missing.join(", ")}`] };
@@ -51,17 +69,17 @@ function buildRows(parsed) {
         ? validateInstanceBundle({ instanceId, manifest, sessions })
         : { ok: false, errors: ["JSON invalide dans manifest/sessions"] };
     }
-    const meta = levelById.get(instanceId);
+    const meta = metaById.get(instanceId);
     rows.push({
       instanceId, files,
-      accessLevel: meta?.accessLevel ?? 4,
-      teachingTitle: meta?.teachingTitle ?? "",
-      inCatalog: !!meta,
+      accessLevel: meta ? meta.accessLevel : null,
+      teachingTitle: meta ? meta.teachingTitle : "",
+      known: !!meta, // in the ZIP's catalog (snapshot) or already published (instance)
       verdict,
       status: "pending",
     });
   }
-  return { catalogText: parsed.catalogText, catalogValid: catV.ok, catalogErrors: catV.errors, rows };
+  return { hasCatalog, catalogText: parsed.catalogText, catalogValid, catalogErrors, rows };
 }
 
 // Table styling shared with MembersTable: white surface card, subtle shadow,
@@ -88,7 +106,7 @@ export default function ContentUpload() {
   const [deletingId, setDeletingId] = useState(null);
 
   // Upload staging
-  const [state, setState] = useState(null); // { catalogText, catalogValid, catalogErrors, rows }
+  const [state, setState] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -102,9 +120,11 @@ export default function ContentUpload() {
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       const list = (data.instances || []).slice().sort((a, b) => a.instanceId.localeCompare(b.instanceId));
       setPublished(list);
+      return list;
     } catch (err) {
       setPublished([]);
       setPubError(`Liste des contenus indisponible : ${err.message}`);
+      return [];
     }
   }, []);
 
@@ -119,7 +139,11 @@ export default function ContentUpload() {
     }
     try {
       const buf = new Uint8Array(await file.arrayBuffer());
-      setState(buildRows(parseZip(buf)));
+      const parsed = parseZip(buf);
+      // Instance mode (no catalog.json) needs the live catalog to resolve levels.
+      const pub = parsed.catalogText ? (published ?? []) : (published ?? (await loadPublished()));
+      const publishedMeta = new Map((pub || []).map((p) => [p.instanceId, p]));
+      setState(buildRows(parsed, publishedMeta));
     } catch (err) {
       setError(`Lecture du ZIP impossible : ${err.message}`);
       setState(null);
@@ -131,7 +155,7 @@ export default function ContentUpload() {
     setBusy(true);
     const rows = [...state.rows];
     for (const row of rows) {
-      if (!row.verdict.ok || !row.inCatalog) {
+      if (!row.verdict.ok || !row.known) {
         row.status = "ignorée";
         setState((s) => ({ ...s, rows: [...rows] }));
         continue;
@@ -158,7 +182,8 @@ export default function ContentUpload() {
       }
       setState((s) => ({ ...s, rows: [...rows] }));
     }
-    if (state.catalogValid) {
+    // Replace the catalog only when the ZIP carried one (snapshot mode).
+    if (state.hasCatalog && state.catalogValid) {
       try {
         await fetch("/api/admin/content/catalog", {
           method: "PUT",
@@ -189,7 +214,10 @@ export default function ContentUpload() {
     }
   }
 
-  const canPublish = state && state.catalogValid && state.rows.some((r) => r.verdict.ok && r.inCatalog);
+  const canPublish =
+    state &&
+    (state.hasCatalog ? state.catalogValid : true) &&
+    state.rows.some((r) => r.verdict.ok && r.known);
 
   return (
     <div style={{ maxWidth: 880 }}>
@@ -215,6 +243,7 @@ export default function ContentUpload() {
               <thead>
                 <tr style={{ background: ADMIN_CHROME.CANVAS_BG, borderBottom: `1px solid ${ADMIN_CHROME.SURFACE_BORDER}` }}>
                   <th style={th}>Instance</th>
+                  <th style={th}>Niveau</th>
                   <th style={th}>Fichiers</th>
                   <th style={{ ...th, textAlign: "right" }}>Action</th>
                 </tr>
@@ -223,6 +252,7 @@ export default function ContentUpload() {
                 {published.map((p, i) => (
                   <tr key={p.instanceId} style={{ borderTop: i === 0 ? "none" : `1px solid ${ADMIN_CHROME.SURFACE_BORDER}` }}>
                     <td style={{ ...cell, fontFamily: "monospace", color: ADMIN_CHROME.NAV_ITEM_ACTIVE_TEXT }}>{p.instanceId}</td>
+                    <td style={cell}>{p.accessLevel ?? "—"}</td>
                     <td style={cell}>{p.files.length} fichier{p.files.length > 1 ? "s" : ""}</td>
                     <td style={{ ...cell, textAlign: "right" }}>
                       {confirmId === p.instanceId ? (
@@ -255,9 +285,14 @@ export default function ContentUpload() {
 
       {/* ── Publish an update ── */}
       <section>
-        <h2 style={{ fontSize: 15, fontWeight: 600, color: COLORS.TEXT_PRIMARY, marginBottom: 12 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 600, color: COLORS.TEXT_PRIMARY, marginBottom: 6 }}>
           Publier une mise à jour
         </h2>
+        <p style={{ fontSize: 12.5, color: COLORS.TEXT_SECONDARY, marginBottom: 14, lineHeight: 1.5 }}>
+          ZIP du dossier <code>output/</code> complet (avec <code>catalog.json</code>) pour
+          ajouter/remplacer du contenu, ou ZIP d’une seule instance déjà publiée pour la
+          mettre à jour.
+        </p>
 
         <div
           onClick={() => inputRef.current?.click()}
@@ -270,7 +305,7 @@ export default function ContentUpload() {
           }}
           style={{
             border: `2px dashed ${dragging ? COLORS.GOLD : ADMIN_CHROME.SURFACE_BORDER}`,
-            background: dragging ? COLORS.GOLD_SUBTLE : "#fff",
+            background: dragging ? COLORS.GOLD_SUBTLE : ADMIN_CHROME.SURFACE,
             borderRadius: 12,
             padding: "32px 24px",
             textAlign: "center",
@@ -279,7 +314,7 @@ export default function ContentUpload() {
           }}
         >
           <div style={{ fontSize: 14, fontWeight: 500, color: COLORS.TEXT_PRIMARY, marginBottom: 4 }}>
-            Glissez ici le ZIP du dossier <code>output/</code> du pipeline
+            Glissez le ZIP ici
           </div>
           <div style={{ fontSize: 12.5, color: COLORS.TEXT_SECONDARY }}>
             ou cliquez pour parcourir vos fichiers (.zip)
@@ -298,12 +333,17 @@ export default function ContentUpload() {
 
         {state && (
           <>
-            {!state.catalogValid && (
+            {state.hasCatalog && !state.catalogValid && (
               <p style={{ color: COLORS.HOVER_RED, fontSize: 13, marginTop: 16 }}>
                 catalog.json invalide — publication bloquée. {state.catalogErrors.join(" · ")}
               </p>
             )}
-            <div style={{ ...surfaceCard, marginTop: 18 }}>
+            <p style={{ fontSize: 12.5, color: COLORS.TEXT_SECONDARY, marginTop: 16 }}>
+              {state.hasCatalog
+                ? "ZIP complet détecté (catalog.json présent) — le catalog sera remplacé."
+                : "Mise à jour d’instance(s) déjà publiée(s) — le catalog n’est pas modifié."}
+            </p>
+            <div style={{ ...surfaceCard, marginTop: 10 }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: ADMIN_CHROME.CANVAS_BG, borderBottom: `1px solid ${ADMIN_CHROME.SURFACE_BORDER}` }}>
@@ -317,9 +357,11 @@ export default function ContentUpload() {
                   {state.rows.map((r, i) => (
                     <tr key={r.instanceId} style={{ borderTop: i === 0 ? "none" : `1px solid ${ADMIN_CHROME.SURFACE_BORDER}` }}>
                       <td style={{ ...cell, fontFamily: "monospace", color: ADMIN_CHROME.NAV_ITEM_ACTIVE_TEXT }}>{r.instanceId}</td>
-                      <td style={cell}>{r.accessLevel}</td>
-                      <td style={{ ...cell, color: r.verdict.ok && r.inCatalog ? ADMIN_CHROME.SUCCESS_TEXT : COLORS.HOVER_RED }}>
-                        {!r.inCatalog ? "absente du catalog" : r.verdict.ok ? "OK" : r.verdict.errors.join(" · ")}
+                      <td style={cell}>{r.accessLevel ?? "—"}</td>
+                      <td style={{ ...cell, color: r.verdict.ok && r.known ? ADMIN_CHROME.SUCCESS_TEXT : COLORS.HOVER_RED }}>
+                        {!r.known
+                          ? (state.hasCatalog ? "absente du catalog" : "inconnue — incluez catalog.json")
+                          : r.verdict.ok ? "OK" : r.verdict.errors.join(" · ")}
                       </td>
                       <td style={{ ...cell, color: r.failed ? COLORS.HOVER_RED : COLORS.TEXT_SECONDARY }}>{r.status}</td>
                     </tr>
