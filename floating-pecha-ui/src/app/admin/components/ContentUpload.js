@@ -88,7 +88,7 @@ export default function ContentUpload() {
     setBusy(true);
     const rows = [...state.rows];
     for (const row of rows) {
-      if (!row.verdict.ok || !row.inCatalog) { row.status = "skipped"; continue; }
+      if (!row.verdict.ok || !row.inCatalog) { row.status = "skipped"; setState((s) => ({ ...s, rows: [...rows] })); continue; }
       row.status = "publishing";
       setState((s) => ({ ...s, rows: [...rows] }));
       try {
@@ -158,7 +158,7 @@ export default function ContentUpload() {
             </thead>
             <tbody>
               {state.rows.map((r) => (
-                <tr key={r.instanceId} style={{ borderTop: "1px solid #eee" }}>
+                <tr key={r.instanceId} style={{ borderTop: `1px solid ${COLORS.TEXT_DISABLED}` }}>
                   <td style={{ padding: "6px 8px", fontFamily: "monospace" }}>{r.instanceId}</td>
                   <td style={{ padding: "6px 8px" }}>{r.accessLevel}</td>
                   <td style={{ padding: "6px 8px", color: r.verdict.ok && r.inCatalog ? COLORS.GOLD : COLORS.HOVER_RED }}>
@@ -175,7 +175,7 @@ export default function ContentUpload() {
             disabled={!canPublish || busy}
             style={{
               marginTop: 20, padding: "9px 18px", fontSize: 13.5, fontWeight: 600,
-              color: "#fff", background: canPublish && !busy ? COLORS.GOLD : "#ccc",
+              color: "#fff", background: canPublish && !busy ? COLORS.GOLD : COLORS.TEXT_DISABLED,
               border: "none", borderRadius: 8, cursor: canPublish && !busy ? "pointer" : "not-allowed",
             }}
           >

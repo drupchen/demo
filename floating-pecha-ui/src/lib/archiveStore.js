@@ -19,7 +19,7 @@ export async function readCatalog(env) {
 }
 
 export async function getArchiveObject(env, instanceId, file) {
-  return env.MEDIA.get(archiveKey(instanceId, file));
+  return await env.MEDIA.get(archiveKey(instanceId, file));
 }
 
 export async function putArchiveText(env, instanceId, file, text) {

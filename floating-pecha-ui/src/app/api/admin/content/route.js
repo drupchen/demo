@@ -20,7 +20,7 @@ export async function POST(request) {
   if (response) return response;
 
   const body = await request.json().catch(() => null);
-  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  if (!body) return NextResponse.json({ error: "Corps de requête JSON invalide" }, { status: 400 });
 
   const instanceId = (body.instanceId ?? "").toString().trim();
   const teachingTitle = (body.teachingTitle ?? "").toString();
