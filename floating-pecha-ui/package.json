@@ -18,7 +18,9 @@
     "seed": "node scripts/seed-users.mjs",
     "search:index": "node scripts/build-search-index.mjs",
     "search:index:remote": "node scripts/build-search-index.mjs --remote",
-    "media:upload": "node scripts/upload-media-to-r2.mjs"
+    "media:upload": "node scripts/upload-media-to-r2.mjs",
+    "archive:upload": "node scripts/upload-archive-to-r2.mjs",
+    "archive:upload:remote": "node scripts/upload-archive-to-r2.mjs --remote"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.18.1",
