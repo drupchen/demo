@@ -1,11 +1,13 @@
 "use client";
 import { inter, sapcheAccentFor, sapcheInk, uchen } from "@/lib/theme";
+import { formatSapcheNumber } from "@/lib/sapcheNumber";
 import { useEffect, useRef } from "react";
 
 function Row({ node, activeId, collapsed, onToggleCollapse, onSelect }) {
   const kids = node.children || [];
   const isCollapsed = collapsed.has(node.id);
   const isActive = activeId === node.id;
+  const num = formatSapcheNumber(node.number);
   const ref = useRef(null);
   useEffect(() => {
     if (isActive) ref.current?.scrollIntoView({ block: "nearest" });
@@ -38,6 +40,7 @@ function Row({ node, activeId, collapsed, onToggleCollapse, onSelect }) {
         ) : (
           <span className="r-toc-chevron-spacer" />
         )}
+        {num && <span className={`${inter.className} r-toc-num`}>{num}</span>}
         <span
           className={`${uchen.className} r-toc-title`}
           style={{ color: sapcheInk }}

@@ -260,10 +260,16 @@
 
 /* --- Sapche (Table of Contents) --- */
 .r-sapche-rule { height:1px; background:linear-gradient(90deg,#d9cfb0,transparent); flex:1; }
-.r-sapche-num { font-size:11px; color:#9a8f76; }
+/* Outline number sits in the left gutter (like the commentary color bars,
+   offset 8px) so the section title aligns with the body text below it. */
+.r-sapche-num {
+  position:absolute; right:100%; margin-right:8px;
+  top:44%; transform:translateY(-50%);
+  font-size:15px; color:#9a8f76; white-space:nowrap;
+}
 /* Inline section separator: full-width block between paragraphs, with breathing room.
    scroll-margin-top gives the teleport a small gap below the top edge. */
-.r-sapche-marker { display:flex; align-items:center; gap:10px; margin:26px 0 14px; scroll-margin-top:24px; }
+.r-sapche-marker { position:relative; display:flex; align-items:center; gap:10px; margin:26px 0 14px; scroll-margin-top:24px; }
 
 /* Sidebar tree */
 .r-toc-row { display:flex; align-items:center; gap:6px; padding:4px 8px; cursor:pointer; white-space:nowrap; scroll-margin-block:24px; }
@@ -271,6 +277,7 @@
 .r-toc-accent { width:3px; align-self:stretch; border-radius:2px; flex:none; opacity:0.45; min-height:1.2em; }
 .r-toc-row:hover { background:rgba(0,0,0,0.04); }
 .r-toc-row-active { background:rgba(139,29,29,0.07); box-shadow:inset 2px 0 0 #8B1D1D; }
+.r-toc-num { font-size:11px; color:#9a8f76; flex:none; }
 .r-toc-title { font-size:15px; line-height:1.45; }
 .r-toc-chevron { width:20px; min-width:20px; font-size:13px; line-height:1; color:#9a8f76; background:none; border:0; padding:2px 0; cursor:pointer; }
 .r-toc-chevron:hover { color:#8B1D1D; }
