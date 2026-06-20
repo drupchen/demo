@@ -11,6 +11,7 @@ import React, {
 } from "react";
 
 import Footer from "@/app/components/Footer";
+import { contentUrl } from "@/lib/contentUrl";
 import { getSizes, getThemeCssVars, inter, uchen } from "@/lib/theme";
 import { parseToMs, useAudioPlayer } from "@/lib/useAudioPlayer";
 import useIsMobile from "@/lib/useIsMobile";
@@ -604,11 +605,9 @@ function ReaderContent() {
     const loadData = async () => {
       try {
         const [manifestRes, sessionsRes, catalogRes] = await Promise.all([
-          fetch(`/data/archive/${instanceId}/manifest.json`),
-          fetch(
-            `/data/archive/${instanceId}/${instanceId}_compiled_sessions.json`,
-          ),
-          fetch("/data/archive/catalog.json"),
+          fetch(contentUrl(instanceId, "manifest.json")),
+          fetch(contentUrl(instanceId, `${instanceId}_compiled_sessions.json`)),
+          fetch("/api/catalog"),
         ]);
         if (manifestRes.ok && sessionsRes.ok) {
           const manifestData = await manifestRes.json();
@@ -628,7 +627,7 @@ function ReaderContent() {
             }
           }
         }
-        fetch(`/data/archive/${instanceId}/sapche.json`)
+        fetch(contentUrl(instanceId, "sapche.json"))
           .then((r) => (r.ok ? r.json() : null))
           .then(setSapche)
           .catch(() => setSapche(null));

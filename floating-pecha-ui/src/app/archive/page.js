@@ -21,7 +21,7 @@ function ArchiveContent() {
   const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
-    fetch('/data/archive/catalog.json')
+    fetch('/api/catalog')
       .then(res => res.json())
       .then(data => setCatalog(data))
       .catch(err => console.error("Catalog load error:", err));
