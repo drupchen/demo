@@ -1,86 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { unzipSync, strFromU8 } from "fflate";
-import { validateInstanceBundle, validateCatalog, requiredInstanceFiles } from "@/lib/archiveValidate";
+import { parseZip, buildRows } from "@/lib/archiveZip";
 import { COLORS, ADMIN_CHROME } from "@/lib/theme";
-
-// Parse the ZIP (browser-side) into { catalogText, instances: Map<id, {files:{name:text}}> }.
-// Tolerates an optional single top-level folder (e.g. "output/").
-function parseZip(uint8) {
-  const entries = unzipSync(uint8);
-  const paths = Object.keys(entries).filter((p) => !p.endsWith("/"));
-  const firstSeg = (p) => p.split("/")[0];
-  const tops = new Set(paths.map(firstSeg));
-  const strip = tops.size === 1 && paths.every((p) => p.includes("/")) ? `${[...tops][0]}/` : "";
-  let catalogText = null;
-  const instances = new Map();
-  for (const p of paths) {
-    const rel = strip && p.startsWith(strip) ? p.slice(strip.length) : p;
-    const text = strFromU8(entries[p]);
-    if (rel === "catalog.json") { catalogText = text; continue; }
-    const slash = rel.indexOf("/");
-    if (slash === -1) continue;
-    const instanceId = rel.slice(0, slash);
-    const name = rel.slice(slash + 1);
-    if (name.includes("/")) continue; // ignore nested dirs (sessions/, session_logs/)
-    if (!instances.has(instanceId)) instances.set(instanceId, { files: {} });
-    instances.get(instanceId).files[name] = text;
-  }
-  return { catalogText, instances };
-}
-
-function safeParse(t) { try { return JSON.parse(t); } catch { return null; } }
-
-// Build per-instance rows with a client-side validation verdict.
-// Two modes:
-//  - snapshot: ZIP contains catalog.json → levels/titles come from it, catalog
-//    is replaced on publish.
-//  - instance: no catalog.json → it's an update to already-published teachings;
-//    levels/titles come from `publishedMeta` (the live catalog) and the catalog
-//    is left untouched. Instances unknown to the catalog are rejected.
-function buildRows(parsed, publishedMeta) {
-  const hasCatalog = !!parsed.catalogText;
-  let catalogValid, catalogErrors, metaById;
-  if (hasCatalog) {
-    const cat = safeParse(parsed.catalogText);
-    const catV = cat
-      ? validateCatalog(cat)
-      : { ok: false, errors: ["catalog.json illisible (JSON invalide)"], instances: [] };
-    catalogValid = catV.ok;
-    catalogErrors = catV.errors;
-    metaById = new Map(catV.instances.map((i) => [i.instanceId, i]));
-  } else {
-    catalogValid = true; // nothing to validate in instance mode
-    catalogErrors = [];
-    metaById = publishedMeta; // instanceId -> { accessLevel, teachingTitle }
-  }
-
-  const rows = [];
-  for (const [instanceId, { files }] of parsed.instances) {
-    const missing = requiredInstanceFiles(instanceId).filter((n) => typeof files[n] !== "string");
-    let verdict;
-    if (missing.length) {
-      verdict = { ok: false, errors: [`Fichiers manquants: ${missing.join(", ")}`] };
-    } else {
-      const manifest = safeParse(files["manifest.json"]);
-      const sessions = safeParse(files[`${instanceId}_compiled_sessions.json`]);
-      verdict = (manifest && sessions)
-        ? validateInstanceBundle({ instanceId, manifest, sessions })
-        : { ok: false, errors: ["JSON invalide dans manifest/sessions"] };
-    }
-    const meta = metaById.get(instanceId);
-    rows.push({
-      instanceId, files,
-      accessLevel: meta ? meta.accessLevel : null,
-      teachingTitle: meta ? meta.teachingTitle : "",
-      known: !!meta, // in the ZIP's catalog (snapshot) or already published (instance)
-      verdict,
-      status: "pending",
-    });
-  }
-  return { hasCatalog, catalogText: parsed.catalogText, catalogValid, catalogErrors, rows };
-}
 
 // Table styling shared with MembersTable: white surface card, subtle shadow,
 // uppercase muted headers on the canvas-gray header row.
