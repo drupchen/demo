@@ -9,6 +9,7 @@ import { inter, ADMIN_CHROME, COLORS } from "@/lib/theme";
 
 const NAV_ITEMS = [
   { label: "Membres", href: "/admin/members", disabled: false },
+  { label: "Contenu", href: "/admin/contenu", disabled: false },
   { label: "Réglages", href: "/admin/settings", disabled: true },
 ];
 
@@ -34,6 +35,16 @@ function IconSettings() {
   );
 }
 
+function IconContent() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      <line x1="8" y1="9" x2="16" y2="9"/>
+      <line x1="8" y1="13" x2="14" y2="13"/>
+    </svg>
+  );
+}
+
 function IconLogout() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -46,6 +57,7 @@ function IconLogout() {
 
 const ICONS = {
   "/admin/members": <IconUsers />,
+  "/admin/contenu": <IconContent />,
   "/admin/settings": <IconSettings />,
 };
 

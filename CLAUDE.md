@@ -41,9 +41,7 @@ khyentse-onang/
 │   ├── srt_sessions_2_manual_overrides.py  # Manual alignment corrections
 │   ├── srt_sessions_3_combine_sessions.py  # Session compilation
 │   ├── generate_catalog.py            # Catalog JSON generation
-│   ├── opensearch_ingest.py           # Index segments into OpenSearch
 │   └── inspect_docx_xml.py            # DOCX debugging utility
-└── docker-compose.yml                 # OpenSearch single-node (port 9200)
 ```
 
 ## Key Concepts
@@ -71,7 +69,7 @@ Content is gated by numeric access levels (0–4). Level 0 = public. Higher leve
 - **Database**: Cloudflare D1 (SQLite at the edge), migrations under `floating-pecha-ui/migrations/`
 - **Search**: SQLite FTS5 inside D1 — no external engine for v1. `segments_fts` virtual table (trigram tokenizer), built by `scripts/build-search-index.mjs`, queried by `/api/search`. A dedicated engine (Meilisearch) is deferred to the faceted multi-entity phase — see `DECISIONS.md` (2026-06-14)
 - **Fonts**: Uchen (Tibetan), Inter (Latin) — loaded via `next/font/google`
-- **Data Pipeline**: Python with `python-docx`, `botok` (Tibetan tokenizer); the OpenSearch ingest script is unused for now
+- **Data Pipeline**: Python with `python-docx`, `botok` (Tibetan tokenizer)
 - **Infrastructure**: Cloudflare Workers via the OpenNext adapter (`@opennextjs/cloudflare`), local dev via `wrangler dev`
 
 ## Design System (`src/lib/theme.js`)
@@ -123,8 +121,6 @@ SEED_PASSWORD_ADMIN=...   \
 npm run seed
 ```
 
-OpenSearch (docker-compose) is no longer required for the app to run.
-
 ### Building the search index (D1 FTS5)
 
 Search is served from a SQLite FTS5 table inside D1 — no external engine. After
@@ -158,11 +154,16 @@ python srt_sessions_1_parse.py
 python srt_sessions_2_manual_overrides.py
 # 5. Combine all sessions → compiled_sessions.json per instance
 python srt_sessions_3_combine_sessions.py
-# 6. Index segments into OpenSearch
-python opensearch_ingest.py
 ```
 
-Output goes to `prepare_data/output/`, then must be copied to `floating-pecha-ui/public/data/archive/`.
+Output goes to `prepare_data/output/`.
+
+### Publishing archive data (no redeploy)
+
+Archive JSON lives in R2 (key prefix `archive/`). Migrate/seed it with
+`npm run archive:upload` (local) or `npm run archive:upload:remote` (deployed).
+After that, an admin publishes updates from /admin → Contenu by uploading the
+ZIP of the pipeline's `output/`; the content and search update live, no redeploy.
 
 ### Sapche (Table of Contents) alignment
 A teaching's *sapche* (ས་བཅད་, the outline) arrives from the annotation tool as a JSON export

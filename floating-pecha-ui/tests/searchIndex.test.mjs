@@ -1,10 +1,10 @@
 // Run: node tests/searchIndex.test.mjs
-// Unit tests for the pure helpers in scripts/build-search-index.mjs:
+// Unit tests for the pure helpers in src/lib/searchIndex.js:
 // segment text reconstruction, SQL string escaping, and byte-budgeted INSERT
 // chunking (the SQLITE_TOOBIG guard).
 
 import assert from "node:assert/strict";
-import { reconstructSegments, sqlString, rowsToSql } from "../scripts/build-search-index.mjs";
+import { reconstructSegments, sqlString, rowsToSql } from "../src/lib/searchIndex.js";
 
 let passed = 0;
 function test(name, fn) {

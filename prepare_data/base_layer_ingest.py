@@ -1,3 +1,4 @@
+import os
 import uuid
 from pathlib import Path
 import docx
@@ -185,7 +186,7 @@ def process_document(docx_path, big_t, title_t, instance_id):
     return final_syllables
 
 if __name__ == "__main__":
-    base_dir = Path("/media/drupchen/Khyentse Önang/Website/website_data")
+    base_dir = Path(os.environ.get("KHYENTSE_DATA_DIR", "/media/drupchen/Khyentse Önang/Website/website_data"))
     output_dir = Path(__file__).resolve().parent / 'output'
     catalog_path = output_dir / "catalog.json"
 

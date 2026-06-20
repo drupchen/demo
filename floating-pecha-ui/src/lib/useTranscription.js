@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { contentUrl } from "@/lib/contentUrl";
 import { parseToMs } from "./useAudioPlayer";
 
 /**
@@ -25,7 +26,7 @@ export function useTranscription(instanceId) {
     let cancelled = false;
     const loadJson = async (file) => {
       try {
-        const res = await fetch(`/data/archive/${instanceId}/${file}`);
+        const res = await fetch(contentUrl(instanceId, file));
         return res.ok ? await res.json() : null;
       } catch {
         return null;

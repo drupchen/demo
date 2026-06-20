@@ -4,12 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:cf": "npm run build:manifest && opennextjs-cloudflare build && printf 'data/world/gallery/mp4/\\n' > .open-next/assets/.assetsignore && wrangler dev",
+    "dev:cf": "npm run build:manifest && opennextjs-cloudflare build && printf 'data/world/gallery/mp4/\\ndata/archive/\\n' > .open-next/assets/.assetsignore && wrangler dev",
     "build:manifest": "node scripts/build-gallery-manifest.mjs",
     "prebuild": "npm run build:manifest",
     "build": "next build",
-    "preview": "npm run build:manifest && opennextjs-cloudflare build && printf 'data/world/gallery/mp4/\\n' > .open-next/assets/.assetsignore && wrangler dev",
-    "deploy": "R2_PUBLIC_BASE=\"$R2_PUBLIC_BASE\" npm run build:manifest && opennextjs-cloudflare build && printf 'data/world/gallery/mp4/\\n' > .open-next/assets/.assetsignore && wrangler deploy",
+    "preview": "npm run build:manifest && opennextjs-cloudflare build && printf 'data/world/gallery/mp4/\\ndata/archive/\\n' > .open-next/assets/.assetsignore && wrangler dev",
+    "deploy": "R2_PUBLIC_BASE=\"$R2_PUBLIC_BASE\" npm run build:manifest && opennextjs-cloudflare build && printf 'data/world/gallery/mp4/\\ndata/archive/\\n' > .open-next/assets/.assetsignore && wrangler deploy",
     "start": "next start",
     "lint": "eslint",
     "test": "for f in tests/*.test.mjs; do node \"$f\" || exit 1; done",
@@ -18,12 +18,14 @@
     "seed": "node scripts/seed-users.mjs",
     "search:index": "node scripts/build-search-index.mjs",
     "search:index:remote": "node scripts/build-search-index.mjs --remote",
-    "media:upload": "node scripts/upload-media-to-r2.mjs"
+    "media:upload": "node scripts/upload-media-to-r2.mjs",
+    "archive:upload": "node scripts/upload-archive-to-r2.mjs",
+    "archive:upload:remote": "node scripts/upload-archive-to-r2.mjs --remote"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.18.1",
-    "@opensearch-project/opensearch": "^3.5.1",
     "bcryptjs": "^2.4.3",
+    "fflate": "^0.8.3",
     "next": "16.1.6",
     "next-auth": "^5.0.0-beta.31",
     "react": "19.2.3",

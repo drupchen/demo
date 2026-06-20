@@ -1,0 +1,4 @@
+botok
+python-docx
+pysrt
+thefuzz
