@@ -22,7 +22,6 @@ const SIBLING_JUMP_MIN_ROWS = 5;
 function StudyRow({
   node,
   siblings,
-  parentNode,
   collapsed,
   activeId,
   focusedId,
@@ -36,14 +35,16 @@ function StudyRow({
   const kids = node.children || [];
   const isCollapsed = collapsed.has(node.id);
   // Same-level navigation, mirroring the prototype's gutter pills: previous /
-  // next sibling, falling back to the parent at either boundary. A pill is
-  // only shown when its target is far enough (in visible rows) for the jump
-  // to beat plain scrolling — adjacent siblings don't need a button.
+  // next sibling. No parent fallback at the boundaries — a ↓ pointing up to
+  // the parent (or a ↑ at the first sibling) reads as a wrong direction, so
+  // the first sibling has no ↑ and the last has no ↓. A pill is only shown
+  // when its target is far enough (in visible rows) for the jump to beat plain
+  // scrolling — adjacent siblings don't need a button.
   const num = formatSapcheNumber(node.number);
   const myIdx = siblings.findIndex((s) => s.id === node.id);
-  const prevTarget = myIdx > 0 ? siblings[myIdx - 1] : parentNode;
+  const prevTarget = myIdx > 0 ? siblings[myIdx - 1] : null;
   const nextTarget =
-    myIdx >= 0 && myIdx < siblings.length - 1 ? siblings[myIdx + 1] : parentNode;
+    myIdx >= 0 && myIdx < siblings.length - 1 ? siblings[myIdx + 1] : null;
   const farEnough = (target) =>
     target &&
     rowIndex.has(target.id) &&
@@ -133,7 +134,6 @@ function StudyRow({
             key={c.id}
             node={c}
             siblings={kids}
-            parentNode={node}
             collapsed={collapsed}
             activeId={activeId}
             focusedId={focusedId}
@@ -464,7 +464,6 @@ export default function SapcheStudyView({ roots, activeId, onSelect, onClose, pr
               key={n.id}
               node={n}
               siblings={top}
-              parentNode={null}
               collapsed={collapsed}
               activeId={activeId}
               focusedId={focusedId}
