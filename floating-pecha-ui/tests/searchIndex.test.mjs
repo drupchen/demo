@@ -4,7 +4,7 @@
 // chunking (the SQLITE_TOOBIG guard).
 
 import assert from "node:assert/strict";
-import { reconstructSegments, sqlString, rowsToSql } from "../scripts/build-search-index.mjs";
+import { reconstructSegments, sqlString, rowsToSql } from "../src/lib/searchIndex.js";
 
 let passed = 0;
 function test(name, fn) {
