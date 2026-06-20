@@ -25,3 +25,18 @@ export function filterCatalogByLevel(catalog, userLevel) {
   const level = Number.isInteger(userLevel) ? userLevel : 0;
   return catalog.filter((t) => levelOf(t) <= level);
 }
+
+/**
+ * Return a copy of the catalog with `instanceId` removed from whichever teaching
+ * contains it; teachings left with no instances are dropped entirely. Used when
+ * an admin deletes a published instance so it no longer appears in any listing.
+ */
+export function removeInstanceFromCatalog(catalog, instanceId) {
+  if (!Array.isArray(catalog)) return [];
+  return catalog
+    .map((t) => ({
+      ...t,
+      Instances: (t.Instances ?? []).filter((i) => i?.Instance_ID !== instanceId),
+    }))
+    .filter((t) => (t.Instances ?? []).length > 0);
+}

@@ -34,6 +34,20 @@ export async function putCatalogText(env, text) {
   });
 }
 
+/** Delete every R2 object under an instance's prefix. Returns the count removed. */
+export async function deleteInstance(env, instanceId) {
+  const prefix = `${PREFIX}${instanceId}/`;
+  const keys = [];
+  let cursor;
+  do {
+    const res = await env.MEDIA.list({ prefix, cursor });
+    for (const o of res.objects) keys.push(o.key);
+    cursor = res.truncated ? res.cursor : undefined;
+  } while (cursor);
+  if (keys.length) await env.MEDIA.delete(keys);
+  return keys.length;
+}
+
 /** List published instances and the files present for each (from R2 listing). */
 export async function listPublishedInstances(env) {
   const byInstance = new Map();

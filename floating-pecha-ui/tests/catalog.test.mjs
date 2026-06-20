@@ -1,6 +1,6 @@
 // Run: node tests/catalog.test.mjs
 import assert from "node:assert/strict";
-import { accessLevelForInstance, filterCatalogByLevel } from "../src/lib/catalog.js";
+import { accessLevelForInstance, filterCatalogByLevel, removeInstanceFromCatalog } from "../src/lib/catalog.js";
 
 let passed = 0;
 function test(name, fn) { fn(); passed++; console.log(`  ok - ${name}`); }
@@ -33,6 +33,25 @@ test("missing Access_Level is treated as max-restricted (4)", () => {
   const c = [{ Title_bo: "X", Instances: [{ Instance_ID: "x" }] }];
   assert.equal(accessLevelForInstance(c, "x"), 4);
   assert.equal(filterCatalogByLevel(c, 3).length, 0);
+});
+
+test("removeInstanceFromCatalog drops the instance, keeps siblings", () => {
+  const r = removeInstanceFromCatalog(catalog, "g1");
+  assert.equal(r.length, 2);
+  const gated = r.find((t) => t.Title_bo === "Gated");
+  assert.deepEqual(gated.Instances.map((i) => i.Instance_ID), ["g2"]);
+});
+
+test("removeInstanceFromCatalog drops a teaching left with no instances", () => {
+  const r = removeInstanceFromCatalog(catalog, "pub1");
+  assert.equal(r.length, 1);
+  assert.equal(r[0].Title_bo, "Gated");
+});
+
+test("removeInstanceFromCatalog leaves catalog unchanged for unknown instance", () => {
+  const r = removeInstanceFromCatalog(catalog, "nope");
+  assert.equal(r.length, 2);
+  assert.equal(r[1].Instances.length, 2);
 });
 
 console.log(`\n${passed} tests passed`);
