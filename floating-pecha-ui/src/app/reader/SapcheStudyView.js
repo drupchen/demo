@@ -177,6 +177,7 @@ export default function SapcheStudyView({ roots, activeId, onSelect, onClose, pr
   const overlayRef = useRef(null);
   const treeRef = useRef(null);
   const bodyRef = useRef(null);
+  const breadcrumbRef = useRef(null);
 
   const { rows, parentOf } = useMemo(
     () => flattenVisibleRows(top, collapsed),
@@ -221,6 +222,15 @@ export default function SapcheStudyView({ roots, activeId, onSelect, onClose, pr
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows]);
+
+  // A deep path (root → current) can't always fit on one line. The rightmost
+  // crumb is the current section — the one that matters most — so pin the
+  // horizontal scroll to the right edge; ancestors stay reachable by scrolling
+  // left. No-op when the path already fits.
+  useEffect(() => {
+    const el = breadcrumbRef.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, [crumbs]);
 
   const onToggle = (id) => {
     setFocusedId(id); // chevron clicks move the focus ring too, so mouse and keyboard stay in step
@@ -429,7 +439,11 @@ export default function SapcheStudyView({ roots, activeId, onSelect, onClose, pr
           </button>
         </span>
       </div>
-      <nav className="r-study-breadcrumb" aria-label="Current section path">
+      <nav
+        ref={breadcrumbRef}
+        className="r-study-breadcrumb"
+        aria-label="Current section path"
+      >
         {crumbs.map((n, i) => (
           <Fragment key={n.id}>
             {i > 0 && <span className="r-study-crumb-sep">›</span>}
