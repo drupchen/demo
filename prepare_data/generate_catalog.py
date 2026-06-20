@@ -1,11 +1,12 @@
 import csv
 import json
+import os
 from pathlib import Path
 
 
 def generate_global_catalog():
     # 1. Setup paths
-    base_dir = Path("/media/drupchen/Khyentse Önang/Website/website_data")
+    base_dir = Path(os.environ.get("KHYENTSE_DATA_DIR", "/media/drupchen/Khyentse Önang/Website/website_data"))
     output_dir = Path(__file__).resolve().parent / 'output'
     db_dir = base_dir / "db"
 

@@ -1,4 +1,5 @@
 import json
+import os
 import pysrt
 import re
 from pathlib import Path
@@ -195,7 +196,7 @@ def sync_and_log_folder(manifest_path, srt_folder, catalog_path, output_folder, 
 if __name__ == "__main__":
     THRESHOLD = 80
 
-    base_dir = Path("/media/drupchen/Khyentse Önang/Website/website_data")
+    base_dir = Path(os.environ.get("KHYENTSE_DATA_DIR", "/media/drupchen/Khyentse Önang/Website/website_data"))
     output_dir = Path(__file__).resolve().parent / 'output'
     catalog_path = output_dir / "catalog.json"
 
