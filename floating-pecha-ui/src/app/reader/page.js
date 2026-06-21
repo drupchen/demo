@@ -742,6 +742,21 @@ function ReaderContent() {
     return m;
   }, [transSessions, transTextByGid]);
 
+  // True only while a session is active AND that session has a real transcript.
+  // Gates the navbar transcription pencil (independent of transcriptionMode).
+  const activeSessionHasTranscript = useMemo(() => {
+    if (!hasTranscription || !activeCommentary) return false;
+    return activeCommentarySegments.some((p) =>
+      (p.transcription_seg_ids || []).some((gid) => transSegByGid[gid]),
+    );
+  }, [hasTranscription, activeCommentary, activeCommentarySegments, transSegByGid]);
+
+  // Leaving a transcript session (or one without a transcript) turns the display
+  // off, so the next transcript session starts hidden (pencil-line, not -off).
+  useEffect(() => {
+    if (!activeSessionHasTranscript && transcriptionMode) setTranscriptionMode(false);
+  }, [activeSessionHasTranscript, transcriptionMode]);
+
   // For the active session: each commented passage's last syllable → its
   // transcription segments (de-duped to a single home passage by start-time),
   // plus the set of passage syllables to mark, and a flat time-sorted list.
@@ -1453,18 +1468,30 @@ function ReaderContent() {
         endOffset,
         anchorText,
         x: Math.min(rect.right, window.innerWidth - 44),
-        y: rect.top + rect.height / 2 - 30,
+        y: rect.top + rect.height / 2,
       });
     };
     const onMouseDown = (e) => {
       if (e.target?.closest?.(".r-note-add-btn")) return; // keep button alive
       setPendingSelection(null);
     };
+    // Touch devices (iOS Safari + Android Chrome) don't reliably fire mouseup/
+    // touchend for an OS-driven text selection — the robust cross-platform signal
+    // is `selectionchange`. Debounce it so it runs once the selection settles,
+    // reusing the same resolver.
+    let selTimer = null;
+    const onSelectionChange = () => {
+      if (selTimer) clearTimeout(selTimer);
+      selTimer = setTimeout(onMouseUp, 250);
+    };
     document.addEventListener("mousedown", onMouseDown);
     document.addEventListener("mouseup", onMouseUp);
+    document.addEventListener("selectionchange", onSelectionChange);
     return () => {
+      if (selTimer) clearTimeout(selTimer);
       document.removeEventListener("mousedown", onMouseDown);
       document.removeEventListener("mouseup", onMouseUp);
+      document.removeEventListener("selectionchange", onSelectionChange);
     };
   }, [annotateMode, manifestIndexOf]);
 
@@ -1896,9 +1923,6 @@ function ReaderContent() {
             sidebarSizes={sidebarSizes}
             preferRestored={preferRestored}
             onTogglePreferRestored={() => setPreferRestored((prev) => !prev)}
-            hasTranscription={hasTranscription}
-            transcriptionOn={transcriptionMode}
-            onToggleTranscription={() => setTranscriptionMode((v) => !v)}
             getCommentaryGroup={getCommentaryGroup}
             noSessionMessage={noSessionMessage}
             instanceId={instanceId}
@@ -1951,6 +1975,9 @@ function ReaderContent() {
         canAnnotate={loggedIn}
         annotateMode={annotateMode}
         onToggleAnnotate={() => setAnnotateMode((v) => !v)}
+        transcriptReady={activeSessionHasTranscript}
+        transcriptionOn={transcriptionMode}
+        onToggleTranscription={() => setTranscriptionMode((v) => !v)}
         center={
           <SearchBar
             manifest={manifest}

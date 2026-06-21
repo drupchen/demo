@@ -27,6 +27,7 @@ export default function SearchBar({
   onTransMatchSetsChange,
 }) {
   const [localQuery, setLocalQuery] = useState(initialQuery);
+  const [searchFocused, setSearchFocused] = useState(false);
   const [scope, setScope] = useState('main'); // 'main' | 'both' | 'transcript'
   // matches: ordered list of { type:'main'|'trans', pos, ids?, gid?, anchorId? }
   const [matches, setMatches] = useState([]);
@@ -208,7 +209,7 @@ export default function SearchBar({
     <button
       key={value}
       onClick={() => setScope(value)}
-      className={`${inter.className} px-2 py-1 text-[10px] font-bold transition-all ${
+      className={`${inter.className} px-2 py-0.5 md:py-1 text-[10px] font-bold transition-all ${
         scope === value ? 'r-btn-active' : 'r-text-secondary'
       }`}
     >
@@ -217,7 +218,13 @@ export default function SearchBar({
   );
 
   return (
-    <div className="flex items-center gap-2 w-full max-w-2xl mx-auto">
+    <div
+      className="flex items-center gap-2 w-full max-w-2xl mx-auto"
+      onFocus={() => setSearchFocused(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setSearchFocused(false);
+      }}
+    >
       <div className="relative flex-grow min-w-0">
         <input
           type="text"
@@ -241,10 +248,10 @@ export default function SearchBar({
       </div>
 
       {transcriptActive && (
-        <div className="flex rounded-md overflow-hidden border r-border flex-shrink-0" title="Search scope">
+        <div className={`${searchFocused && matches.length === 0 ? 'flex' : 'hidden'} md:flex flex-col md:flex-row rounded-md overflow-hidden border r-border flex-shrink-0`} title="Search scope">
           {scopeBtn('main', 'Text')}
           {scopeBtn('both', 'Both')}
-          {scopeBtn('transcript', 'Oral')}
+          {scopeBtn('transcript', 'Transcript')}
         </div>
       )}
 
