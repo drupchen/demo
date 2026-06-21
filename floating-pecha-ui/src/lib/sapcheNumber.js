@@ -16,12 +16,22 @@ const toLetters = (n) => {
 };
 
 // `number` is the dot-separated, all-digit outline string from sapche.json
-// (e.g. "1.2.1"). Segment i (1-indexed) is rendered as a digit when i is odd
-// and a letter when i is even; only the final two segments are returned.
-export function formatSapcheNumber(number) {
-  if (!number) return "";
-  const segs = String(number)
+// (e.g. "1.2.1"). Segment index i is rendered as a digit when i is even and a
+// letter when i is odd; only the final two segments are returned, each tagged
+// with its kind so callers can color letters and numbers distinctly.
+export function sapcheNumberSegments(number) {
+  if (!number) return [];
+  return String(number)
     .split(".")
-    .map((p, i) => (i % 2 === 0 ? p : toLetters(parseInt(p, 10))));
-  return segs.slice(-2).join(".");
+    .map((p, i) => ({
+      text: i % 2 === 0 ? p : toLetters(parseInt(p, 10)),
+      isLetter: i % 2 === 1,
+    }))
+    .slice(-2);
+}
+
+export function formatSapcheNumber(number) {
+  return sapcheNumberSegments(number)
+    .map((s) => s.text)
+    .join(".");
 }

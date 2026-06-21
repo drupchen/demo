@@ -216,6 +216,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
   transBlocksByAnchor,
   transSegSylsByGid,
   activePassageSylIds,
+  passageAnchorBySyl,
   onTransSegClick,
 }) {
   const ref = useRef(null);
@@ -264,7 +265,12 @@ const LazyParagraph = React.memo(function LazyParagraph({
 
     const mediaOptions = syllableMediaMap[syl.id] || [];
     const hasMedia = mediaOptions.length > 0;
-    const sizeStyle = sizes[syl.size?.toUpperCase()] || sizes.DEFAULT;
+    const baseSize = sizes[syl.size?.toUpperCase()] || sizes.DEFAULT;
+    // In transcription mode the root text is the secondary layer — render it
+    // slightly smaller than the prominent transcript below it.
+    const sizeStyle = transcriptionMode
+      ? { ...baseSize, fontSize: `calc(${baseSize.fontSize} * 0.78)` }
+      : baseSize;
 
     const isCoveredByFilter = teachingCoverageSet.has(syl.id);
     const isSelected = activeSylId === syl.id;
@@ -352,7 +358,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
         onMouseLeave={
           annotateMode && isNoted ? () => onNoteSylHover?.(null) : undefined
         }
-        className={`${fontClass} r-syl inline relative ${colorClass} ${bgClass} ${extraClass} ${noteWholeClass} ${
+        className={`${fontClass} r-syl r-snap inline relative ${colorClass} ${bgClass} ${extraClass} ${noteWholeClass} ${
           isInPassage ? "r-syl-passage" : ""
         } ${
           !annotateMode && !transcriptionMode && hasMedia && !isSelected
@@ -384,7 +390,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
                   ? "r-match"
                   : "";
               return (
-                <span key={syl.id} id={syl.id} className={cls}>
+                <span key={syl.id} id={syl.id} className={`r-snap ${cls}`}>
                   {syl.text}
                 </span>
               );
@@ -401,6 +407,41 @@ const LazyParagraph = React.memo(function LazyParagraph({
       return [span, renderTransBlock(transBlocksByAnchor[syl.id], syl.id)];
     }
     return span;
+  };
+
+  // Render an item's syllables. In transcription mode, group consecutive
+  // syllables that belong to the same transcript passage into a block-level band
+  // (so a continuous light-gray rectangle sits behind the passage), followed by
+  // that passage's transcript block. Syllables outside any passage stay inline.
+  const renderItemSyls = (syls) => {
+    if (!transcriptionMode) return syls.map(renderSylWithBlock);
+    const out = [];
+    let run = [];
+    let runAnchor = null;
+    const flush = () => {
+      if (!run.length) return;
+      if (runAnchor && transBlocksByAnchor?.[runAnchor]) {
+        out.push(
+          <div key={`pb-${run[0].id}`} className="r-passage-band">
+            {run.map(renderSyl)}
+          </div>,
+        );
+        out.push(renderTransBlock(transBlocksByAnchor[runAnchor], runAnchor));
+      } else {
+        run.forEach((s) => out.push(renderSyl(s)));
+      }
+      run = [];
+    };
+    syls.forEach((syl) => {
+      const anchor = passageAnchorBySyl?.get(syl.id) ?? null;
+      if (anchor !== runAnchor) {
+        flush();
+        runAnchor = anchor;
+      }
+      run.push(syl);
+    });
+    flush();
+    return out;
   };
 
   // Build a flat list of items, breaking on commentary-set change OR a section
@@ -445,7 +486,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
             <SectionMarker key={`m-${n.id}`} node={n} />
           ));
         }
-        const syls = item.syls.map(renderSylWithBlock);
+        const syls = renderItemSyls(item.syls);
         if (item.groups.length === 0) {
           return <React.Fragment key={`s${i}`}>{syls}</React.Fragment>;
         }
@@ -560,6 +601,9 @@ function ReaderContent() {
   const [hoveredSegSylIds, setHoveredSegSylIds] = useState(new Set());
   const [rootTextScrolledAt, setRootTextScrolledAt] = useState(0);
   const rootTextRef = useRef(null);
+
+  // Selection-snapping (rounds any text selection in the pecha to whole syllables).
+  const pointerDownRef = useRef(false);
 
   // Scroll container ref (from ReaderLayout) for viewport tracking
   const scrollContainerRef = useRef(null);
@@ -762,7 +806,7 @@ function ReaderContent() {
   // plus the set of passage syllables to mark, and a flat time-sorted list.
   const transcriptionView = useMemo(() => {
     if (!transcriptionMode || !hasTranscription || activeCommentarySegments.length === 0) {
-      return { byAnchor: {}, passageSylIds: new Set(), flat: [] };
+      return { byAnchor: {}, passageSylIds: new Set(), flat: [], passageAnchorBySyl: new Map() };
     }
     const ranges = activeCommentarySegments.map((p) => ({
       start: parseToMs(p.start),
@@ -787,6 +831,9 @@ function ReaderContent() {
     });
     const byAnchor = {};
     const flat = [];
+    // sylId -> passage anchor, for every passage that has a transcript block, so
+    // the reader can group each passage's syllables into a background band.
+    const passageAnchorBySyl = new Map();
     activeCommentarySegments.forEach((p, idx) => {
       const anchor = (p.syl_uuids || []).slice(-1)[0];
       if (!anchor) return;
@@ -797,10 +844,11 @@ function ReaderContent() {
       if (segs.length) {
         byAnchor[anchor] = segs;
         flat.push(...segs);
+        (p.syl_uuids || []).forEach((u) => passageAnchorBySyl.set(u, anchor));
       }
     });
     flat.sort((a, b) => a.startMs - b.startMs);
-    return { byAnchor, passageSylIds, flat };
+    return { byAnchor, passageSylIds, flat, passageAnchorBySyl };
   }, [transcriptionMode, hasTranscription, activeCommentarySegments, transSegByGid]);
 
   // Main-text syllables of the active transcript segment's passage — the only
@@ -1392,6 +1440,115 @@ function ReaderContent() {
     },
     [activeCommentary, audio, annotateMode],
   );
+
+  // System-wide selection snapping: round any text selection in the pecha text
+  // out to whole-syllable boundaries, so a drag can never leave a partial
+  // syllable highlighted. Always on (independent of annotate mode), and works on
+  // both desktop (mouse drag) and mobile (native selection handles). Kept cheap
+  // on low-power devices: the high-frequency `selectionchange` path bails in O(1)
+  // for collapsed/foreign selections and while a pointer is down; the actual
+  // rewrite is debounced, idempotent, and guarded against needless reflow.
+  useEffect(() => {
+    // Resolve a selection endpoint node to its enclosing syllable span (or null).
+    // Layer-agnostic: every snappable syllable unit — the root pecha AND every
+    // transcription, now and future — renders a leaf span marked `.r-snap`, so
+    // this works without enumerating ids per layer.
+    const endpointSpan = (node) => {
+      const el = node?.nodeType === 3 ? node.parentElement : node;
+      return el?.closest?.(".r-snap") || null;
+    };
+
+    // Round the live selection out to whole-syllable boundaries (idempotent).
+    const snapSelection = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      const root = rootTextRef.current;
+      if (
+        !root ||
+        !root.contains(range.startContainer) ||
+        !root.contains(range.endContainer)
+      ) {
+        return;
+      }
+      // A DOM Range is always in document order, so start <= end already.
+      const startSpan = endpointSpan(range.startContainer);
+      const endSpan = endpointSpan(range.endContainer);
+      if (!startSpan || !endSpan) return;
+
+      const newRange = document.createRange();
+      newRange.setStart(startSpan, 0);
+      newRange.setEnd(endSpan, endSpan.childNodes.length);
+
+      // Already snapped? Skip the selection rewrite to avoid a needless reflow.
+      // This also makes re-firing harmless: the post-snap `selectionchange`
+      // produces an identical range and stops here, so there is no loop.
+      const unchanged =
+        range.compareBoundaryPoints(Range.START_TO_START, newRange) === 0 &&
+        range.compareBoundaryPoints(Range.END_TO_END, newRange) === 0;
+      if (unchanged) return;
+      sel.removeAllRanges();
+      sel.addRange(newRange);
+    };
+
+    // On mobile, any programmatic selection rewrite tears down the OS selection
+    // handles + context menu, so we must NOT snap while the user is still working
+    // the native selection. Instead we wait for the selection to go idle (the
+    // user has stopped dragging the handles) before snapping once. Desktop has no
+    // native selection UI to disturb, so it snaps the instant the mouse is up.
+    const SNAP_IDLE_MS = isMobile ? 700 : 150;
+
+    let timer = null;
+    const scheduleSnap = (delay) => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        snapSelection();
+      }, delay);
+    };
+
+    const onPointerDown = () => {
+      pointerDownRef.current = true;
+    };
+    const onPointerUp = () => {
+      pointerDownRef.current = false;
+      // Desktop: a mouse release means the selection is finished — snap right
+      // away (next tick, so the rewrite happens after the event has unwound).
+      // Mobile: do NOT snap on release; that would clobber the native handles/
+      // menu the OS just put up. Wait for the selection to go idle instead, so
+      // the menu stays reachable and the handles remain draggable.
+      scheduleSnap(isMobile ? SNAP_IDLE_MS : 0);
+    };
+    const onSelectionChange = () => {
+      // O(1) bails for the overwhelmingly common fires (clicks, caret moves,
+      // typing) and while a pointer drag is in progress (handled on release).
+      // Each change resets the idle timer: on mobile, dragging a native handle
+      // fires a stream of selectionchange events (but no document pointer
+      // events), so this debounce is what catches the "done adjusting" moment.
+      if (pointerDownRef.current) return;
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+      scheduleSnap(SNAP_IDLE_MS);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown, { passive: true });
+    // A phone's native selection gesture commonly ends with `pointercancel` or
+    // `touchend` rather than a document-level `pointerup`, so listen for all three.
+    document.addEventListener("pointerup", onPointerUp, { passive: true });
+    document.addEventListener("pointercancel", onPointerUp, { passive: true });
+    document.addEventListener("touchend", onPointerUp, { passive: true });
+    document.addEventListener("selectionchange", onSelectionChange, {
+      passive: true,
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("pointercancel", onPointerUp);
+      document.removeEventListener("touchend", onPointerUp);
+      document.removeEventListener("selectionchange", onSelectionChange);
+    };
+  }, [isMobile]);
 
   // While annotation mode is on, watch for a finished text selection and show
   // the "+ Note" button near it.
@@ -2110,6 +2267,7 @@ function ReaderContent() {
                 transBlocksByAnchor={transcriptionView.byAnchor}
                 transSegSylsByGid={transSegSylsByGid}
                 activePassageSylIds={activePassageSylIds}
+                passageAnchorBySyl={transcriptionView.passageAnchorBySyl}
                 onTransSegClick={handleTransSegClick}
               />
             ))}

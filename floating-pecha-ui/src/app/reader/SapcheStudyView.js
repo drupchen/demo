@@ -7,7 +7,7 @@
 // Spec: docs/superpowers/specs/2026-06-11-sapche-study-mode-design.md
 import { inter, sapcheAccentFor, sapcheInk, uchen } from "@/lib/theme";
 import { collectCollapsibleIds, flattenVisibleRows } from "@/lib/sapcheStudy";
-import { formatSapcheNumber } from "@/lib/sapcheNumber";
+import SapcheNumber from "./SapcheNumber";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 const STUDY_SIZES = [30, 26, 23, 21, 19]; // uchen px for depth 1..5; deeper → 18
@@ -40,7 +40,6 @@ function StudyRow({
   // the first sibling has no ↑ and the last has no ↓. A pill is only shown
   // when its target is far enough (in visible rows) for the jump to beat plain
   // scrolling — adjacent siblings don't need a button.
-  const num = formatSapcheNumber(node.number);
   const myIdx = siblings.findIndex((s) => s.id === node.id);
   const prevTarget = myIdx > 0 ? siblings[myIdx - 1] : null;
   const nextTarget =
@@ -88,7 +87,7 @@ function StudyRow({
         ) : (
           <span className="r-toc-chevron-spacer" />
         )}
-        {num && <span className={`${inter.className} r-study-num`}>{num}</span>}
+        <SapcheNumber number={node.number} className={`${inter.className} r-study-num`} />
         <span
           className={`${uchen.className} r-study-title`}
           style={{ color: sapcheInk, fontSize: studySizeFor(node.depth) }}

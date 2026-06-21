@@ -51,10 +51,10 @@
   color: var(--reader-accent, #D4AF37);
 }
 
-/* Root (main) text in transcription mode — traditional pecha vermilion, so it
-   stays distinct from the black transcript body. */
+/* Root (main) text in transcription mode — black, sitting on a light-gray band,
+   so it reads as the secondary layer beneath the dark-blue transcript. */
 .r-text-root {
-  color: var(--theme-hover-red, #8B1D1D);
+  color: var(--reader-text-primary, #1A1A1A);
 }
 
 .r-text-white {
@@ -292,6 +292,10 @@
   flex:none;
   font-size:15px; color:#9a8f76; white-space:nowrap;
 }
+/* Outline numbering: letters (A, B…) blue, digits (1, 2…) orange; the "." stays
+   the muted parent color. Applies in the sidebar, inline titles and study view. */
+.r-sapche-letter { color:#1F5FA0; }
+.r-sapche-digit  { color:#D8601E; }
 /* Inline section separator: full-width block between paragraphs, with breathing room.
    scroll-margin-top gives the teleport a small gap below the top edge. */
 .r-sapche-marker { position:relative; display:flex; align-items:center; gap:10px; margin:26px 0 14px; scroll-margin-top:24px; }
@@ -487,24 +491,29 @@
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
-/* ── Transcription mode: passage mark + interleaved read-along ───────────── */
-/* The main-text passage of the active transcript segment — very light red so it
-   reads as the root-text portion, distinct from the transcript segment's
-   (gold/cream) selection highlight. */
-.r-syl-passage {
-  background-color: rgba(139, 29, 29, 0.08);
+/* ── Transcription mode: passage band + interleaved read-along ───────────── */
+/* Each main-text passage sits on a very-light-gray band that spans from the left
+   commentary bar to the right text-wrap edge. The negative side margins reach the
+   bar on the left and the column edge on the right; padding keeps the text within
+   the column width. */
+.r-passage-band {
+  display: block;
+  background: #F4F4F5;
+  margin: 0.2em -8px;
+  padding: 0.1em 8px;
+  border-radius: 4px;
 }
 
 /* The transcription, flowing as prominent body text beneath a passage (no box).
-   Size/line-height come from the inline `sizes` style so it matches the main
-   text; color is the primary ink (the root text is the distinct one). */
+   Size/line-height come from the inline `sizes` style; color is dark blue, set
+   apart from the black root text above it. */
 .r-trans-block {
   display: block;
   clear: both;
   margin: 0.6em 0 1.1em 0;
 }
 .r-trans-text {
-  color: var(--reader-text-primary, #1A1A1A);
+  color: var(--reader-trans-blue, #1E3A8A);
 }
 /* Each transcription segment; the one under the playhead is highlighted. */
 .r-tseg {
@@ -512,13 +521,13 @@
   border-radius: 3px;
 }
 .r-tseg-active {
-  color: var(--reader-text-primary, #1A1A1A);
+  color: var(--reader-trans-blue, #1E3A8A);
   background-color: var(--reader-accent-subtle, #FDF8EE);
   box-shadow: 0 0 0 2px var(--reader-accent-subtle, #FDF8EE);
 }
 /* In transcription mode the segments are the interactive target. */
 .r-tseg-clickable { cursor: pointer; }
 .r-tseg-clickable:hover {
-  color: var(--reader-text-primary, #1A1A1A);
+  color: var(--reader-trans-blue, #1E3A8A);
   background-color: var(--reader-accent-subtle, #FDF8EE);
 }
