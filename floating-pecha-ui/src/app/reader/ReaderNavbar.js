@@ -47,21 +47,6 @@ export default function ReaderNavbar({
   return (
     <nav className={`${outfit.className} fixed top-0 z-60 w-full h-16 border-b pl-2 pr-2 md:px-10 flex items-center justify-between r-bg r-border`}>
       <div className="flex items-center gap-2 md:gap-4">
-        {/* Small brand seal — anchors the reader in the same visual lineage as the landing */}
-        <Link
-          href="/"
-          className="rd-seal hidden md:flex items-center justify-center w-7 h-7 rounded-full shrink-0"
-          style={{
-            background: 'radial-gradient(circle at 38% 30%, #E9C56B, #ECB320 58%, #A28348)',
-            color: '#0A2347',
-            fontSize: 12,
-            boxShadow: '0 0 0 1px rgba(236, 179, 32, 0.42), 0 0 10px rgba(236, 179, 32, 0.28)',
-          }}
-          aria-label="Rabsal Dawa — home"
-        >
-          ༀ
-        </Link>
-
         <Link
           href="/archive"
           className="group flex items-center gap-2.5 text-[10px] md:text-xs font-medium uppercase tracking-[0.18em] transition-colors duration-200 r-text-muted r-hover-accent"
