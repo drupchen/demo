@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useSession, signIn, signOut } from "next-auth/react";
 import { cormorant, outfit } from "@/lib/theme";
 import styles from "./page.module.css";
 
@@ -54,15 +55,27 @@ const GATEWAYS = [
 ];
 
 export default function LandingPage() {
+  const { status } = useSession();
   const [scrolled, setScrolled] = useState(false);
+  const [overCream, setOverCream] = useState(false);
   const revealRefs = useRef([]);
 
-  // Topbar darkens on scroll past ~40px
+  // Topbar reacts to scroll: tints to the moon-centre blue past ~40px, then turns
+  // cream once it crosses into the cream gateways section (so the logo's navy
+  // rings stay hidden over the dark hero and reveal against the cream).
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40);
+    const onScroll = () => {
+      setScrolled(window.scrollY > 40);
+      const cream = document.getElementById("gateways");
+      setOverCream(cream ? cream.getBoundingClientRect().top <= 64 : false);
+    };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    window.addEventListener("resize", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
   }, []);
 
   // IntersectionObserver-driven fade-in for `.reveal` elements
@@ -91,9 +104,13 @@ export default function LandingPage() {
       <div className={styles.grain} />
 
       {/* TOPBAR */}
-      <header className={`${styles.topbar} ${scrolled ? styles.topbarScrolled : ""}`}>
+      <header
+        className={`${styles.topbar} ${scrolled ? styles.topbarScrolled : ""} ${
+          overCream ? styles.topbarCream : ""
+        }`}
+      >
         <Link href="/" className={styles.brand}>
-          <img src="/images/moon.png" alt="" className={styles.seal} />
+          <img src="/images/moon-badge.png" alt="" className={styles.seal} />
           <span className={styles.brandName}>Rabsal Dawa</span>
         </Link>
         <nav className={styles.navlinks}>
@@ -101,6 +118,15 @@ export default function LandingPage() {
           <Link href="/archive">Archive</Link>
           <Link href="/archive?view=search">Search</Link>
         </nav>
+        {status === "authenticated" ? (
+          <button type="button" className={styles.navCta} onClick={() => signOut()}>
+            Sign out
+          </button>
+        ) : (
+          <button type="button" className={styles.navCta} onClick={() => signIn()}>
+            Sign in
+          </button>
+        )}
       </header>
 
       {/* ACT I — THE BRILLIANCE */}

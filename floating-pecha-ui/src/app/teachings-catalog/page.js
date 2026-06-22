@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSession, signIn } from "next-auth/react";
 import Footer from "@/app/components/Footer";
 import { cormorant, outfit, uchen, getThemeCssVars } from "@/lib/theme";
-import { SECTIONS } from "./catalogData";
+
+const REQUIRED_LEVEL = 4;
 
 const slugify = (s) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -19,12 +21,44 @@ function SourceLink({ href, label }) {
 }
 
 export default function TeachingsCatalogPage() {
+  const { data: session, status } = useSession();
+  const level = session?.user?.accessLevel ?? 0;
+  const allowed = status === "authenticated" && level >= REQUIRED_LEVEL;
+
+  const [sections, setSections] = useState([]);
+  const [loadingData, setLoadingData] = useState(false);
   const [q, setQ] = useState("");
   const query = q.trim().toLowerCase();
 
+  // Fetch the catalog only when authorized; the data is served by a level-4
+  // gated API so it never reaches unauthorized clients.
+  useEffect(() => {
+    if (!allowed) {
+      setSections([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingData(true);
+    fetch("/api/teachings-catalog")
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((data) => {
+        if (!cancelled) setSections(data.sections || []);
+      })
+      .catch((err) => {
+        if (!cancelled) setSections([]);
+        console.error("Catalog load error:", err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingData(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [allowed]);
+
   const filtered = useMemo(() => {
-    if (!query) return SECTIONS;
-    return SECTIONS.map((s) => ({
+    if (!query) return sections;
+    return sections.map((s) => ({
       ...s,
       rows: s.rows.filter(
         (r) =>
@@ -32,7 +66,7 @@ export default function TeachingsCatalogPage() {
           r.extra.some((v) => (v || "").toLowerCase().includes(query))
       ),
     })).filter((s) => s.rows.length > 0);
-  }, [query]);
+  }, [query, sections]);
 
   const totalHits = filtered.reduce((n, s) => n + s.rows.length, 0);
 
@@ -78,6 +112,28 @@ export default function TeachingsCatalogPage() {
           </p>
         </header>
 
+        {!allowed ? (
+          <div className="rd-gate">
+            {status === "loading" ? (
+              <p>Checking access…</p>
+            ) : (
+              <>
+                <p>
+                  This catalog is restricted to <strong>Level 4</strong> members.
+                  {status === "authenticated" && (
+                    <> Your account does not have access.</>
+                  )}
+                </p>
+                {status !== "authenticated" && (
+                  <button type="button" className="rd-signin" onClick={() => signIn()}>
+                    Sign in
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        ) : (
+        <>
         {/* Search */}
         <div className="rd-search">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a7a4e" strokeWidth="2" strokeLinecap="round">
@@ -180,11 +236,46 @@ export default function TeachingsCatalogPage() {
             </div>
           </section>
         ))}
+        </>
+        )}
       </main>
 
       <Footer />
 
       <style jsx>{`
+        .rd-gate {
+          margin-top: 24px;
+          padding: 40px 28px;
+          background: #fbf8f1;
+          border: 1px solid rgba(162, 131, 72, 0.22);
+          border-radius: 8px;
+          text-align: center;
+          color: #5e6b78;
+          font-size: 16px;
+        }
+        .rd-gate strong {
+          color: #0a2347;
+        }
+        .rd-signin {
+          margin-top: 18px;
+          font-size: 12px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: #f8f5ee;
+          background: #a8231b;
+          border: 1px solid #a8231b;
+          border-radius: 2px;
+          padding: 10px 22px;
+          cursor: pointer;
+          box-shadow: inset 0 0 0 1px rgba(236, 179, 32, 0.55);
+          transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .rd-signin:hover {
+          transform: translateY(-1px);
+          box-shadow: inset 0 0 0 1px rgba(236, 179, 32, 0.85),
+            0 8px 18px -8px rgba(122, 24, 18, 0.6);
+        }
+
         .rd-search {
           display: flex;
           align-items: center;

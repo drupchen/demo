@@ -64,14 +64,13 @@ export default function ArchiveHeader() {
             }}
           >
             <img
-              src="/images/moon.png"
+              src="/images/moon-badge.png"
               alt=""
               style={{
                 width: 32,
                 height: 32,
                 objectFit: "contain",
                 flexShrink: 0,
-                filter: "drop-shadow(0 0 6px rgba(255, 255, 255, 0.3))",
               }}
             />
             <span

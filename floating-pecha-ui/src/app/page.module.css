@@ -94,9 +94,30 @@
 
 .topbarScrolled {
   padding: 13px 44px;
-  background: rgba(7, 27, 56, 0.62);
+  /* the blue found behind the moon's centre in the hero gradient (azure) */
+  background: rgba(7, 87, 148, 0.72);
   backdrop-filter: blur(18px) saturate(1.2);
   border-bottom-color: var(--gline-soft);
+}
+
+/* Once scrolled into the cream gateways section the bar turns cream with dark
+   text, so the logo's navy rings reveal against it. */
+.topbarCream {
+  background: rgba(248, 245, 238, 0.92);
+  backdrop-filter: blur(18px) saturate(1.2);
+  border-bottom-color: var(--cline);
+}
+.topbarCream .brandName,
+.topbarCream .navlinks a,
+.topbarCream .navCta {
+  color: var(--sky-900);
+}
+.topbarCream .navCta {
+  border-color: var(--cline);
+}
+.topbarCream .navCta:hover {
+  background: rgba(236, 179, 32, 0.16);
+  border-color: var(--gold);
 }
 
 .brand {
@@ -111,7 +132,6 @@
   height: 34px;
   flex-shrink: 0;
   object-fit: contain;
-  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.35));
 }
 
 .brandName {
@@ -164,8 +184,11 @@
 .navCta {
   font-size: 12.5px;
   font-weight: 400;
+  font-family: inherit;
   letter-spacing: 0.04em;
   color: var(--cream-hi);
+  background: transparent;
+  cursor: pointer;
   border: 1px solid var(--gline);
   border-radius: 2px;
   padding: 9px 18px;
