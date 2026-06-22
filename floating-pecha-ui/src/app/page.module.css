@@ -222,6 +222,26 @@
   filter: drop-shadow(0 0 70px rgba(255, 255, 255, 0.42)) drop-shadow(0 0 150px rgba(233, 197, 107, 0.20));
 }
 
+/* Portrait overlaid on the moon disc at half opacity (clipped to a circle).
+   Sized to the moon's visible disc (~0.68 of the moon box) and centered on the
+   halo origin, which is where the moon disc sits. */
+.face {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: clamp(204px, 43.5vw, 421px);
+  height: clamp(204px, 43.5vw, 421px);
+  z-index: 2;
+  pointer-events: none;
+  background-image: url("/images/face.png");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  border-radius: 50%;
+  opacity: 0.15;
+}
+
 .ring {
   position: absolute;
   left: 50%;

@@ -9,18 +9,18 @@ import styles from "./page.module.css";
 // second row is the three teachings we have data for plus the search guide.
 const GATEWAYS = [
   {
-    badge: "◆ Article",
-    badgeClass: "bArticle",
-    grad: "tAzure",
+    badge: "♫ Playlist",
+    badgeClass: "bPlaylist",
+    grad: "tAmber",
     svg: (
       <svg viewBox="0 0 300 132" preserveAspectRatio="none">
-        <path d="M-20 124 Q150 30 320 124" fill="none" stroke="#ECB320" strokeWidth="1" />
+        <path d="M40 100 H260 M40 80 H260" stroke="#F0EBDE" strokeWidth=".6" />
       </svg>
     ),
-    title: "Dilgo Khyentse’s World",
-    blurb: "Placeholder content. Yet to be created.",
-    cta: "Read",
-    href: "/world",
+    title: "Teachings’ Catalog - April ’26",
+    blurb: "MP3 files of all the identified teaching sessions",
+    cta: "Enter",
+    href: "/teachings-catalog",
   },
   {
     badge: "❖ Collection",
@@ -38,18 +38,18 @@ const GATEWAYS = [
     href: "/archive",
   },
   {
-    badge: "♫ Playlist",
-    badgeClass: "bPlaylist",
-    grad: "tAmber",
+    badge: "◆ Article",
+    badgeClass: "bArticle",
+    grad: "tAzure",
     svg: (
       <svg viewBox="0 0 300 132" preserveAspectRatio="none">
-        <path d="M40 100 H260 M40 80 H260" stroke="#F0EBDE" strokeWidth=".6" />
+        <path d="M-20 124 Q150 30 320 124" fill="none" stroke="#ECB320" strokeWidth="1" />
       </svg>
     ),
-    title: "Teachings’ Catalog - April ’26",
-    blurb: "MP3 files of all the identified teaching sessions",
-    cta: "Enter",
-    href: "/teachings-catalog",
+    title: "Dilgo Khyentse’s World",
+    blurb: "Placeholder content. Yet to be created.",
+    cta: "Read",
+    href: "/world",
   },
 ];
 
@@ -115,6 +115,7 @@ export default function LandingPage() {
           <div className={`${styles.ring} ${styles.r7}`} />
           <div className={`${styles.ring} ${styles.r8}`} />
           <div className={styles.moon} />
+          <div className={styles.face} />
         </div>
         <div className={styles.heroTop}>
           <div className={styles.eyebrow}>
