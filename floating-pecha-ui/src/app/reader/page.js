@@ -17,7 +17,6 @@ import { parseToMs, useAudioPlayer } from "@/lib/useAudioPlayer";
 import useIsMobile from "@/lib/useIsMobile";
 import { useReaderPreferences } from "@/lib/useReaderPreferences";
 import { useTranscription } from "@/lib/useTranscription";
-import FloatingPopover from "./FloatingPopover";
 import InfoTab from "./InfoTab";
 import MiniPlayer from "./MiniPlayer";
 import MobileAudioBar from "./MobileAudioBar";
@@ -630,7 +629,6 @@ function ReaderContent() {
   const [activeTransGid, setActiveTransGid] = useState(null);
   const [activeTab, setActiveTab] = useState("player");
   const [activeSylId, setActiveSylId] = useState(null);
-  const [popoverOpen, setPopoverOpen] = useState(false);
   const [activeCommentary, setActiveCommentary] = useState(null);
 
   // Teaching filter: "A", "B", etc. or null = "All Teachings"
@@ -1504,25 +1502,6 @@ function ReaderContent() {
   // ----------------------------------------
   // Handlers
   // ----------------------------------------
-  const handleSyllableClick = useCallback(
-    (sylId) => {
-      if (annotateMode) return; // selection drives annotation; ignore audio click
-      setActiveSylId((prev) => {
-        if (prev === sylId) {
-          setPopoverOpen(false);
-          return null;
-        }
-        setPopoverOpen(true);
-        return sylId;
-      });
-      if (activeCommentary) {
-        audio.pause();
-        setActiveCommentary(null);
-      }
-    },
-    [activeCommentary, audio, annotateMode],
-  );
-
   // System-wide selection snapping: round any text selection in the pecha text
   // out to whole-syllable boundaries, so a drag can never leave a partial
   // syllable highlighted. Always on (independent of annotate mode), and works on
@@ -1822,7 +1801,6 @@ function ReaderContent() {
 
   const handleCommentarySelect = useCallback(
     (commentaryId, startSegment, autoPlay = true) => {
-      setPopoverOpen(false);
       setActiveCommentary(commentaryId);
       setActiveTab("player");
       setSidebarOpen(true);
@@ -1867,6 +1845,42 @@ function ReaderContent() {
     },
     [audio, sessions, preferRestored, paragraphs],
   );
+
+  // Clicking an audio-linked syllable selects it and readies the sidebar player
+  // on the first available teaching instance's matching section — loaded but
+  // paused (awaiting Play). No popup. Defined after handleCommentarySelect
+  // because it depends on it.
+  const handleSyllableClick = useCallback(
+    (sylId) => {
+      if (annotateMode) return; // selection drives annotation; ignore audio click
+      if (activeSylId === sylId) return; // already selected + readied
+      setActiveSylId(sylId);
+
+      const opts = syllableMediaMap[sylId] || [];
+      if (opts.length === 0) return; // click only bound when hasMedia
+      // First available teaching instance: mirror the popover's prior ordering
+      // (session ids sorted), then the option covering the clicked syllable.
+      const firstSession = [...new Set(opts.map((o) => o.source_session))].sort(
+        (a, b) => a.localeCompare(b),
+      )[0];
+      const startSegment = opts.find((o) => o.source_session === firstSession);
+      handleCommentarySelect(firstSession, startSegment, false);
+    },
+    [annotateMode, activeSylId, syllableMediaMap, handleCommentarySelect],
+  );
+
+  // Mobile: once playback actually starts while the player sheet is open,
+  // minimize the sheet (to the MobileAudioBar) so the reader text is visible to
+  // follow along. Rising-edge only on isPlaying, so re-opening the sheet during
+  // playback doesn't immediately re-close it.
+  const wasPlayingRef = useRef(false);
+  useEffect(() => {
+    const playing = audio.isPlaying;
+    if (isMobile && playing && !wasPlayingRef.current) {
+      setSidebarOpen(false);
+    }
+    wasPlayingRef.current = playing;
+  }, [audio.isPlaying, isMobile]);
 
   // ----------------------------------------
   // Deep-link: load session + seek to time once data is ready
@@ -2313,21 +2327,6 @@ function ReaderContent() {
             </svg>
           </button>
         )}
-
-        {/* Floating Context Popover */}
-        <FloatingPopover
-          activeSylId={activeSylId}
-          popoverOpen={popoverOpen}
-          syllableMediaMap={syllableMediaMap}
-          manifest={manifest}
-          onCommentarySelect={handleCommentarySelect}
-          getCommentaryGroup={getCommentaryGroup}
-          sidebarSizes={sidebarSizes}
-          onClose={() => {
-            setActiveSylId(null);
-            setPopoverOpen(false);
-          }}
-        />
 
         <div
           ref={rootTextRef}
