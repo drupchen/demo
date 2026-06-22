@@ -388,10 +388,62 @@ const LazyParagraph = React.memo(function LazyParagraph({
                 ? "r-match-active"
                 : transAllMatchSet?.has(syl.id)
                   ? "r-match"
-                  : "";
+                  : (syl.mainText ? "r-main-text" : "");
+
+              // Personal-note highlight (annotation mode only) — mirrors the root
+              // pecha render: paint the exact selected character range so comments
+              // display on transcription text too.
+              const isNoted = noteHighlightSet?.has(syl.id);
+              const isNoteHovered =
+                annotateMode && isNoted && hoveredNoteSylIds?.has(syl.id);
+              let noteChildren = syl.text;
+              let noteWholeClass = "";
+              if (isNoted && annotateMode) {
+                const hl = noteHighlightRanges?.get(syl.id);
+                const len = syl.text.length;
+                const from = hl ? Math.max(0, Math.min(hl.from, len)) : 0;
+                const to = hl ? Math.max(from, Math.min(hl.to, len)) : len;
+                const hoverCls = isNoteHovered ? " r-note-hover" : "";
+                if (!hl || (from <= 0 && to >= len)) {
+                  noteWholeClass = `r-note-highlight${hoverCls}`;
+                } else if (to > from) {
+                  noteChildren = (
+                    <>
+                      {syl.text.slice(0, from)}
+                      <span className={`r-note-highlight${hoverCls}`}>
+                        {syl.text.slice(from, to)}
+                      </span>
+                      {syl.text.slice(to)}
+                    </>
+                  );
+                }
+              }
+
               return (
-                <span key={syl.id} id={syl.id} className={`r-snap ${cls}`}>
-                  {syl.text}
+                <span
+                  key={syl.id}
+                  id={syl.id}
+                  className={`r-snap ${cls} ${noteWholeClass}`}
+                  onClick={
+                    annotateMode && isNoted
+                      ? (e) => {
+                          e.stopPropagation(); // don't trigger segment play
+                          onNoteSylClick?.(syl.id);
+                        }
+                      : undefined
+                  }
+                  onMouseEnter={
+                    annotateMode && isNoted
+                      ? () => onNoteSylHover?.(syl.id)
+                      : undefined
+                  }
+                  onMouseLeave={
+                    annotateMode && isNoted
+                      ? () => onNoteSylHover?.(null)
+                      : undefined
+                  }
+                >
+                  {noteChildren}
                 </span>
               );
             })}
@@ -531,7 +583,7 @@ function ReaderContent() {
   // Below Tailwind's md breakpoint we switch to a stacked, off-canvas layout.
   const isMobile = useIsMobile();
   // Oral-transcription layer (absent for instances not yet transcribed).
-  const { hasTranscription, transTextByGid, transSessions, transSegSylsByGid } =
+  const { hasTranscription, transManifest, transTextByGid, transSessions, transSegSylsByGid } =
     useTranscription(instanceId);
 
   const { data: session } = useSession();
@@ -971,6 +1023,27 @@ function ReaderContent() {
     return m;
   }, [manifest]);
 
+  // Same, for the transcription layer (its syllables carry their own UUIDs).
+  const transIndexOf = useMemo(() => {
+    const m = new Map();
+    transManifest.forEach((s, i) => m.set(s.id, i));
+    return m;
+  }, [transManifest]);
+
+  // Resolve any syllable id to its layer's ordered list + index, so the notes
+  // pipeline can anchor/highlight/order against root pecha OR transcription text
+  // without enumerating ids per layer. layer 0 = root pecha, 1 = transcription.
+  const locateSyl = useCallback(
+    (id) => {
+      const ri = manifestIndexOf.get(id);
+      if (ri != null) return { layer: 0, index: ri, list: manifest };
+      const ti = transIndexOf.get(id);
+      if (ti != null) return { layer: 1, index: ti, list: transManifest };
+      return null;
+    },
+    [manifestIndexOf, transIndexOf, manifest, transManifest]
+  );
+
   // Note coverage: `noteHighlightSet` is every syllable id any note touches (for
   // click/hover detection). `noteHighlightRanges` maps each syllable id to the
   // exact character slice { from, to } to paint — full for interior syllables,
@@ -988,12 +1061,17 @@ function ReaderContent() {
       );
     };
     for (const note of notes) {
-      const a = manifestIndexOf.get(note.start_syl_id);
-      const b = manifestIndexOf.get(note.end_syl_id);
-      if (a == null || b == null) continue; // anchor broken — shown in tab only
+      const start = locateSyl(note.start_syl_id);
+      const end = locateSyl(note.end_syl_id);
+      // anchor broken or split across layers — shown in tab only.
+      if (!start || !end || start.layer !== end.layer) continue;
+      const list = start.list;
+      const a = start.index;
+      const b = end.index;
+      if (a > b) continue;
       const hasOffsets = note.start_offset != null && note.end_offset != null;
       for (let i = a; i <= b; i++) {
-        const syl = manifest[i];
+        const syl = list[i];
         set.add(syl.id);
         const len = (syl.text || "").length;
         let from = 0;
@@ -1006,19 +1084,23 @@ function ReaderContent() {
       }
     }
     return { noteHighlightSet: set, noteHighlightRanges: ranges };
-  }, [notes, manifestIndexOf, manifest]);
+  }, [notes, locateSyl]);
 
   const panelNotes = useMemo(() => {
     if (!notePanel) return [];
     const sylId = notePanel.sylId ?? notePanel.createAnchor?.startSylId;
-    const i = manifestIndexOf.get(sylId);
-    if (i == null) return [];
+    const loc = locateSyl(sylId);
+    if (!loc) return [];
     return notes.filter((n) => {
-      const a = manifestIndexOf.get(n.start_syl_id);
-      const b = manifestIndexOf.get(n.end_syl_id);
-      return a != null && b != null && i >= a && i <= b;
+      const a = locateSyl(n.start_syl_id);
+      const b = locateSyl(n.end_syl_id);
+      return (
+        a && b &&
+        a.layer === loc.layer && b.layer === loc.layer &&
+        loc.index >= a.index && loc.index <= b.index
+      );
     });
-  }, [notePanel, notes, manifestIndexOf]);
+  }, [notePanel, notes, locateSyl]);
 
   const panelAnchor = useMemo(() => {
     if (!notePanel) return null;
@@ -1564,7 +1646,9 @@ function ReaderContent() {
         return;
       }
       const range = sel.getRangeAt(0);
-      const isSyl = (id) => manifestIndexOf.has(id);
+      // Layer-agnostic: a selectable syllable is any root pecha OR transcription
+      // syllable, so comments work in both layers.
+      const isSyl = (id) => manifestIndexOf.has(id) || transIndexOf.has(id);
 
       // Capture each endpoint as a syllable id PLUS the character offset within
       // that syllable, so a note can highlight exactly what was selected — even
@@ -1600,10 +1684,20 @@ function ReaderContent() {
         setPendingSelection(null);
         return;
       }
+      // Both endpoints must live in the same layer — don't create a note that
+      // straddles the root pecha and the transcription (their syllables aren't
+      // ordered against each other).
+      const sLoc = locateSyl(startPt.id);
+      const eLoc = locateSyl(endPt.id);
+      if (!sLoc || !eLoc || sLoc.layer !== eLoc.layer) {
+        setPendingSelection(null);
+        return;
+      }
       // Normalise to document order (a selection can run backwards).
-      const si = manifestIndexOf.get(startPt.id);
-      const ei = manifestIndexOf.get(endPt.id);
-      if (si > ei || (si === ei && startPt.offset > endPt.offset)) {
+      if (
+        sLoc.index > eLoc.index ||
+        (sLoc.index === eLoc.index && startPt.offset > endPt.offset)
+      ) {
         const tmp = startPt;
         startPt = endPt;
         endPt = tmp;
@@ -1650,7 +1744,7 @@ function ReaderContent() {
       document.removeEventListener("mouseup", onMouseUp);
       document.removeEventListener("selectionchange", onSelectionChange);
     };
-  }, [annotateMode, manifestIndexOf]);
+  }, [annotateMode, manifestIndexOf, transIndexOf, locateSyl]);
 
   const handleCreateInPanel = useCallback(
     async (payload) => {
@@ -1692,19 +1786,23 @@ function ReaderContent() {
   const handleNoteSylHover = useCallback(
     (sylId) => {
       if (sylId == null) return setHoveredNoteSylIds(new Set());
-      const i = manifestIndexOf.get(sylId);
-      if (i == null) return setHoveredNoteSylIds(new Set());
+      const loc = locateSyl(sylId);
+      if (!loc) return setHoveredNoteSylIds(new Set());
       const ids = new Set();
       for (const n of notes) {
-        const a = manifestIndexOf.get(n.start_syl_id);
-        const b = manifestIndexOf.get(n.end_syl_id);
-        if (a != null && b != null && i >= a && i <= b) {
-          for (let j = a; j <= b; j++) ids.add(manifest[j].id);
+        const a = locateSyl(n.start_syl_id);
+        const b = locateSyl(n.end_syl_id);
+        if (
+          a && b &&
+          a.layer === loc.layer && b.layer === loc.layer &&
+          loc.index >= a.index && loc.index <= b.index
+        ) {
+          for (let j = a.index; j <= b.index; j++) ids.add(loc.list[j].id);
         }
       }
       setHoveredNoteSylIds(ids);
     },
-    [notes, manifestIndexOf, manifest]
+    [notes, locateSyl]
   );
 
   // Transcription mode: click a transcription segment to play from its start.

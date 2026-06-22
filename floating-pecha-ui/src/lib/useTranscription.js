@@ -54,12 +54,19 @@ export function useTranscription(instanceId) {
     if (!hasTranscription) return {};
     const byId = {};
     transManifest.forEach((t) => {
-      byId[t.id] = t.text === "\n" ? " " : t.text;
+      byId[t.id] = {
+        text: t.text === "\n" ? " " : t.text,
+        mainText: Array.isArray(t.tags) && t.tags.includes("main-text"),
+      };
     });
     const out = {};
     transSessions.forEach((seg) => {
       const gid = seg.global_seg_id || seg.seg_id;
-      out[gid] = seg.syl_uuids.map((id) => ({ id, text: byId[id] ?? "" }));
+      out[gid] = seg.syl_uuids.map((id) => ({
+        id,
+        text: byId[id]?.text ?? "",
+        mainText: byId[id]?.mainText ?? false,
+      }));
     });
     return out;
   }, [hasTranscription, transManifest, transSessions]);

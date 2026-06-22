@@ -515,6 +515,8 @@
 .r-trans-text {
   color: var(--reader-trans-blue, #1E3A8A);
 }
+/* Transcription syllables tagged "main-text" (mirror the root pecha). */
+.r-main-text { color: #9F5304; }
 /* Each transcription segment; the one under the playhead is highlighted. */
 .r-tseg {
   transition: color 0.15s, background-color 0.15s;
