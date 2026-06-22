@@ -17,24 +17,23 @@ const GATEWAYS = [
         <path d="M-20 124 Q150 30 320 124" fill="none" stroke="#ECB320" strokeWidth="1" />
       </svg>
     ),
-    title: "About Dilgo Khyentse Rinpoche",
-    blurb:
-      "One of the foremost masters of the Nyingma and Rimé traditions — a teacher whose voice continues through these recordings.",
+    title: "Dilgo Khyentse’s World",
+    blurb: "Placeholder content. Yet to be created.",
     cta: "Read",
     href: "/world",
   },
   {
-    badge: "✦ Guide",
-    badgeClass: "bGuide",
+    badge: "❖ Collection",
+    badgeClass: "bCollection",
     grad: "tJade",
     svg: (
       <svg viewBox="0 0 300 132" preserveAspectRatio="none">
         <circle cx="150" cy="66" r="48" fill="none" stroke="#F0EBDE" strokeWidth=".8" />
       </svg>
     ),
-    title: "How the reader works",
+    title: "Teaching Archives",
     blurb:
-      "Aligned audio, syllable-level coverage across sessions, and the textual heart of every teaching — explained simply.",
+      "Sample text, sample text, sample text, sample text, sample text, sample text, sample text, sample text, sample text.",
     cta: "Enter",
     href: "/archive",
   },
@@ -47,56 +46,10 @@ const GATEWAYS = [
         <path d="M40 100 H260 M40 80 H260" stroke="#F0EBDE" strokeWidth=".6" />
       </svg>
     ),
-    title: "Foundations · Ngöndro",
-    blurb:
-      "Eighteen sessions of oral commentary on the preliminaries — the indispensable ground of practice.",
+    title: "Teachings’ Catalog - April ’26",
+    blurb: "MP3 files of all the identified teaching sessions",
     cta: "Enter",
-    href: "/reader?instance=rpn_ngondro_1",
-  },
-  {
-    badge: "❖ Collection",
-    badgeClass: "bCollection",
-    grad: "tVermilion",
-    svg: (
-      <svg viewBox="0 0 300 132" preserveAspectRatio="none">
-        <path d="M-20 124 Q150 24 320 124" fill="none" stroke="#ECB320" strokeWidth="1" />
-      </svg>
-    ),
-    title: "Yeshe Lama · The Path of Dzogchen",
-    blurb:
-      "Extended commentary on Jigme Lingpa's Yeshe Lama, drawn from over a hundred recorded sessions.",
-    cta: "Enter",
-    href: "/reader?instance=yeshe_lama_1",
-  },
-  {
-    badge: "♫ Playlist",
-    badgeClass: "bPlaylist",
-    grad: "tGold",
-    svg: (
-      <svg viewBox="0 0 300 132" preserveAspectRatio="none">
-        <circle cx="150" cy="66" r="28" fill="none" stroke="#9A2018" strokeWidth=".8" />
-      </svg>
-    ),
-    title: "Thok-Tha Bar-Sum",
-    blurb:
-      "A view–meditation–conduct cycle taught across multiple sessions — a clear entry into the Great Perfection.",
-    cta: "Enter",
-    href: "/reader?instance=thokthabarsum_1",
-  },
-  {
-    badge: "✦ Guide",
-    badgeClass: "bGuide",
-    grad: "tMist",
-    svg: (
-      <svg viewBox="0 0 300 132" preserveAspectRatio="none">
-        <path d="M50 50 H250 M50 72 H250" stroke="#075794" strokeWidth=".6" />
-      </svg>
-    ),
-    title: "Searching in Tibetan",
-    blurb:
-      "Find passages by syllable, phrase, or topic — with results aligned to the exact moment they are spoken.",
-    cta: "Enter",
-    href: "/archive?view=search",
+    href: "/teachings-catalog",
   },
 ];
 
@@ -140,35 +93,29 @@ export default function LandingPage() {
       {/* TOPBAR */}
       <header className={`${styles.topbar} ${scrolled ? styles.topbarScrolled : ""}`}>
         <Link href="/" className={styles.brand}>
-          <div className={styles.seal}>ༀ</div>
+          <img src="/images/moon.png" alt="" className={styles.seal} />
           <span className={styles.brandName}>Rabsal Dawa</span>
         </Link>
         <nav className={styles.navlinks}>
           <a href="#gateways">Explore</a>
           <Link href="/archive">Archive</Link>
           <Link href="/archive?view=search">Search</Link>
-          <Link href="/archive">Reader</Link>
         </nav>
-        <Link href="/archive" className={styles.navCta}>
-          Enter the archive
-        </Link>
       </header>
 
       {/* ACT I — THE BRILLIANCE */}
       <section className={styles.stage}>
         <div className={styles.halo}>
-          <div className={styles.bloom} />
-          <div className={`${styles.ring} ${styles.r5}`} />
-          <div className={`${styles.ring} ${styles.r4}`} />
-          <div className={`${styles.ring} ${styles.r3}`} />
-          <div className={`${styles.ring} ${styles.r2}`} />
           <div className={`${styles.ring} ${styles.r1}`} />
+          <div className={`${styles.ring} ${styles.r2}`} />
+          <div className={`${styles.ring} ${styles.r3}`} />
+          <div className={`${styles.ring} ${styles.r4}`} />
+          <div className={`${styles.ring} ${styles.r5}`} />
+          <div className={`${styles.ring} ${styles.r6}`} />
+          <div className={`${styles.ring} ${styles.r7}`} />
+          <div className={`${styles.ring} ${styles.r8}`} />
           <div className={styles.moon} />
         </div>
-        <div lang="bo" className={styles.inscription}>
-          རབ་གསལ་ཟླ་བ།
-        </div>
-
         <div className={styles.heroTop}>
           <div className={styles.eyebrow}>
             <span>Oral Teachings Archive</span>
@@ -180,12 +127,9 @@ export default function LandingPage() {
 
         <div className={styles.heroBottom}>
           <p className={styles.lede}>
-            The recorded voice of Dilgo Khyentse Rinpoche — preserved, aligned to its texts, and
-            opened to all who wish to listen.
+            Sample text, sample text, sample text, sample text, sample text, sample text, sample
+            text, sample text, sample text.
           </p>
-          <a href="#gateways" className={styles.enterBtn}>
-            Begin <span className={styles.arr}>→</span>
-          </a>
         </div>
 
         <div className={styles.scrollHint}>
@@ -198,11 +142,11 @@ export default function LandingPage() {
       <section ref={addReveal(0)} className={`${styles.approach} ${styles.reveal}`}>
         <div className={styles.approachMark}>❖</div>
         <h2>
-          You are entering a recorded silence —<br />a voice that <em>still instructs</em>.
+          Sample text, sample text, sample text, sample text, sample text.
         </h2>
         <p>
-          Each teaching is held exactly as it was spoken, its audio aligned word by word to the
-          page. Wander inward at your own pace; nothing here is in a hurry.
+          Sample text, sample text, sample text, sample text, sample text, sample text, sample
+          text, sample text, sample text, sample text, sample text.
         </p>
       </section>
 
@@ -240,7 +184,7 @@ export default function LandingPage() {
         <footer ref={addReveal(8)} className={`${styles.footer} ${styles.reveal}`}>
           <div>
             <h4>
-              Rabsal Dawa<span lang="bo" className={styles.footerBo}>རབ་གསལ་ཟླ་བ།</span>
+              Rabsal Dawa
             </h4>
             <p>
               A digital archive of the teachings of Dilgo Khyentse Rinpoche — preserved and shared
@@ -249,8 +193,6 @@ export default function LandingPage() {
           </div>
           <div className={styles.footMeta}>
             © 2026 Shechen Archives
-            <br />
-            For the benefit of all beings
           </div>
         </footer>
       </section>

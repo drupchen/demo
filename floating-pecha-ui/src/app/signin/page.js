@@ -100,20 +100,22 @@ function SignInContent() {
             transform: "translateX(-50%)",
             width: 44,
             height: 44,
-            borderRadius: "50%",
-            background:
-              "radial-gradient(circle at 38% 30%, #E9C56B, #ECB320 58%, #A28348)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: "#0A2347",
-            fontSize: 20,
-            boxShadow:
-              "0 0 0 1px rgba(236, 179, 32, 0.42), 0 0 18px rgba(236, 179, 32, 0.4)",
             textDecoration: "none",
           }}
         >
-          ༀ
+          <img
+            src="/images/moon.png"
+            alt=""
+            style={{
+              width: 44,
+              height: 44,
+              objectFit: "contain",
+              filter: "drop-shadow(0 0 10px rgba(255, 255, 255, 0.35))",
+            }}
+          />
         </Link>
 
         {/* Eyebrow */}

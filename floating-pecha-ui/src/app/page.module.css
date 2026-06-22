@@ -42,25 +42,28 @@
 }
 
 /* Wrapper makes the gradient the page background without touching globals.css body.
-   `overflow-x: clip` (not `hidden`) so we don't establish a scroll container that
-   would force a second vertical scrollbar to appear next to the body's own. */
+   `overflow: clip` (not `hidden`) bounds the moon's ripple rings to the page so
+   their large radius never adds blank scroll space below the footer, without
+   establishing a scroll container that would force a second vertical scrollbar. */
 .page {
   position: relative;
   min-height: 100vh;
   color: var(--cream-hi);
   line-height: 1.65;
-  overflow-x: clip;
+  overflow: clip;
+  /* one evenly-spaced ramp (~7.2% per stop, 0% → 65%) so the sky-to-cream
+     transition reads at a single constant speed rather than in zones */
   background: linear-gradient(180deg,
     var(--sky-950) 0%,
-    var(--sky-900) 12%,
-    var(--sky-800) 24%,
-    var(--azure) 37%,
-    var(--azure-glow) 49%,
-    #3F7AA8 61%,
-    #6FA0C2 72%,
-    #A3C2D6 82%,
-    #D6E2E6 90%,
-    var(--cream-hi) 97%);
+    var(--sky-900) 7.2%,
+    var(--sky-800) 14.4%,
+    var(--azure) 21.7%,
+    var(--azure-glow) 28.9%,
+    #3F7AA8 36.1%,
+    #6FA0C2 43.3%,
+    #A3C2D6 50.6%,
+    #D6E2E6 57.8%,
+    var(--cream-hi) 65%);
 }
 
 /* feathered grain — atmosphere + defeats gradient banding */
@@ -106,15 +109,9 @@
 .seal {
   width: 34px;
   height: 34px;
-  border-radius: 50%;
   flex-shrink: 0;
-  background: radial-gradient(circle at 38% 30%, var(--gold-soft), var(--gold) 58%, var(--bronze));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--sky-900);
-  font-size: 17px;
-  box-shadow: 0 0 0 1px var(--gline), 0 0 20px rgba(236, 179, 32, 0.38);
+  object-fit: contain;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.35));
 }
 
 .brandName {
@@ -126,6 +123,9 @@
 }
 
 .navlinks {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   gap: 34px;
   font-size: 13.5px;
@@ -194,7 +194,7 @@
 .halo {
   position: absolute;
   left: 50%;
-  top: 48%;
+  top: 57.5%;
   transform: translate(-50%, -50%);
   z-index: 0;
   pointer-events: none;
@@ -202,11 +202,15 @@
 
 .moon {
   position: absolute;
+  /* moon.png's bright disc is centered at (688.5, 640.5) in its 1333² canvas —
+     i.e. +1.65% right / -1.95% above the canvas center. The translate offset is
+     expressed as a % of the moon's own box, so the disc stays concentric with
+     the rings at any (fluid) size. */
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%);
-  width: 440px;
-  height: 440px;
+  transform: translate(calc(-50% - 1.65%), calc(-50% + 1.95%));
+  width: clamp(300px, 64vw, 620px);
+  height: clamp(300px, 64vw, 620px);
   z-index: 1;
   pointer-events: none;
   background-image: url("/images/moon.png");
@@ -216,26 +220,6 @@
   opacity: 0.92;
   mix-blend-mode: screen;
   filter: drop-shadow(0 0 70px rgba(255, 255, 255, 0.42)) drop-shadow(0 0 150px rgba(233, 197, 107, 0.20));
-  animation: breathe 17s ease-in-out infinite;
-}
-
-.bloom {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 2200px;
-  height: 2200px;
-  z-index: 0;
-  pointer-events: none;
-  background: radial-gradient(circle closest-side,
-    rgba(233, 197, 107, 0.16) 0%,
-    rgba(255, 255, 255, 0.12) 18%,
-    rgba(191, 211, 222, 0.07) 42%,
-    rgba(191, 211, 222, 0.03) 66%,
-    transparent 100%);
-  mix-blend-mode: screen;
-  animation: bloom 17s ease-in-out infinite;
 }
 
 .ring {
@@ -243,48 +227,31 @@
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
+  width: clamp(230px, 47vw, 460px);
+  height: clamp(230px, 47vw, 460px);
   border-radius: 50%;
-  border: 1px solid transparent;
-  animation: breathe 17s ease-in-out infinite;
+  border: 1px solid rgba(233, 197, 107, 0.28);
+  will-change: transform, opacity;
+  /* 6 rings, perfectly continuous emission: scale travels 1→7 across the FULL
+     cycle (no pause), so the staggered rings stay evenly spaced. Opacity only
+     fades in at birth and out as it exits — it never gates the spacing. */
+  animation: ripple 50s linear infinite;
 }
 
-.r1 { width: 560px; height: 560px; border-color: rgba(233, 197, 107, 0.30); }
-.r2 { width: 720px; height: 720px; border-color: rgba(236, 179, 32, 0.16); animation-delay: 0.5s; }
-.r3 { width: 930px; height: 930px; border-color: rgba(113, 166, 117, 0.16); animation-delay: 1s; }
-.r4 {
-  width: 1180px; height: 1180px;
-  border-color: rgba(67, 136, 182, 0.22);
-  animation-delay: 1.5s;
-  box-shadow: 0 0 120px rgba(14, 92, 158, 0.18);
-}
-.r5 { width: 1480px; height: 1480px; border-color: rgba(191, 211, 222, 0.10); animation-delay: 2s; }
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: -6.25s; }
+.r3 { animation-delay: -12.5s; }
+.r4 { animation-delay: -18.75s; }
+.r5 { animation-delay: -25s; }
+.r6 { animation-delay: -31.25s; }
+.r7 { animation-delay: -37.5s; }
+.r8 { animation-delay: -43.75s; }
 
-@keyframes breathe {
-  0%, 100% { opacity: 0.72; transform: translate(-50%, -50%) scale(1); }
-  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.045); }
-}
-
-@keyframes bloom {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 1; }
-}
-
-/* Tibetan inscribed on the moon */
-.inscription {
-  position: absolute;
-  left: 50%;
-  top: 48%;
-  transform: translate(-50%, -50%);
-  z-index: 2;
-  font-family: 'Monlam Uni Dutsa', serif;
-  font-size: 38px;
-  line-height: 1.4;
-  white-space: nowrap;
-  color: var(--bronze);
-  opacity: 0.78;
-  pointer-events: none;
-  text-shadow: 0 0 24px rgba(248, 245, 238, 0.55), 0 1px 2px rgba(7, 27, 56, 0.25);
-  animation: breathe 17s ease-in-out infinite;
+@keyframes ripple {
+  0%   { opacity: 0;    transform: translate(-50%, -50%) scale(1); }
+  4%   { opacity: 0.45; }
+  92%  { opacity: 0.45; }
+  100% { opacity: 0;    transform: translate(-50%, -50%) scale(9); }
 }
 
 .heroTop {
@@ -681,23 +648,31 @@
 @media (max-width: 980px) {
   .grid { grid-template-columns: 1fr 1fr; }
   .title { font-size: 66px; }
-  .navlinks { display: none; }
-  .inscription { font-size: 30px; }
-  .moon { width: 360px; height: 360px; }
+  /* keep Explore/Archive/Search visible; flow them to the right of the brand
+     (via the topbar's space-between) instead of absolute-centering, so they
+     never overlap the brand on smaller screens. */
+  .navlinks { position: static; transform: none; gap: 24px; }
   .footer { flex-direction: column; align-items: flex-start; }
 }
 
 @media (max-width: 600px) {
   .grid { grid-template-columns: 1fr; }
-  .topbar { padding: 14px 18px; }
+  .topbar { padding: 14px 16px; }
   .title { font-size: 48px; }
   .approach h2 { font-size: 30px; }
-  .r4, .r5 { display: none; }
-  .inscription { font-size: 24px; }
-  .moon { width: 300px; height: 300px; }
+  /* tighten the header so brand + nav fit on phones down to ~320px */
+  .brand { gap: 9px; }
+  .brandName { font-size: 16px; }
+  .seal { width: 28px; height: 28px; }
+  .navlinks { gap: 14px; font-size: 12px; }
+}
+
+@media (max-width: 360px) {
+  .navlinks { gap: 11px; font-size: 11px; }
+  .brandName { font-size: 15px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .moon, .bloom, .ring, .inscription, .chev { animation: none !important; }
+  .moon, .ring, .chev { animation: none !important; }
   .reveal { transition: opacity 0.6s ease; transform: none; }
 }

@@ -63,23 +63,17 @@ export default function ArchiveHeader() {
               textDecoration: "none",
             }}
           >
-            <div
+            <img
+              src="/images/moon.png"
+              alt=""
               style={{
                 width: 32,
                 height: 32,
-                borderRadius: "50%",
-                background: "radial-gradient(circle at 38% 30%, #E9C56B, #ECB320 58%, #A28348)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#0A2347",
-                fontSize: 15,
-                boxShadow: "0 0 0 1px rgba(236, 179, 32, 0.42), 0 0 14px rgba(236, 179, 32, 0.32)",
+                objectFit: "contain",
                 flexShrink: 0,
+                filter: "drop-shadow(0 0 6px rgba(255, 255, 255, 0.3))",
               }}
-            >
-              ༀ
-            </div>
+            />
             <span
               className={cormorant.className}
               style={{

@@ -228,16 +228,6 @@ function ArchiveContent() {
                   >
                     {teaching.Title_bo}
                   </h3>
-                  <p style={{
-                    margin: '6px 0 0',
-                    fontSize: 10.5,
-                    letterSpacing: '0.18em',
-                    textTransform: 'uppercase',
-                    color: colors.bronze,
-                    fontWeight: 500,
-                  }}>
-                    {teaching.Instances?.length || 0} version{(teaching.Instances?.length || 0) === 1 ? '' : 's'} available
-                  </p>
                 </div>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={colors.bronze} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="rd-arrow">
                   <line x1="5" y1="12" x2="19" y2="12" />

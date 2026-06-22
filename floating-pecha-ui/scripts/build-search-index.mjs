@@ -18,7 +18,7 @@
 
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, rmSync, existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { sqlString, reconstructSegments, rowsToSql } from "../src/lib/searchIndex.js";
 export { sqlString, reconstructSegments, rowsToSql };
@@ -85,6 +85,6 @@ function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   main();
 }

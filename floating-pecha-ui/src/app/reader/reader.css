@@ -314,6 +314,13 @@
 .r-toc-chevron-spacer { width:20px; min-width:20px; display:inline-block; }
 .r-toc-iconbtn { font-size:16px; line-height:1; padding:3px 6px; color:#9a8f76; background:none; border:0; cursor:pointer; border-radius:4px; }
 .r-toc-iconbtn:hover { color:var(--reader-accent, #D4AF37); background:rgba(0,0,0,0.05); }
+.r-toc-iconbtn:disabled { opacity:0.35; cursor:default; }
+.r-toc-iconbtn:disabled:hover { color:#9a8f76; background:none; }
+/* Smaller text-size steppers, nudged left so they read apart from the ✕ close. */
+.r-study-fontbtn { padding:2px 4px; }
+.r-study-fontbtn svg { width:14px; height:14px; }
+/* The + (second stepper) gets the gap before the ✕ close. */
+.r-study-fontbtn + .r-study-fontbtn { margin-right:18px; }
 /* Mobile: the row expand/collapse triangles are too small to tap — enlarge the
    glyph and widen both the chevron and its spacer together so indentation stays
    aligned. Desktop (>=768px) keeps the compact size. */

@@ -11,9 +11,12 @@ import SapcheNumber from "./SapcheNumber";
 import TocModeIcon, { TOC_MODE_LABEL } from "./TocModeIcon";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const STUDY_SIZES = [30, 26, 23, 21, 19]; // uchen px for depth 1..5; deeper → 18
-const studySizeFor = (depth) =>
-  depth >= 6 ? 18 : STUDY_SIZES[Math.max(depth, 1) - 1];
+// All rows share one uchen size (no longer depth-scaled); the reader controls it
+// with the +/- buttons in the header, clamped to [MIN, MAX].
+const STUDY_FONT_DEFAULT = 24;
+const STUDY_FONT_MIN = 14;
+const STUDY_FONT_MAX = 40;
+const STUDY_FONT_STEP = 2;
 
 const PREVIEW_HOVER_DELAY_MS = 450;
 
@@ -23,6 +26,7 @@ function StudyRow({
   activeId,
   focusedId,
   centered,
+  fontSize,
   onToggle,
   onSelect,
   onFocusNode,
@@ -70,7 +74,7 @@ function StudyRow({
         <SapcheNumber number={node.number} className={`${inter.className} r-study-num`} />
         <span
           className={`${uchen.className} r-study-title`}
-          style={{ color: sapcheInk, fontSize: studySizeFor(node.depth) }}
+          style={{ color: sapcheInk, fontSize }}
         >
           {node.title}
         </span>
@@ -113,6 +117,7 @@ function StudyRow({
             activeId={activeId}
             focusedId={focusedId}
             centered={centered}
+            fontSize={fontSize}
             onToggle={onToggle}
             onSelect={onSelect}
             onFocusNode={onFocusNode}
@@ -152,6 +157,13 @@ export default function SapcheStudyView({
   // Centered mode translates the outline column so the selected row sits exactly
   // on the band (deterministic — no native scroll). px offset of `.r-study-col`.
   const [centerOffset, setCenterOffset] = useState(0);
+  // Uniform uchen size for every row, adjusted by the header +/- buttons.
+  const [fontSize, setFontSize] = useState(STUDY_FONT_DEFAULT);
+  const adjustFontSize = useCallback((delta) => {
+    setFontSize((s) =>
+      Math.min(STUDY_FONT_MAX, Math.max(STUDY_FONT_MIN, s + delta))
+    );
+  }, []);
   // { nodeId, left, top, above } or null. `sourceRef` tracks whether the
   // popover came from hover (closes on mouseleave) or Space (sticky, follows
   // arrow navigation until toggled off).
@@ -349,7 +361,7 @@ export default function SapcheStudyView({
     recenter();
     window.addEventListener("resize", recenter);
     return () => window.removeEventListener("resize", recenter);
-  }, [focusedId, rows, studyMode]);
+  }, [focusedId, rows, studyMode, fontSize]);
 
   // Centered mode has no scroll, so derive the breadcrumb from the selected
   // node's ancestor chain.
@@ -567,6 +579,31 @@ export default function SapcheStudyView({
         <span className="flex items-center gap-1">
           <button
             type="button"
+            className="r-toc-iconbtn r-study-fontbtn"
+            onClick={() => adjustFontSize(-STUDY_FONT_STEP)}
+            disabled={fontSize <= STUDY_FONT_MIN}
+            title="Decrease text size"
+            aria-label="Decrease text size"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M5 12h14" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className="r-toc-iconbtn r-study-fontbtn"
+            onClick={() => adjustFontSize(STUDY_FONT_STEP)}
+            disabled={fontSize >= STUDY_FONT_MAX}
+            title="Increase text size"
+            aria-label="Increase text size"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 5v14" />
+              <path d="M5 12h14" />
+            </svg>
+          </button>
+          <button
+            type="button"
             className="r-toc-iconbtn"
             onClick={onClose}
             title="Close (Esc)"
@@ -630,6 +667,7 @@ export default function SapcheStudyView({
                 activeId={activeId}
                 focusedId={focusedId}
                 centered={studyMode === "centered"}
+                fontSize={fontSize}
                 onToggle={onToggle}
                 onSelect={onSelect}
                 onFocusNode={setFocusedId}
