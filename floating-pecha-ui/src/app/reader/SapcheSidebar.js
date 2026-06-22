@@ -1,6 +1,7 @@
 "use client";
 import { inter, sapcheAccentFor, sapcheInk, uchen } from "@/lib/theme";
 import SapcheNumber from "./SapcheNumber";
+import TocModeIcon, { TOC_MODE_LABEL } from "./TocModeIcon";
 import { useEffect, useRef } from "react";
 
 function Row({ node, activeId, collapsed, onToggleCollapse, onSelect }) {
@@ -68,55 +69,59 @@ export default function SapcheSidebar({
   collapsedIds,
   onToggleCollapse,
   onSelect,
-  onExpandAll,
-  onCollapseAll,
+  tocMode,
+  onCycleTocMode,
   onHide,
   onExpand,
 }) {
   const top = roots[0]?.children || []; // skip the document root node
+  const modeLabel = TOC_MODE_LABEL[tocMode] || TOC_MODE_LABEL.centered;
   return (
     <div className="flex flex-col h-full">
       <div
         className={`${inter.className} flex justify-between items-center px-3 py-2.5 border-b r-border`}
       >
         <span
-          className="uppercase tracking-[0.12em]"
+          className="uppercase tracking-[0.12em] text-[11px]"
           style={{ color: "#9a8f76" }}
         >
-          <span className="text-[11px]">Contents · </span>
-          <span
-            className={`${uchen.className} text-[13px] tracking-normal align-middle`}
-          >
-            ས་བཅད་
-          </span>
+          TOC
         </span>
         <span className="flex items-center gap-0.5">
           <button
             type="button"
             className="r-toc-iconbtn"
             onClick={onExpand}
-            title="Study view"
-            aria-label="Open study view"
+            title="Sapche view"
+            aria-label="Open Sapche view"
           >
-            ⛶
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+              <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+              <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+              <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+              <rect width="10" height="8" x="7" y="8" rx="1" />
+            </svg>
           </button>
           <button
             type="button"
             className="r-toc-iconbtn"
-            onClick={onCollapseAll}
-            title="Collapse all"
-            aria-label="Collapse all"
+            onClick={onCycleTocMode}
+            title={modeLabel}
+            aria-label={`Outline: ${modeLabel} (click to change)`}
           >
-            ⊟
-          </button>
-          <button
-            type="button"
-            className="r-toc-iconbtn"
-            onClick={onExpandAll}
-            title="Expand all"
-            aria-label="Expand all"
-          >
-            ⊞
+            <TocModeIcon mode={tocMode} />
           </button>
           <button
             type="button"

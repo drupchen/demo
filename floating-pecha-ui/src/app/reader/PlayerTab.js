@@ -353,7 +353,7 @@ export default function PlayerTab({
         <div
           className={`${inter.className} text-sm text-center py-12 r-text-secondary`}
         >
-          Select a commentary from the text to start listening.
+          Select a syllable in the text to start listening.
         </div>
       </div>
     );

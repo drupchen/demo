@@ -121,7 +121,8 @@
 }
 
 .r-syl-playing {
-  background-color: var(--reader-accent-subtle, #FDF8EE);
+  /* Same gray as the main-text passage band (.r-passage-band). */
+  background-color: #F4F4F5;
 }
 
 .r-syl-hovered {
@@ -309,35 +310,73 @@
 .r-toc-num { font-size:11px; color:#9a8f76; flex:none; }
 .r-toc-title { font-size:15px; line-height:1.45; }
 .r-toc-chevron { width:20px; min-width:20px; font-size:13px; line-height:1; color:#9a8f76; background:none; border:0; padding:2px 0; cursor:pointer; }
-.r-toc-chevron:hover { color:#8B1D1D; }
+.r-toc-chevron:hover { color:var(--reader-accent, #D4AF37); }
 .r-toc-chevron-spacer { width:20px; min-width:20px; display:inline-block; }
 .r-toc-iconbtn { font-size:16px; line-height:1; padding:3px 6px; color:#9a8f76; background:none; border:0; cursor:pointer; border-radius:4px; }
-.r-toc-iconbtn:hover { color:#8B1D1D; background:rgba(0,0,0,0.05); }
+.r-toc-iconbtn:hover { color:var(--reader-accent, #D4AF37); background:rgba(0,0,0,0.05); }
+/* Mobile: the row expand/collapse triangles are too small to tap — enlarge the
+   glyph and widen both the chevron and its spacer together so indentation stays
+   aligned. Desktop (>=768px) keeps the compact size. */
+@media (max-width: 767px) {
+  .r-toc-chevron { width:28px; min-width:28px; font-size:20px; }
+  .r-toc-chevron-spacer { width:28px; min-width:28px; }
+  /* Study rows have larger type, so their triangles need to be bigger still. */
+  .r-study-chevron { width:32px; min-width:32px; font-size:26px; }
+  .r-study-row .r-toc-chevron-spacer { width:32px; min-width:32px; }
+}
 
 /* --- Sapche study view (fullscreen) --- */
 /* z-index above everything in the reader: MiniPlayer is z-[70], SearchBar z-[55]. */
 .r-study-overlay { position:fixed; inset:0; z-index:100; display:flex; flex-direction:column;
   background:var(--reader-bg-primary, #F9F9F7); outline:none; }
-.r-study-header { display:flex; align-items:center; justify-content:space-between;
+/* Desktop: a centered floating panel — the reader page shows on the left/right,
+   the side gaps growing with screen size. (Mobile keeps the full-screen rule.) */
+@media (min-width: 768px) {
+  .r-study-overlay {
+    inset:auto; top:0; bottom:1.5rem; left:0; right:0;
+    width:min(900px, 92vw); margin-inline:auto;
+    border:1px solid #e0dccf; border-radius:12px;
+    box-shadow:0 24px 64px rgba(0,0,0,0.22); overflow:hidden;
+  }
+}
+.r-study-header { position:relative; display:flex; align-items:center; justify-content:space-between;
   padding:14px 24px; background:#F2EFE8; border-bottom:1px solid #e0dccf; }
-.r-study-body { flex:1; overflow-y:auto; overscroll-behavior:contain; padding:40px 24px 30vh; }
-.r-study-col { max-width:880px; margin:0 auto; }
+/* Three-way mode switch, centered in the header bar (over the title/close row). */
+.r-study-modes { position:absolute; left:50%; transform:translateX(-50%);
+  display:flex; align-items:center; gap:6px; }
+/* Body wrapper: the center band is fixed to the body's middle while the body
+   scrolls inside it (Centered mode). */
+.r-study-body-wrap { position:relative; flex:1; display:flex; }
+.r-study-body { position:absolute; inset:0; overflow:auto; overscroll-behavior:contain; padding:40px 24px 30vh; }
+/* Centered mode snaps one level at a time onto the band. Vertical is driven by the
+   column transform (no native Y scroll); horizontal scrolls natively for wide,
+   deeply-indented trees. touch-action:pan-x lets the browser own horizontal
+   panning while JS owns vertical (the level stepper). */
+.r-study-body-centered { overflow-x:auto; overflow-y:hidden; touch-action:pan-x; padding:0 24px; }
+.r-study-body-centered .r-study-col { transition:transform 0.25s ease; will-change:transform; }
+/* Full-width gray band marking the center line; text scrolls over it. */
+.r-study-centerband { position:absolute; left:0; right:0; top:50%; transform:translateY(-50%);
+  height:64px; background:#F4F4F5; pointer-events:none; z-index:0; }
+/* Size to content so wide/indented rows overflow horizontally (one line each);
+   min-width:100% keeps short trees full width. padding-left gives root nodes a
+   comfortable margin so they don't sit flush against the panel edge. */
+.r-study-col { width:max-content; min-width:100%; margin:0; padding-left:1.5rem;
+  position:relative; z-index:1; }
 .r-study-row { display:flex; align-items:center; gap:12px; padding:8px 12px; cursor:pointer;
   border-radius:6px; scroll-margin-block:80px; }
 .r-study-row:hover { background:rgba(0,0,0,0.04); }
 .r-study-row-active { background:rgba(139,29,29,0.07); box-shadow:inset 3px 0 0 #8B1D1D; }
 .r-study-row-focused { outline:2px solid rgba(139,29,29,0.45); outline-offset:-2px; }
 .r-study-num { font-size:13px; color:#9a8f76; min-width:52px; text-align:right; }
-.r-study-title { line-height:1.7; }
-.r-study-chevron { font-size:15px; }
+.r-study-title { line-height:1.7; white-space:nowrap; flex:none; }
+.r-study-chevron { font-size:20px; width:26px; min-width:26px; }
+.r-study-row .r-toc-chevron-spacer { width:26px; min-width:26px; }
 /* Depth-accent bar (full strength here — no commentary colors in the study view) */
 .r-study-accent { width:5px; align-self:stretch; border-radius:3px; flex:none; min-height:1.6em; }
-/* Sibling-navigation pills, revealed on row hover at the right edge */
-.r-study-nav { display:flex; gap:2px; margin-left:auto; opacity:0; transition:opacity 120ms ease; }
-.r-study-row:hover .r-study-nav { opacity:1; }
-.r-study-navbtn { width:24px; height:24px; border-radius:9999px; border:1px solid #e0dccf;
-  background:#FFFDF8; color:#6f675a; font-size:12px; line-height:1; cursor:pointer; }
-.r-study-navbtn:hover { color:#8B1D1D; border-color:#8B1D1D; }
+/* "Open in reader" affordance, shown right after the selected node's title. */
+.r-study-goto { flex:none; display:inline-flex; align-items:center;
+  padding:4px 6px; color:#9a8f76; background:none; border:0; cursor:pointer; border-radius:4px; }
+.r-study-goto:hover { color:var(--reader-accent, #D4AF37); background:rgba(0,0,0,0.05); }
 /* Sticky breadcrumb under the header: ancestor path of the topmost visible row */
 .r-study-breadcrumb { display:flex; align-items:center; gap:4px; overflow-x:auto;
   padding:6px 24px; min-height:38px; background:#FBF9F3; border-bottom:1px solid #e0dccf;
@@ -519,13 +558,17 @@
 .r-main-text { color: #9F5304; }
 /* Each transcription segment; the one under the playhead is highlighted. */
 .r-tseg {
-  transition: color 0.15s, background-color 0.15s;
+  /* No transition: the read-along moves .r-tseg-active between segments every
+     few hundred ms; a background-color fade-out made the previous segment linger
+     (dual highlight) on short transcript segments. Instant toggle also avoids
+     per-frame paint/compositing — lighter on older mobile devices. */
   border-radius: 3px;
 }
 .r-tseg-active {
   color: var(--reader-trans-blue, #1E3A8A);
-  background-color: var(--reader-accent-subtle, #FDF8EE);
-  box-shadow: 0 0 0 2px var(--reader-accent-subtle, #FDF8EE);
+  /* Same gray as the main-text passage band (.r-passage-band). */
+  background-color: #F4F4F5;
+  box-shadow: 0 0 0 2px #F4F4F5;
 }
 /* In transcription mode the segments are the interactive target. */
 .r-tseg-clickable { cursor: pointer; }

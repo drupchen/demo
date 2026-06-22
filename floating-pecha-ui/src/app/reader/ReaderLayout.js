@@ -67,7 +67,7 @@ const ReaderLayout = forwardRef(function ReaderLayout(
             onClick={onRevealLeft}
             title="Show contents"
             aria-label="Show table of contents"
-            className="h-full w-8 flex-shrink-0 border-r r-sidebar r-text-accent active:bg-black/5 transition-colors flex items-start justify-center pt-3"
+            className="h-full w-8 flex-shrink-0 border-r r-sidebar r-text-muted active:bg-black/5 transition-colors flex items-start justify-center pt-3"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"

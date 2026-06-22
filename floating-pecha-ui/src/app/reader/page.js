@@ -617,6 +617,10 @@ function ReaderContent() {
   const [studyOpen, setStudyOpen] = useState(false);
   const [tocWidth, setTocWidth] = useState(280);
   const [collapsedIds, setCollapsedIds] = useState(new Set());
+  // TOC outline mode for the single tri-state button: "centered" (default —
+  // follow the active section, folding the tree around it), "expand" (all open),
+  // "collapse" (all closed). Reader scrolling resets it to "centered".
+  const [tocMode, setTocMode] = useState("centered");
   const [activeSectionId, setActiveSectionId] = useState(null);
   // While a sapche click is settling the scroll, ignore scroll-driven active
   // updates so the highlighted row doesn't flicker to intermediate sections.
@@ -624,6 +628,9 @@ function ReaderContent() {
   // When on, the main reader interleaves the oral transcription beneath each
   // commented passage and read-along follows the transcription segments.
   const [transcriptionMode, setTranscriptionMode] = useState(false);
+  // Sticky "user turned transcription off" preference: suppresses the
+  // auto-on-play default until the user re-enables it or changes the main text.
+  const [transcriptOptOut, setTranscriptOptOut] = useState(false);
   // The transcript segment currently under the playhead / selected. Drives the
   // active transcript highlight and the shaded root-text passage.
   const [activeTransGid, setActiveTransGid] = useState(null);
@@ -847,9 +854,24 @@ function ReaderContent() {
 
   // Leaving a transcript session (or one without a transcript) turns the display
   // off, so the next transcript session starts hidden (pencil-line, not -off).
+  // Does NOT touch transcriptOptOut: this is automatic, not a manual opt-out.
   useEffect(() => {
     if (!activeSessionHasTranscript && transcriptionMode) setTranscriptionMode(false);
   }, [activeSessionHasTranscript, transcriptionMode]);
+
+  // Changing the main text (instance) clears the sticky manual-off preference,
+  // so transcription defaults back on when the next session is played.
+  useEffect(() => {
+    setTranscriptOptOut(false);
+  }, [instanceId]);
+
+  // Manual transcription toggle: records the user's intent so the auto-on-play
+  // default respects a deliberate "off" (sticky) until they re-enable it.
+  const handleToggleTranscription = useCallback(() => {
+    const next = !transcriptionMode;
+    setTranscriptionMode(next);
+    setTranscriptOptOut(!next); // off => opted out (sticky); on => opted back in
+  }, [transcriptionMode]);
 
   // For the active session: each commented passage's last syllable → its
   // transcription segments (de-duped to a single home passage by start-time),
@@ -1290,30 +1312,46 @@ function ReaderContent() {
     return () => container.removeEventListener("scroll", update);
   }, [sapcheNodes]);
 
-  // Follow the active section with minimal hierarchy: keep only the active
-  // node and its ancestors open, collapsing every other branch behind us.
-  useEffect(() => {
-    if (!activeSectionId) return;
-    const node = idToNode.get(activeSectionId);
-    if (!node) return;
-    const openIds = new Set([activeSectionId]); // active node + its ancestors
-    const parts = node.number.split(".");
-    for (let i = 1; i < parts.length; i++) {
-      const id = numberToId.get(parts.slice(0, i).join("."));
-      if (id) openIds.add(id);
-    }
-    setCollapsedIds((prev) => {
+  // "Centered" fold: the collapse set that keeps only the given active node and
+  // its ancestors open, collapsing every other branch. Shared by the scroll-
+  // driven follow effect and the tri-state button's "centered" mode.
+  const computeCenteredCollapse = useCallback(
+    (activeId) => {
+      const openIds = new Set();
+      const node = activeId ? idToNode.get(activeId) : null;
+      if (node) {
+        openIds.add(node.id);
+        const parts = node.number.split(".");
+        for (let i = 1; i < parts.length; i++) {
+          const id = numberToId.get(parts.slice(0, i).join("."));
+          if (id) openIds.add(id);
+        }
+      }
       const next = new Set();
       for (const n of sapcheNodes) {
         if ((n.children?.length || 0) > 0 && !openIds.has(n.id)) next.add(n.id);
       }
+      return next;
+    },
+    [idToNode, numberToId, sapcheNodes],
+  );
+
+  // Follow the active section with minimal hierarchy: keep only the active node
+  // and its ancestors open, collapsing every other branch behind us. Because the
+  // active section changes as the reader scrolls, this also resets the tri-state
+  // button back to "centered" (its default mode + icon).
+  useEffect(() => {
+    if (!activeSectionId || !idToNode.get(activeSectionId)) return;
+    setCollapsedIds((prev) => {
+      const next = computeCenteredCollapse(activeSectionId);
       // Avoid a re-render if the collapse set is unchanged.
       if (next.size === prev.size && [...next].every((id) => prev.has(id))) {
         return prev;
       }
       return next;
     });
-  }, [activeSectionId, idToNode, numberToId, sapcheNodes]);
+    setTocMode("centered");
+  }, [activeSectionId, idToNode, computeCenteredCollapse]);
 
   // ----------------------------------------
   // Track currently-playing segment for root text highlighting
@@ -1846,6 +1884,22 @@ function ReaderContent() {
     [audio, sessions, preferRestored, paragraphs],
   );
 
+  // Collapsing the player sidebar (desktop toggle) returns the reader to its
+  // pristine pre-selection state — like first opening the text from the archive:
+  // playback stops and every media-covered syllable goes back to black (no
+  // teaching filter), with no selection/segment highlight left over.
+  const collapseSidebarToPristine = useCallback(() => {
+    setSidebarOpen(false);
+    audio.pause();
+    setActiveCommentary(null);
+    setActiveTeachingFilter(null);
+    setActiveSylId(null);
+    setActiveTransGid(null);
+    setTranscriptionMode(false);
+    setPlayingSegSylIds(new Set());
+    setNoSessionMessage(null);
+  }, [audio]);
+
   // Clicking an audio-linked syllable selects it and readies the sidebar player
   // on the first available teaching instance's matching section — loaded but
   // paused (awaiting Play). No popup. Defined after handleCommentarySelect
@@ -1869,18 +1923,21 @@ function ReaderContent() {
     [annotateMode, activeSylId, syllableMediaMap, handleCommentarySelect],
   );
 
-  // Mobile: once playback actually starts while the player sheet is open,
-  // minimize the sheet (to the MobileAudioBar) so the reader text is visible to
-  // follow along. Rising-edge only on isPlaying, so re-opening the sheet during
-  // playback doesn't immediately re-close it.
+  // Fires once when playback actually starts (rising edge of isPlaying):
+  //  - Mobile: minimize the player sheet to the MobileAudioBar so the reader
+  //    text is visible to follow along (re-opening the sheet mid-playback won't
+  //    re-close it, since isPlaying didn't transition).
+  //  - Both: if the session has a transcript and the user hasn't opted out,
+  //    turn the transcription display on by default.
   const wasPlayingRef = useRef(false);
   useEffect(() => {
     const playing = audio.isPlaying;
-    if (isMobile && playing && !wasPlayingRef.current) {
-      setSidebarOpen(false);
-    }
+    const justStarted = playing && !wasPlayingRef.current;
     wasPlayingRef.current = playing;
-  }, [audio.isPlaying, isMobile]);
+    if (!justStarted) return;
+    if (isMobile) setSidebarOpen(false);
+    if (activeSessionHasTranscript && !transcriptOptOut) setTranscriptionMode(true);
+  }, [audio.isPlaying, isMobile, activeSessionHasTranscript, transcriptOptOut]);
 
   // ----------------------------------------
   // Deep-link: load session + seek to time once data is ready
@@ -2067,6 +2124,18 @@ function ReaderContent() {
   }, [sapche]);
   const onExpandAll = useCallback(() => setCollapsedIds(new Set()), []);
 
+  // Single tri-state outline button. Cycles expand -> collapse -> centered and
+  // applies that mode. (Scrolling the reader independently resets it to
+  // "centered" via the follow effect above.)
+  const onCycleTocMode = useCallback(() => {
+    const next =
+      tocMode === "centered" ? "expand" : tocMode === "expand" ? "collapse" : "centered";
+    if (next === "expand") onExpandAll();
+    else if (next === "collapse") onCollapseAll();
+    else setCollapsedIds(computeCenteredCollapse(activeSectionId));
+    setTocMode(next);
+  }, [tocMode, onExpandAll, onCollapseAll, computeCenteredCollapse, activeSectionId]);
+
   const handleSapcheSelect = useCallback((node) => {
     if (!node.startSylId) return;
     // On mobile the TOC is an overlay drawer — close it so the navigated text is
@@ -2237,7 +2306,7 @@ function ReaderContent() {
       <audio {...audio.audioProps} />
 
       <ReaderNavbar
-        onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+        onToggleSidebar={() => (sidebarOpen ? collapseSidebarToPristine() : setSidebarOpen(true))}
         sidebarOpen={sidebarOpen}
         prefs={prefs}
         onUpdatePref={updatePref}
@@ -2246,7 +2315,7 @@ function ReaderContent() {
         onToggleAnnotate={() => setAnnotateMode((v) => !v)}
         transcriptReady={activeSessionHasTranscript}
         transcriptionOn={transcriptionMode}
-        onToggleTranscription={() => setTranscriptionMode((v) => !v)}
+        onToggleTranscription={handleToggleTranscription}
         center={
           <SearchBar
             manifest={manifest}
@@ -2275,7 +2344,7 @@ function ReaderContent() {
         leftSidebar={sapche ? (
           <SapcheSidebar roots={sapche.roots} activeId={activeSectionId}
             collapsedIds={collapsedIds} onToggleCollapse={onToggleCollapse}
-            onSelect={handleSapcheSelect} onExpandAll={onExpandAll} onCollapseAll={onCollapseAll}
+            onSelect={handleSapcheSelect} tocMode={tocMode} onCycleTocMode={onCycleTocMode}
             onHide={() => setTocOpen(false)}
             onExpand={() => setStudyOpen(true)} />
         ) : null}
