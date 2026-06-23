@@ -121,6 +121,16 @@ SEED_PASSWORD_ADMIN=...   \
 npm run seed
 ```
 
+### Pulling production data into local dev
+
+To mirror the **production** accounts and notes locally (e.g. to test against real
+members' data), run `npm run db:pull` (`scripts/pull-prod-db.mjs`). It exports the
+remote `users` + `notes` rows and replaces the local ones, so afterwards you sign
+in locally with **production** credentials. It does NOT pull `segments_fts` (the
+FTS5 virtual table cannot be exported — rebuild with `npm run search:index`) or
+voice-note audio (that lives in R2, not D1). Requires the local schema to exist
+first (`npm run db:apply`). **Replaces local `users`/`notes`.**
+
 ### Building the search index (D1 FTS5)
 
 Search is served from a SQLite FTS5 table inside D1 — no external engine. After
