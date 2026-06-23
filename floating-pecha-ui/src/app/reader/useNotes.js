@@ -8,8 +8,13 @@ import { useCallback, useEffect, useState } from "react";
  *
  * `enabled` should be false when the user is logged out — the hook then stays
  * empty and makes no requests.
+ *
+ * `viewUserId` (admin-only) loads another user's notes for read-only viewing;
+ * when null/omitted the hook loads the logged-in user's own notes. Viewing
+ * another user is read-only at the UI level — create/update/delete always act
+ * on the logged-in user regardless of `viewUserId`.
  */
-export function useNotes(instanceId, enabled) {
+export function useNotes(instanceId, enabled, viewUserId) {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -22,7 +27,9 @@ export function useNotes(instanceId, enabled) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/notes?instance=${encodeURIComponent(instanceId)}`);
+      const params = new URLSearchParams({ instance: instanceId });
+      if (viewUserId) params.set("user", viewUserId);
+      const res = await fetch(`/api/notes?${params.toString()}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setNotes(data.notes || []);
@@ -32,7 +39,7 @@ export function useNotes(instanceId, enabled) {
     } finally {
       setLoading(false);
     }
-  }, [instanceId, enabled]);
+  }, [instanceId, enabled, viewUserId]);
 
   useEffect(() => {
     reload();

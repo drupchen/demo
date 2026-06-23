@@ -588,6 +588,11 @@ function ReaderContent() {
 
   const { data: session } = useSession();
   const loggedIn = !!session?.user?.id;
+  const isAdmin = session?.user?.role === "admin";
+  const selfId = session?.user?.id;
+  // null = viewing own notes; an id = admin viewing that member's notes (read-only).
+  const [viewUserId, setViewUserId] = useState(null);
+  const readOnly = isAdmin && viewUserId != null && viewUserId !== selfId;
 
   const [annotateMode, setAnnotateMode] = useState(false);
   // Pending selection awaiting the "+ Note" button: { startSylId, endSylId, anchorText, x, y }
@@ -603,7 +608,26 @@ function ReaderContent() {
     createNote: createNoteApi,
     updateNote: updateNoteApi,
     deleteNote: deleteNoteApi,
-  } = useNotes(instanceId, loggedIn);
+  } = useNotes(instanceId, loggedIn, viewUserId);
+
+  // Member list for the admin "viewing notes of" picker.
+  const [members, setMembers] = useState([]);
+  useEffect(() => {
+    if (!isAdmin) {
+      setMembers([]);
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/admin/users")
+      .then((r) => (r.ok ? r.json() : { users: [] }))
+      .then((d) => {
+        if (!cancelled) setMembers(d.users || []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin]);
 
   // Data state
   const [manifest, setManifest] = useState([]);
@@ -1778,6 +1802,7 @@ function ReaderContent() {
 
   const handleCreateInPanel = useCallback(
     async (payload) => {
+      if (readOnly) return; // defensive: admins viewing another member never create
       if (!panelAnchor) return;
       await createNoteApi({
         startSylId: panelAnchor.startSylId,
@@ -1790,7 +1815,7 @@ function ReaderContent() {
       setPendingSelection(null);
       window.getSelection()?.removeAllRanges();
     },
-    [panelAnchor, createNoteApi]
+    [panelAnchor, createNoteApi, readOnly]
   );
 
   const handleGoToNote = useCallback(
@@ -2304,6 +2329,12 @@ function ReaderContent() {
             onGoToNote={handleGoToNote}
             onUpdateNote={updateNoteApi}
             onDeleteNote={deleteNoteApi}
+            isAdmin={isAdmin}
+            members={members}
+            viewUserId={viewUserId}
+            selfId={selfId}
+            onChangeViewUser={setViewUserId}
+            readOnly={readOnly}
           />
         )}
       </div>
@@ -2371,7 +2402,7 @@ function ReaderContent() {
         showLeftReveal={!!sapche && !tocOpen}
         onRevealLeft={() => setTocOpen(true)}
       >
-        {pendingSelection && !notePanel && (
+        {pendingSelection && !notePanel && !readOnly && (
           <button
             type="button"
             className="r-note-add-btn"
@@ -2470,6 +2501,7 @@ function ReaderContent() {
           onCreate={handleCreateInPanel}
           onUpdateNote={updateNoteApi}
           onDeleteNote={deleteNoteApi}
+          readOnly={readOnly}
         />
       )}
 

@@ -11,6 +11,10 @@ import DeleteButton from "./DeleteButton";
  * by passage (a passage can hold several notes).
  * Props: notes[], loggedIn, manifestIndexOf (Map sylId->index),
  * onGoToNote(note), onUpdateNote(id, bodyText), onDeleteNote(id).
+ *
+ * Admin-only: isAdmin, members[], viewUserId, selfId, onChangeViewUser(id|null)
+ * drive the "viewing notes of" picker; readOnly hides all edit/delete affordances
+ * when an admin is viewing another member's notes.
  */
 export default function NotesTab({
   notes,
@@ -19,6 +23,12 @@ export default function NotesTab({
   onGoToNote,
   onUpdateNote,
   onDeleteNote,
+  isAdmin,
+  members,
+  viewUserId,
+  selfId,
+  onChangeViewUser,
+  readOnly,
 }) {
   const [editingId, setEditingId] = useState(null);
 
@@ -30,12 +40,41 @@ export default function NotesTab({
     );
   }
 
+  const picker = isAdmin ? (
+    <div className={`${inter.className} mb-3`}>
+      <label className="block text-[10px] uppercase tracking-wide r-text-muted mb-1">
+        Viewing notes of
+      </label>
+      <select
+        value={viewUserId ?? ""}
+        onChange={(e) => onChangeViewUser(e.target.value || null)}
+        className="w-full text-xs p-1.5 rounded-md border r-border bg-transparent r-text-1a"
+      >
+        <option value="">Me</option>
+        {(members || [])
+          .filter((m) => m.id !== selfId)
+          .map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name ? `${m.name} (${m.username})` : m.username}
+            </option>
+          ))}
+      </select>
+      {readOnly && (
+        <p className="mt-1 text-[10px] r-text-muted">Read-only — another member&apos;s notes.</p>
+      )}
+    </div>
+  ) : null;
+
   if (!notes.length) {
     return (
-      <p className={`${inter.className} text-xs r-text-muted`}>
-        No notes yet. Turn on annotation mode (the pencil button), select a
-        passage, then add a note.
-      </p>
+      <div className={`${inter.className}`}>
+        {picker}
+        <p className="text-xs r-text-muted">
+          {readOnly
+            ? "This member has no notes for this teaching."
+            : "No notes yet. Turn on annotation mode (the pencil button), select a passage, then add a note."}
+        </p>
+      </div>
     );
   }
 
@@ -58,6 +97,7 @@ export default function NotesTab({
 
   return (
     <div className={`${inter.className} flex flex-col gap-4`}>
+      {picker}
       {groups.map((group) => (
         <div key={`${group.head.start_syl_id}_${group.head.end_syl_id}`}
           className="rounded-md border r-border p-3 flex flex-col gap-3">
@@ -69,7 +109,7 @@ export default function NotesTab({
 
           {group.notes.map((note) => (
             <div key={note.id} className="flex flex-col gap-2 border-t r-border pt-2 first:border-t-0 first:pt-0">
-              {editingId === note.id ? (
+              {!readOnly && editingId === note.id ? (
                 <NoteComposer
                   editing
                   initialText={note.body_text || ""}
@@ -91,13 +131,15 @@ export default function NotesTab({
                     <span className="text-[10px] r-text-muted">
                       {note.created_at ? formatNoteDate(note.created_at) : ""}
                     </span>
-                    <span className="flex items-center gap-3">
-                    {note.kind === "text" && (
-                      <button type="button" onClick={() => setEditingId(note.id)}
-                        className="r-text-muted r-hover-accent underline">Edit</button>
+                    {!readOnly && (
+                      <span className="flex items-center gap-3">
+                      {note.kind === "text" && (
+                        <button type="button" onClick={() => setEditingId(note.id)}
+                          className="r-text-muted r-hover-accent underline">Edit</button>
+                      )}
+                      <DeleteButton onDelete={() => onDeleteNote(note.id)} />
+                      </span>
                     )}
-                    <DeleteButton onDelete={() => onDeleteNote(note.id)} />
-                    </span>
                   </div>
                 </>
               )}

@@ -13,12 +13,14 @@ import DeleteButton from "./DeleteButton";
  *  - editing a note -> inline editor for that note
  * Props: notes[], anchor {startSylId,endSylId,anchorText}, x, y, onClose,
  * onCreate(payload), onUpdateNote(id, bodyText), onDeleteNote(id).
+ * `readOnly` (admin viewing another member's notes) hides all create/edit/delete
+ * affordances — the popover then only lists the notes.
  */
-export default function NotePopover({ notes, anchor, x, y, onClose, onCreate, onUpdateNote, onDeleteNote }) {
+export default function NotePopover({ notes, anchor, x, y, onClose, onCreate, onUpdateNote, onDeleteNote, readOnly }) {
   const ref = useRef(null);
   const [pos, setPos] = useState({ top: y, left: x, ready: false });
   const [editingId, setEditingId] = useState(null);
-  const [adding, setAdding] = useState(notes.length === 0);
+  const [adding, setAdding] = useState(!readOnly && notes.length === 0);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -57,7 +59,11 @@ export default function NotePopover({ notes, anchor, x, y, onClose, onCreate, on
       style={{ top: pos.top, left: pos.left, visibility: pos.ready ? "visible" : "hidden" }}
     >
       {notes.length === 0 ? (
-        composer
+        readOnly ? (
+          <p className="text-xs r-text-muted">No notes.</p>
+        ) : (
+          composer
+        )
       ) : (
         <div className="flex flex-col gap-3">
           {notes.map((note) => (
@@ -65,7 +71,7 @@ export default function NotePopover({ notes, anchor, x, y, onClose, onCreate, on
               <div className={`${uchen.className} r-text-muted`} style={{ fontSize: "1.3rem", lineHeight: 1.7 }}>
                 {note.anchor_text || ""}
               </div>
-              {editingId === note.id ? (
+              {!readOnly && editingId === note.id ? (
                 <NoteComposer
                   editing
                   initialText={note.body_text || ""}
@@ -84,24 +90,27 @@ export default function NotePopover({ notes, anchor, x, y, onClose, onCreate, on
                     <span className="text-[10px] r-text-muted">
                       {note.created_at ? formatNoteDate(note.created_at) : ""}
                     </span>
-                    <span className="flex items-center gap-3">
-                      {note.kind === "text" && (
-                        <button type="button" onClick={() => setEditingId(note.id)}
-                          className="r-text-muted r-hover-accent underline">Edit</button>
-                      )}
-                      <DeleteButton onDelete={() => onDeleteNote(note.id)} />
-                    </span>
+                    {!readOnly && (
+                      <span className="flex items-center gap-3">
+                        {note.kind === "text" && (
+                          <button type="button" onClick={() => setEditingId(note.id)}
+                            className="r-text-muted r-hover-accent underline">Edit</button>
+                        )}
+                        <DeleteButton onDelete={() => onDeleteNote(note.id)} />
+                      </span>
+                    )}
                   </div>
                 </>
               )}
             </div>
           ))}
-          {adding ? composer : (
-            <button type="button" onClick={() => setAdding(true)}
-              className="self-start px-3 py-1.5 rounded-md text-xs font-semibold r-text-accent border r-border r-hover-accent">
-              + Add note
-            </button>
-          )}
+          {!readOnly &&
+            (adding ? composer : (
+              <button type="button" onClick={() => setAdding(true)}
+                className="self-start px-3 py-1.5 rounded-md text-xs font-semibold r-text-accent border r-border r-hover-accent">
+                + Add note
+              </button>
+            ))}
         </div>
       )}
     </div>
