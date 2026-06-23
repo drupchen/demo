@@ -46,10 +46,8 @@ export function useNotes(instanceId, enabled, viewUserId) {
   }, [reload]);
 
   /**
-   * Create a note. `payload` is { startSylId, endSylId, anchorText,
-   * quotePrefix, quoteSuffix, kind, bodyText, audioBlob, audioDurationMs,
-   * startOffset, endOffset }. quotePrefix/quoteSuffix are the surrounding text
-   * context of the quote, persisted for durable re-resolution after re-ingest.
+   * Create a note. `payload` is { startSylId, endSylId, anchorText, kind,
+   * bodyText, audioBlob, audioDurationMs, startOffset, endOffset }.
    * startOffset/endOffset are optional character offsets within the start/end
    * syllable for character-exact highlighting. Returns the created note or throws.
    */
@@ -62,8 +60,6 @@ export function useNotes(instanceId, enabled, viewUserId) {
         form.set("start_syl_id", payload.startSylId);
         form.set("end_syl_id", payload.endSylId);
         form.set("anchor_text", payload.anchorText || "");
-        form.set("quote_prefix", payload.quotePrefix || "");
-        form.set("quote_suffix", payload.quoteSuffix || "");
         form.set("kind", "voice");
         form.set("body_text", payload.bodyText || "");
         form.set("audio_duration_ms", String(payload.audioDurationMs || 0));
@@ -81,8 +77,6 @@ export function useNotes(instanceId, enabled, viewUserId) {
             start_syl_id: payload.startSylId,
             end_syl_id: payload.endSylId,
             anchor_text: payload.anchorText || "",
-            quote_prefix: payload.quotePrefix || "",
-            quote_suffix: payload.quoteSuffix || "",
             kind: "text",
             body_text: payload.bodyText || "",
             start_offset: payload.startOffset ?? null,

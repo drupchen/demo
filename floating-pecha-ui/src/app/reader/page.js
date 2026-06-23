@@ -30,7 +30,6 @@ import SectionMarker from "./SectionMarker";
 import { useSession } from "next-auth/react";
 import { useNotes } from "./useNotes";
 import { closestSylId } from "@/lib/note-selection";
-import { buildAnchorIndex, captureAnchor, resolveAnchor } from "@/lib/note-anchor";
 import NotePopover from "./NotePopover";
 import NotesTab from "./NotesTab";
 import "./reader.css";
@@ -1102,40 +1101,19 @@ function ReaderContent() {
     [manifestIndexOf, transIndexOf, manifest, transManifest]
   );
 
-  // Durable text-quote indices for each layer: a normalized char stream + a
-  // char->sylId map, used to re-resolve a note whose stored UUIDs no longer
-  // exist (manifest re-ingested) by matching its quoted text + context.
-  const rootAnchorIndex = useMemo(() => buildAnchorIndex(manifest), [manifest]);
-  const transAnchorIndex = useMemo(
-    () => buildAnchorIndex(transManifest),
-    [transManifest]
-  );
-
-  // Resolve a note to CURRENT syllable ids. Fast path: stored ids still exist
-  // in one layer (offset-precise highlighting preserved). Fallback: re-find by
-  // quoted text (root layer first, then transcription) — whole-syllable only.
+  // Resolve a note to CURRENT syllable ids: the stored ids must still exist in a
+  // single layer. If they don't (e.g. the manifest was re-ingested), the note is
+  // shown in the Notes tab only.
   const resolveNoteIds = useCallback(
     (note) => {
       const s = locateSyl(note.start_syl_id);
       const e = locateSyl(note.end_syl_id);
       if (s && e && s.layer === e.layer) {
-        return {
-          startSylId: note.start_syl_id,
-          endSylId: note.end_syl_id,
-          viaQuote: false,
-        };
+        return { startSylId: note.start_syl_id, endSylId: note.end_syl_id };
       }
-      const sel = {
-        prefix: note.quote_prefix,
-        exact: note.anchor_text,
-        suffix: note.quote_suffix,
-      };
-      const r =
-        resolveAnchor(sel, rootAnchorIndex) ||
-        resolveAnchor(sel, transAnchorIndex);
-      return r ? { ...r, viaQuote: true } : null;
+      return null;
     },
-    [locateSyl, rootAnchorIndex, transAnchorIndex]
+    [locateSyl]
   );
 
   // Note coverage: `noteHighlightSet` is every syllable id any note touches (for
@@ -1166,10 +1144,8 @@ function ReaderContent() {
       const a = start.index;
       const b = end.index;
       if (a > b) continue;
-      // Offsets only make sense against the ORIGINAL manifest. When re-resolved
-      // by quote, highlight whole syllables (ignore stored start/end offsets).
+      // Offsets are character indices into the syllable's text.
       const hasOffsets =
-        !resolved.viaQuote &&
         note.start_offset != null &&
         note.end_offset != null;
       for (let i = a; i <= b; i++) {
@@ -1217,8 +1193,6 @@ function ReaderContent() {
           startOffset: head.start_offset,
           endOffset: head.end_offset,
           anchorText: head.anchor_text || "",
-          quotePrefix: head.quote_prefix || "",
-          quoteSuffix: head.quote_suffix || "",
         }
       : null;
   }, [notePanel, panelNotes]);
@@ -1809,21 +1783,7 @@ function ReaderContent() {
       const endSylId = endPt.id;
       const startOffset = startPt.offset;
       const endOffset = endPt.offset;
-      // Durable text-quote anchor: capture the exact syllable span plus the
-      // surrounding context, against THIS selection's layer list. anchor_text
-      // holds the full exact quote; quote_prefix/suffix disambiguate it on
-      // re-resolution after the manifest's position-derived UUIDs change.
-      const sLocEnd = locateSyl(startSylId);
-      const eLocEnd = locateSyl(endSylId);
-      const list = sLocEnd?.list || [];
-      const { prefix, exact, suffix } = captureAnchor(
-        list,
-        sLocEnd?.index ?? 0,
-        eLocEnd?.index ?? 0
-      );
-      const anchorText = exact.slice(0, 2000);
-      const quotePrefix = prefix;
-      const quoteSuffix = suffix;
+      const anchorText = (sel.toString() || "").slice(0, 280);
       const rect = range.getBoundingClientRect();
       // Anchor the button entirely to the RIGHT of the selection, vertically
       // centered on it. The CSS places its left edge at x and centers it
@@ -1835,8 +1795,6 @@ function ReaderContent() {
         startOffset,
         endOffset,
         anchorText,
-        quotePrefix,
-        quoteSuffix,
         x: Math.min(rect.right, window.innerWidth - 44),
         y: rect.top + rect.height / 2,
       });
@@ -1875,8 +1833,6 @@ function ReaderContent() {
         startOffset: panelAnchor.startOffset,
         endOffset: panelAnchor.endOffset,
         anchorText: panelAnchor.anchorText,
-        quotePrefix: panelAnchor.quotePrefix,
-        quoteSuffix: panelAnchor.quoteSuffix,
         ...payload,
       });
       setPendingSelection(null);
@@ -1892,8 +1848,8 @@ function ReaderContent() {
       // rendered passage stalls as lazy paragraphs reflow above it — which is
       // why far-away notes (e.g. another member's) appeared to do nothing.
       setRootTextScrolledAt(Date.now());
-      // Navigate to the CURRENT start id: re-resolved by quote when the stored
-      // UUID is gone, falling back to the stored id if resolution fails.
+      // Navigate to the stored start id (falling back to it if it no longer
+      // resolves to a current syllable).
       const resolved = resolveNoteIds(note);
       scrollToSyllable(resolved?.startSylId ?? note.start_syl_id, paragraphs, true);
     },
@@ -2496,8 +2452,6 @@ function ReaderContent() {
                   startOffset: pendingSelection.startOffset,
                   endOffset: pendingSelection.endOffset,
                   anchorText: pendingSelection.anchorText,
-                  quotePrefix: pendingSelection.quotePrefix,
-                  quoteSuffix: pendingSelection.quoteSuffix,
                 },
               });
               setPendingSelection(null);

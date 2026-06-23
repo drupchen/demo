@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 const COLS =
-  "id, user_id, instance_id, start_syl_id, end_syl_id, anchor_text, quote_prefix, quote_suffix, kind, body_text, audio_key, audio_duration_ms, start_offset, end_offset, visibility, created_at, updated_at";
+  "id, user_id, instance_id, start_syl_id, end_syl_id, anchor_text, kind, body_text, audio_key, audio_duration_ms, start_offset, end_offset, visibility, created_at, updated_at";
 
 const KINDS = new Set(["text", "voice"]);
 
@@ -51,15 +51,15 @@ export async function getNoteById(db, id) {
 
 export async function createNote(
   db,
-  { userId, instanceId, startSylId, endSylId, anchorText, quotePrefix, quoteSuffix, kind, bodyText, audioKey, audioDurationMs, startOffset, endOffset }
+  { userId, instanceId, startSylId, endSylId, anchorText, kind, bodyText, audioKey, audioDurationMs, startOffset, endOffset }
 ) {
   const id = randomUUID();
   const now = Math.floor(Date.now() / 1000);
   await db
     .prepare(
       `INSERT INTO notes
-         (id, user_id, instance_id, start_syl_id, end_syl_id, anchor_text, quote_prefix, quote_suffix, kind, body_text, audio_key, audio_duration_ms, start_offset, end_offset, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         (id, user_id, instance_id, start_syl_id, end_syl_id, anchor_text, kind, body_text, audio_key, audio_duration_ms, start_offset, end_offset, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       id,
@@ -68,8 +68,6 @@ export async function createNote(
       startSylId,
       endSylId,
       anchorText ?? null,
-      quotePrefix ?? null,
-      quoteSuffix ?? null,
       kind,
       bodyText ?? null,
       audioKey ?? null,
@@ -87,8 +85,6 @@ export async function createNote(
     start_syl_id: startSylId,
     end_syl_id: endSylId,
     anchor_text: anchorText ?? null,
-    quote_prefix: quotePrefix ?? null,
-    quote_suffix: quoteSuffix ?? null,
     kind,
     body_text: bodyText ?? null,
     audio_key: audioKey ?? null,
