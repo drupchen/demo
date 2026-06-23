@@ -1821,7 +1821,11 @@ function ReaderContent() {
   const handleGoToNote = useCallback(
     (note) => {
       setActiveTab("notes");
-      scrollToSyllable(note.start_syl_id, paragraphs);
+      // Teleport (instant) rather than smooth: a smooth scroll to a not-yet-
+      // rendered passage stalls as lazy paragraphs reflow above it — which is
+      // why far-away notes (e.g. another member's) appeared to do nothing.
+      setRootTextScrolledAt(Date.now());
+      scrollToSyllable(note.start_syl_id, paragraphs, true);
     },
     [paragraphs]
   );
