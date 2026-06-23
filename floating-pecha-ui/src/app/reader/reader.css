@@ -373,6 +373,8 @@
 .r-study-row { display:flex; align-items:center; gap:12px; padding:8px 12px; cursor:pointer;
   border-radius:6px; scroll-margin-block:80px; }
 .r-study-row:hover { background:rgba(0,0,0,0.04); }
+/* Centered popup view: no hover background on nodes. */
+.r-study-body-centered .r-study-row:hover { background:transparent; }
 .r-study-row-active { background:rgba(139,29,29,0.07); box-shadow:inset 3px 0 0 #8B1D1D; }
 .r-study-row-focused { outline:2px solid rgba(139,29,29,0.45); outline-offset:-2px; }
 .r-study-num { font-size:13px; color:#9a8f76; min-width:52px; text-align:right; }

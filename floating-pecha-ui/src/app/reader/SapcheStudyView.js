@@ -18,8 +18,6 @@ const STUDY_FONT_MIN = 14;
 const STUDY_FONT_MAX = 40;
 const STUDY_FONT_STEP = 2;
 
-const PREVIEW_HOVER_DELAY_MS = 450;
-
 function StudyRow({
   node,
   collapsed,
@@ -304,18 +302,9 @@ export default function SapcheStudyView({
     setPreview({ nodeId, ...previewPositionFor(el) });
   };
 
-  const onRowEnter = (node, el) => {
-    clearTimeout(hoverTimerRef.current);
-    if (!previewFor || !previewFor(node)) return;
-    hoverTimerRef.current = setTimeout(() => {
-      previewSourceRef.current = "hover";
-      setPreview({ nodeId: node.id, ...previewPositionFor(el) });
-    }, PREVIEW_HOVER_DELAY_MS);
-  };
-  const onRowLeave = () => {
-    clearTimeout(hoverTimerRef.current);
-    if (previewSourceRef.current === "hover") setPreview(null);
-  };
+  // Section text preview popover removed — hover no longer surfaces a preview.
+  const onRowEnter = () => {};
+  const onRowLeave = () => {};
 
   // On open: take keyboard focus and show the current reading position.
   // On close: hand focus back to whatever had it (the opener button).
@@ -467,12 +456,7 @@ export default function SapcheStudyView({
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
-      if (preview) {
-        previewSourceRef.current = null;
-        setPreview(null);
-      } else {
-        onClose();
-      }
+      onClose();
       return;
     }
     if (e.key === "Tab") {
@@ -526,25 +510,15 @@ export default function SapcheStudyView({
         // Open the selected section in the reader (same as its arrow button).
         if (node) onSelect(node);
         break;
-      case " ": {
-        // Peek at the section text without leaving the study view.
-        if (preview && preview.nodeId === node?.id) {
-          previewSourceRef.current = null;
-          setPreview(null);
-        } else if (node) {
-          showPreviewFor(node.id, "key");
-        }
+      case " ":
+        // Preview removed; swallow Space so it doesn't scroll the overlay.
         break;
-      }
       default:
         return; // let unhandled keys through untouched
     }
     e.preventDefault();
     e.stopPropagation();
   };
-
-  const previewNode = preview ? rows.find((n) => n.id === preview.nodeId) : null;
-  const previewText = previewNode && previewFor ? previewFor(previewNode) : null;
 
   return (
     <div
@@ -678,23 +652,6 @@ export default function SapcheStudyView({
           </div>
         </div>
       </div>
-      {previewNode && previewText && (
-        <div
-          className={`${uchen.className} r-study-preview`}
-          style={{
-            left: preview.left,
-            top: preview.top,
-            transform: preview.above ? "translateY(-100%)" : undefined,
-          }}
-          role="note"
-          aria-label="Section text preview"
-        >
-          <div className={`${inter.className} r-study-preview-num`}>
-            Space / Esc to dismiss
-          </div>
-          {previewText}
-        </div>
-      )}
     </div>
   );
 }
