@@ -132,16 +132,21 @@ voice-note audio (that lives in R2, not D1). Requires the local schema to exist
 first (`npm run db:apply`). **Replaces local `users`/`notes`.**
 
 To make pulled notes actually navigate/highlight locally, the local archive must
-match production's manifests (notes anchor by syllable UUID). Pull the archive
-content from the deployed R2 with `npm run archive:pull` (all instances, from
-`catalog.json`) or `npm run archive:pull -- <instance_id>` (one). It writes
-`public/data/archive/...` from R2 keys `archive/...`.
+match production's. The reader serves archive via `/api/content` + `/api/catalog`,
+which read the `MEDIA` R2 binding (local miniflare R2 under `npm run dev`) — NOT
+`public/data`. So mirror production with `npm run archive:pull` (copies R2 remote
+→ R2 local; all instances from `catalog.json`) or `npm run archive:pull -- <instance_id>`
+(one). `npm run archive:upload` loads local `public/data/archive` → local R2.
 
-⚠️ **Notes anchor by syllable UUID.** Regenerating a teaching's `manifest.json`
-changes those UUIDs and **orphans every existing note** for that teaching
-(navigation + highlight break; only `anchor_text` survives for display). Avoid
-re-publishing regenerated manifests for teachings that already have notes, or
-plan a re-anchoring step.
+**Durable note anchoring (since migration 0006).** Notes store a W3C
+TextQuoteSelector (`anchor_text` = exact quote, `quote_prefix`/`quote_suffix` =
+context) in addition to the syllable UUIDs. Syllable UUIDs are position-derived
+(`uuid5(instance_id_index_text)`), so re-ingesting a teaching changes them; the
+reader then RE-RESOLVES a note's position by matching its quoted text against the
+current manifest (`src/lib/note-anchor.js`). Notes created before 0006 lack the
+quote and stay orphaned if their UUIDs change — only `anchor_text` shows in the
+tab. The `start_offset`/`end_offset` (character-exact highlight) only apply when
+the UUIDs still resolve; re-resolved notes highlight whole syllables.
 
 ### Building the search index (D1 FTS5)
 
