@@ -30,6 +30,7 @@ import SectionMarker from "./SectionMarker";
 import { useSession } from "next-auth/react";
 import { useNotes } from "./useNotes";
 import { closestSylId } from "@/lib/note-selection";
+import { buildAnchorIndex, captureAnchor, resolveAnchor } from "@/lib/note-anchor";
 import NotePopover from "./NotePopover";
 import NotesTab from "./NotesTab";
 import "./reader.css";
@@ -1101,6 +1102,42 @@ function ReaderContent() {
     [manifestIndexOf, transIndexOf, manifest, transManifest]
   );
 
+  // Durable text-quote indices for each layer: a normalized char stream + a
+  // char->sylId map, used to re-resolve a note whose stored UUIDs no longer
+  // exist (manifest re-ingested) by matching its quoted text + context.
+  const rootAnchorIndex = useMemo(() => buildAnchorIndex(manifest), [manifest]);
+  const transAnchorIndex = useMemo(
+    () => buildAnchorIndex(transManifest),
+    [transManifest]
+  );
+
+  // Resolve a note to CURRENT syllable ids. Fast path: stored ids still exist
+  // in one layer (offset-precise highlighting preserved). Fallback: re-find by
+  // quoted text (root layer first, then transcription) — whole-syllable only.
+  const resolveNoteIds = useCallback(
+    (note) => {
+      const s = locateSyl(note.start_syl_id);
+      const e = locateSyl(note.end_syl_id);
+      if (s && e && s.layer === e.layer) {
+        return {
+          startSylId: note.start_syl_id,
+          endSylId: note.end_syl_id,
+          viaQuote: false,
+        };
+      }
+      const sel = {
+        prefix: note.quote_prefix,
+        exact: note.anchor_text,
+        suffix: note.quote_suffix,
+      };
+      const r =
+        resolveAnchor(sel, rootAnchorIndex) ||
+        resolveAnchor(sel, transAnchorIndex);
+      return r ? { ...r, viaQuote: true } : null;
+    },
+    [locateSyl, rootAnchorIndex, transAnchorIndex]
+  );
+
   // Note coverage: `noteHighlightSet` is every syllable id any note touches (for
   // click/hover detection). `noteHighlightRanges` maps each syllable id to the
   // exact character slice { from, to } to paint — full for interior syllables,
@@ -1118,15 +1155,23 @@ function ReaderContent() {
       );
     };
     for (const note of notes) {
-      const start = locateSyl(note.start_syl_id);
-      const end = locateSyl(note.end_syl_id);
+      // Resolve to current ids: fast path (stored ids live) or quote fallback.
+      const resolved = resolveNoteIds(note);
+      if (!resolved) continue; // unresolvable — shown in tab only.
+      const start = locateSyl(resolved.startSylId);
+      const end = locateSyl(resolved.endSylId);
       // anchor broken or split across layers — shown in tab only.
       if (!start || !end || start.layer !== end.layer) continue;
       const list = start.list;
       const a = start.index;
       const b = end.index;
       if (a > b) continue;
-      const hasOffsets = note.start_offset != null && note.end_offset != null;
+      // Offsets only make sense against the ORIGINAL manifest. When re-resolved
+      // by quote, highlight whole syllables (ignore stored start/end offsets).
+      const hasOffsets =
+        !resolved.viaQuote &&
+        note.start_offset != null &&
+        note.end_offset != null;
       for (let i = a; i <= b; i++) {
         const syl = list[i];
         set.add(syl.id);
@@ -1141,7 +1186,7 @@ function ReaderContent() {
       }
     }
     return { noteHighlightSet: set, noteHighlightRanges: ranges };
-  }, [notes, locateSyl]);
+  }, [notes, locateSyl, resolveNoteIds]);
 
   const panelNotes = useMemo(() => {
     if (!notePanel) return [];
@@ -1149,15 +1194,17 @@ function ReaderContent() {
     const loc = locateSyl(sylId);
     if (!loc) return [];
     return notes.filter((n) => {
-      const a = locateSyl(n.start_syl_id);
-      const b = locateSyl(n.end_syl_id);
+      const resolved = resolveNoteIds(n);
+      if (!resolved) return false;
+      const a = locateSyl(resolved.startSylId);
+      const b = locateSyl(resolved.endSylId);
       return (
         a && b &&
         a.layer === loc.layer && b.layer === loc.layer &&
         loc.index >= a.index && loc.index <= b.index
       );
     });
-  }, [notePanel, notes, locateSyl]);
+  }, [notePanel, notes, locateSyl, resolveNoteIds]);
 
   const panelAnchor = useMemo(() => {
     if (!notePanel) return null;
@@ -1170,6 +1217,8 @@ function ReaderContent() {
           startOffset: head.start_offset,
           endOffset: head.end_offset,
           anchorText: head.anchor_text || "",
+          quotePrefix: head.quote_prefix || "",
+          quoteSuffix: head.quote_suffix || "",
         }
       : null;
   }, [notePanel, panelNotes]);
@@ -1760,7 +1809,21 @@ function ReaderContent() {
       const endSylId = endPt.id;
       const startOffset = startPt.offset;
       const endOffset = endPt.offset;
-      const anchorText = sel.toString().slice(0, 280);
+      // Durable text-quote anchor: capture the exact syllable span plus the
+      // surrounding context, against THIS selection's layer list. anchor_text
+      // holds the full exact quote; quote_prefix/suffix disambiguate it on
+      // re-resolution after the manifest's position-derived UUIDs change.
+      const sLocEnd = locateSyl(startSylId);
+      const eLocEnd = locateSyl(endSylId);
+      const list = sLocEnd?.list || [];
+      const { prefix, exact, suffix } = captureAnchor(
+        list,
+        sLocEnd?.index ?? 0,
+        eLocEnd?.index ?? 0
+      );
+      const anchorText = exact.slice(0, 2000);
+      const quotePrefix = prefix;
+      const quoteSuffix = suffix;
       const rect = range.getBoundingClientRect();
       // Anchor the button entirely to the RIGHT of the selection, vertically
       // centered on it. The CSS places its left edge at x and centers it
@@ -1772,6 +1835,8 @@ function ReaderContent() {
         startOffset,
         endOffset,
         anchorText,
+        quotePrefix,
+        quoteSuffix,
         x: Math.min(rect.right, window.innerWidth - 44),
         y: rect.top + rect.height / 2,
       });
@@ -1810,6 +1875,8 @@ function ReaderContent() {
         startOffset: panelAnchor.startOffset,
         endOffset: panelAnchor.endOffset,
         anchorText: panelAnchor.anchorText,
+        quotePrefix: panelAnchor.quotePrefix,
+        quoteSuffix: panelAnchor.quoteSuffix,
         ...payload,
       });
       setPendingSelection(null);
@@ -1825,9 +1892,12 @@ function ReaderContent() {
       // rendered passage stalls as lazy paragraphs reflow above it — which is
       // why far-away notes (e.g. another member's) appeared to do nothing.
       setRootTextScrolledAt(Date.now());
-      scrollToSyllable(note.start_syl_id, paragraphs, true);
+      // Navigate to the CURRENT start id: re-resolved by quote when the stored
+      // UUID is gone, falling back to the stored id if resolution fails.
+      const resolved = resolveNoteIds(note);
+      scrollToSyllable(resolved?.startSylId ?? note.start_syl_id, paragraphs, true);
     },
-    [paragraphs]
+    [paragraphs, resolveNoteIds]
   );
 
   const handleNoteSylClick = useCallback((sylId) => {
@@ -1849,8 +1919,10 @@ function ReaderContent() {
       if (!loc) return setHoveredNoteSylIds(new Set());
       const ids = new Set();
       for (const n of notes) {
-        const a = locateSyl(n.start_syl_id);
-        const b = locateSyl(n.end_syl_id);
+        const resolved = resolveNoteIds(n);
+        if (!resolved) continue;
+        const a = locateSyl(resolved.startSylId);
+        const b = locateSyl(resolved.endSylId);
         if (
           a && b &&
           a.layer === loc.layer && b.layer === loc.layer &&
@@ -1861,7 +1933,7 @@ function ReaderContent() {
       }
       setHoveredNoteSylIds(ids);
     },
-    [notes, locateSyl]
+    [notes, locateSyl, resolveNoteIds]
   );
 
   // Transcription mode: click a transcription segment to play from its start.
@@ -2424,6 +2496,8 @@ function ReaderContent() {
                   startOffset: pendingSelection.startOffset,
                   endOffset: pendingSelection.endOffset,
                   anchorText: pendingSelection.anchorText,
+                  quotePrefix: pendingSelection.quotePrefix,
+                  quoteSuffix: pendingSelection.quoteSuffix,
                 },
               });
               setPendingSelection(null);
