@@ -21,7 +21,8 @@
     "search:index:remote": "node scripts/build-search-index.mjs --remote",
     "media:upload": "node scripts/upload-media-to-r2.mjs",
     "archive:upload": "node scripts/upload-archive-to-r2.mjs",
-    "archive:upload:remote": "node scripts/upload-archive-to-r2.mjs --remote"
+    "archive:upload:remote": "node scripts/upload-archive-to-r2.mjs --remote",
+    "archive:pull": "node scripts/pull-archive-from-r2.mjs"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.18.1",

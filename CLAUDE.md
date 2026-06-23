@@ -131,6 +131,18 @@ FTS5 virtual table cannot be exported — rebuild with `npm run search:index`) o
 voice-note audio (that lives in R2, not D1). Requires the local schema to exist
 first (`npm run db:apply`). **Replaces local `users`/`notes`.**
 
+To make pulled notes actually navigate/highlight locally, the local archive must
+match production's manifests (notes anchor by syllable UUID). Pull the archive
+content from the deployed R2 with `npm run archive:pull` (all instances, from
+`catalog.json`) or `npm run archive:pull -- <instance_id>` (one). It writes
+`public/data/archive/...` from R2 keys `archive/...`.
+
+⚠️ **Notes anchor by syllable UUID.** Regenerating a teaching's `manifest.json`
+changes those UUIDs and **orphans every existing note** for that teaching
+(navigation + highlight break; only `anchor_text` survives for display). Avoid
+re-publishing regenerated manifests for teachings that already have notes, or
+plan a re-anchoring step.
+
 ### Building the search index (D1 FTS5)
 
 Search is served from a SQLite FTS5 table inside D1 — no external engine. After
