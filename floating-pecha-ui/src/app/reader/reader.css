@@ -293,10 +293,11 @@
   flex:none;
   font-size:15px; color:#9a8f76; white-space:nowrap;
 }
-/* Outline numbering: letters (A, B…) blue, digits (1, 2…) orange; the "." stays
-   the muted parent color. Applies in the sidebar, inline titles and study view. */
-.r-sapche-letter { color:#1F5FA0; }
-.r-sapche-digit  { color:#D8601E; }
+/* Outline numbering: letters (A, B…) crimson, digits (1, 2…) bronzed gold —
+   the app's two signature accents; the "." stays the muted parent color.
+   Applies in the sidebar, inline titles and study view. */
+.r-sapche-letter { color:#8B1D1D; }
+.r-sapche-digit  { color:#A8862B; }
 /* Inline section separator: full-width block between paragraphs, with breathing room.
    scroll-margin-top gives the teleport a small gap below the top edge. */
 .r-sapche-marker { position:relative; display:flex; align-items:center; gap:10px; margin:26px 0 14px; scroll-margin-top:24px; }
