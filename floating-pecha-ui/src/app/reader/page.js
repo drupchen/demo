@@ -1,6 +1,6 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import React, {
   Suspense,
   useCallback,
@@ -568,6 +568,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
 // ==========================================
 function ReaderContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   // URL parameters
   const instanceId = searchParams.get("instance") || "rpn_ngondro_1";
@@ -608,6 +609,9 @@ function ReaderContent() {
   const [manifest, setManifest] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  // Set when the content API denies this instance (403) or it doesn't exist
+  // (404). We bounce back to the catalog instead of rendering an empty reader.
+  const [forbidden, setForbidden] = useState(false);
   const [teachingTitle, setTeachingTitle] = useState("");
   const [sapche, setSapche] = useState(null);
 
@@ -710,6 +714,15 @@ function ReaderContent() {
           fetch(contentUrl(instanceId, `${instanceId}_compiled_sessions.json`)),
           fetch("/api/catalog"),
         ]);
+        // The content API gates by the server-side session: 403 = this user
+        // lacks the access level, 404 = the instance doesn't exist. Either way
+        // there is nothing to read, so redirect to the catalog rather than
+        // leaving an empty reader on screen.
+        if (manifestRes.status === 403 || manifestRes.status === 404) {
+          setForbidden(true);
+          router.replace("/archive");
+          return;
+        }
         if (manifestRes.ok && sessionsRes.ok) {
           const manifestData = await manifestRes.json();
           const sessionsData = await sessionsRes.json();
@@ -739,7 +752,7 @@ function ReaderContent() {
       }
     };
     loadData();
-  }, [instanceId]);
+  }, [instanceId, router]);
 
   // ----------------------------------------
   // Derived data: syllableMediaMap
@@ -2196,6 +2209,10 @@ function ReaderContent() {
   // ----------------------------------------
   // Loading state
   // ----------------------------------------
+  // Access denied / missing instance: a redirect to the catalog is already in
+  // flight, so render nothing rather than flashing an empty reader.
+  if (forbidden) return null;
+
   if (isLoading || !loaded) {
     return (
       <div
