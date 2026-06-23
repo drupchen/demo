@@ -40,6 +40,15 @@ export async function getNote(db, id, userId) {
   return row ?? null;
 }
 
+/** Fetch a note by id WITHOUT user scoping. Only call from admin-gated paths. */
+export async function getNoteById(db, id) {
+  const row = await db
+    .prepare(`SELECT ${COLS} FROM notes WHERE id = ?`)
+    .bind(id)
+    .first();
+  return row ?? null;
+}
+
 export async function createNote(
   db,
   { userId, instanceId, startSylId, endSylId, anchorText, kind, bodyText, audioKey, audioDurationMs, startOffset, endOffset }

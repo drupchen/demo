@@ -14,8 +14,17 @@ export async function GET(request) {
     return NextResponse.json({ error: "instance required" }, { status: 400 });
   }
 
+  const targetUser = (searchParams.get("user") || "").trim();
+  let userId = session.user.id;
+  if (targetUser && targetUser !== session.user.id) {
+    if (session.user.role !== "admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    userId = targetUser;
+  }
+
   const { env } = getCloudflareContext();
-  const notes = await listNotes(env.DB, session.user.id, instanceId);
+  const notes = await listNotes(env.DB, userId, instanceId);
   return NextResponse.json({ notes });
 }
 

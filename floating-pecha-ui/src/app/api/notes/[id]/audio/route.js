@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { requireUser } from "@/lib/note-auth";
-import { getNote } from "@/lib/notes";
+import { getNote, getNoteById } from "@/lib/notes";
 
 export async function GET(request, { params }) {
   const { session, response } = await requireUser();
@@ -10,7 +10,10 @@ export async function GET(request, { params }) {
   const { id } = await params;
   const { env } = getCloudflareContext();
 
-  const note = await getNote(env.DB, id, session.user.id);
+  let note = await getNote(env.DB, id, session.user.id);
+  if (!note && session.user.role === "admin") {
+    note = await getNoteById(env.DB, id);
+  }
   if (!note || !note.audio_key) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
