@@ -22,9 +22,10 @@ export default function SearchBar({
   manifest,
   onMatchSetsChange,
   initialQuery = '',
-  transcriptActive = false,
+  transcriptAvailable = false,
   transcriptSyllables = [],
   onTransMatchSetsChange,
+  onTranscriptNavigate,
 }) {
   const [localQuery, setLocalQuery] = useState(initialQuery);
   const [searchFocused, setSearchFocused] = useState(false);
@@ -34,10 +35,10 @@ export default function SearchBar({
   const [activeMatchIdx, setActiveMatchIdx] = useState(-1);
   const lastScrolledRef = useRef(-1);
 
-  // Transcription off → force scope back to main.
+  // No transcript for this text → force scope back to main.
   useEffect(() => {
-    if (!transcriptActive && scope !== 'main') setScope('main');
-  }, [transcriptActive, scope]);
+    if (!transcriptAvailable && scope !== 'main') setScope('main');
+  }, [transcriptAvailable, scope]);
 
   // Main-text index: compressed text + per-char syllable id, plus id→position.
   const mainIndex = useMemo(() => {
@@ -65,8 +66,10 @@ export default function SearchBar({
     let compressedText = '';
     const charIndexToUuid = [];
     const uuidToAnchor = new Map();
+    const uuidToSession = new Map();
     (transcriptSyllables || []).forEach((syl) => {
       uuidToAnchor.set(syl.id, syl.anchorId);
+      uuidToSession.set(syl.id, syl.sessionId);
       if (syl.text) {
         for (let i = 0; i < syl.text.length; i++) {
           const char = syl.text[i];
@@ -77,7 +80,7 @@ export default function SearchBar({
         }
       }
     });
-    return { compressedText, charIndexToUuid, uuidToAnchor };
+    return { compressedText, charIndexToUuid, uuidToAnchor, uuidToSession };
   }, [transcriptSyllables]);
 
   const scrollToEntry = useCallback((entry) => {
@@ -87,24 +90,24 @@ export default function SearchBar({
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
-    // transcript: scroll to the matched syllable span; if its lazy paragraph
-    // isn't mounted yet, jump to the anchor syllable first, then retry.
-    const sylId = entry.ids?.[0];
-    const syl = sylId && document.getElementById(sylId);
-    if (syl) {
-      syl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
-    const anchor = entry.anchorId && document.getElementById(entry.anchorId);
-    if (anchor) {
-      anchor.scrollIntoView({ behavior: 'instant', block: 'center' });
-      setTimeout(() => {
-        document
-          .getElementById(sylId)
-          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 60);
-    }
-  }, []);
+    // Transcript matches can live in any session, and only the loaded session's
+    // transcript is on screen. Let the reader switch session (if needed), turn on
+    // the transcript display, and scroll to the matched syllable.
+    onTranscriptNavigate?.({
+      sessionId: entry.sessionId,
+      sylId: entry.ids?.[0],
+      anchorId: entry.anchorId,
+    });
+  }, [onTranscriptNavigate]);
+
+  // Keep a stable reference to the latest scrollToEntry so the highlight-report
+  // effect below doesn't list it as a dependency: scrollToEntry's identity
+  // changes every render (it closes over the reader's audio/session callbacks),
+  // and that effect calls setState — depending on it would loop indefinitely.
+  const scrollToEntryRef = useRef(scrollToEntry);
+  useEffect(() => {
+    scrollToEntryRef.current = scrollToEntry;
+  }, [scrollToEntry]);
 
   // Recompute matches on query / scope / index change.
   useEffect(() => {
@@ -139,8 +142,8 @@ export default function SearchBar({
       }
     }
 
-    if ((scope === 'transcript' || scope === 'both') && transcriptActive) {
-      const { compressedText, charIndexToUuid, uuidToAnchor } = transIndex;
+    if ((scope === 'transcript' || scope === 'both') && transcriptAvailable) {
+      const { compressedText, charIndexToUuid, uuidToAnchor, uuidToSession } = transIndex;
       let from = 0;
       let at = compressedText.indexOf(cleanQuery, from);
       while (at !== -1 && result.length < MAX_MATCHES) {
@@ -159,6 +162,7 @@ export default function SearchBar({
             type: 'trans',
             ids,
             anchorId,
+            sessionId: uuidToSession.get(ids[0]),
             pos: mainIndex.idToPos.get(anchorId) ?? 0,
           });
         }
@@ -173,7 +177,7 @@ export default function SearchBar({
     lastScrolledRef.current = -1; // allow the new active match to scroll
     setMatches(result);
     setActiveMatchIdx(result.length ? 0 : -1);
-  }, [localQuery, scope, mainIndex, transIndex, transcriptActive]);
+  }, [localQuery, scope, mainIndex, transIndex, transcriptAvailable]);
 
   // Report highlight sets to the reader, and scroll to the active match.
   useEffect(() => {
@@ -192,9 +196,9 @@ export default function SearchBar({
 
     if (active && activeMatchIdx !== lastScrolledRef.current) {
       lastScrolledRef.current = activeMatchIdx;
-      setTimeout(() => scrollToEntry(active), 30);
+      setTimeout(() => scrollToEntryRef.current(active), 30);
     }
-  }, [matches, activeMatchIdx, onMatchSetsChange, onTransMatchSetsChange, scrollToEntry]);
+  }, [matches, activeMatchIdx, onMatchSetsChange, onTransMatchSetsChange]);
 
   const handleNext = () => {
     if (matches.length === 0) return;
@@ -205,17 +209,32 @@ export default function SearchBar({
     setActiveMatchIdx((i) => (i - 1 + matches.length) % matches.length);
   };
 
-  const scopeBtn = (value, label) => (
-    <button
-      key={value}
-      onClick={() => setScope(value)}
-      className={`${inter.className} px-2 py-0.5 md:py-1 text-[10px] font-bold transition-all ${
-        scope === value ? 'r-btn-active' : 'r-text-secondary'
-      }`}
-    >
-      {label}
-    </button>
-  );
+  const scopeBtn = (value, label, disabled = false) => {
+    // No transcript → the whole control is inactive: every option is disabled
+    // and rendered in the same muted gray (no active highlight), so the box
+    // reads as one uniformly-grayed, non-tappable unit (see the container's
+    // opacity below). With a transcript, normal active/secondary styling.
+    const isDisabled = disabled || !transcriptAvailable;
+    let cls;
+    if (!transcriptAvailable) {
+      cls = 'r-text-muted cursor-not-allowed';
+    } else if (disabled) {
+      cls = 'r-text-muted opacity-40 cursor-not-allowed';
+    } else {
+      cls = scope === value ? 'r-btn-active' : 'r-text-secondary';
+    }
+    return (
+      <button
+        key={value}
+        onClick={() => !isDisabled && setScope(value)}
+        disabled={isDisabled}
+        title={!transcriptAvailable ? 'This text has no transcript' : undefined}
+        className={`${inter.className} px-2 py-0.5 md:py-1 text-[10px] font-bold transition-all ${cls}`}
+      >
+        {label}
+      </button>
+    );
+  };
 
   return (
     <div
@@ -245,15 +264,35 @@ export default function SearchBar({
             ✕
           </button>
         )}
+
+        {/* Mobile: scope options float below the focused field as a popup, so
+            the search field itself is never shortened by an inline control. */}
+        {searchFocused && (
+          <div
+            className={`md:hidden absolute left-0 top-full mt-2 z-[80] flex rounded-lg overflow-hidden border shadow-xl r-settings ${
+              !transcriptAvailable ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+            role="menu"
+            title={transcriptAvailable ? 'Search scope' : 'No transcript for this text'}
+          >
+            {scopeBtn('main', 'Text')}
+            {scopeBtn('both', 'Both', !transcriptAvailable)}
+            {scopeBtn('transcript', 'Transcript', !transcriptAvailable)}
+          </div>
+        )}
       </div>
 
-      {transcriptActive && (
-        <div className={`${searchFocused && matches.length === 0 ? 'flex' : 'hidden'} md:flex flex-col md:flex-row rounded-md overflow-hidden border r-border flex-shrink-0`} title="Search scope">
-          {scopeBtn('main', 'Text')}
-          {scopeBtn('both', 'Both')}
-          {scopeBtn('transcript', 'Transcript')}
-        </div>
-      )}
+      {/* Desktop: inline segmented control. */}
+      <div
+        className={`hidden md:flex flex-row rounded-md overflow-hidden border r-border flex-shrink-0 ${
+          !transcriptAvailable ? 'opacity-50 cursor-not-allowed' : ''
+        }`}
+        title={transcriptAvailable ? 'Search scope' : 'No transcript for this text'}
+      >
+        {scopeBtn('main', 'Text')}
+        {scopeBtn('both', 'Both', !transcriptAvailable)}
+        {scopeBtn('transcript', 'Transcript', !transcriptAvailable)}
+      </div>
 
       {matches.length > 0 && (
         <div className={`${inter.className} flex items-center gap-2 flex-shrink-0`}>

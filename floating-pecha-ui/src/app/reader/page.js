@@ -133,6 +133,56 @@ function getCommentaryGroup(sessionId) {
 }
 
 /**
+ * Group one session's transcription segments under their home root-text passage.
+ * `segments` are a single session's root segments (sorted by start); each carries
+ * `transcription_seg_ids` linking it to transcription segments in `transSegByGid`.
+ * Each transcription gid is assigned to exactly one passage (the one whose time
+ * range contains its start), and anchored to that passage's last syllable.
+ * Returns { byAnchor, passageSylIds, flat, passageAnchorBySyl }.
+ */
+function buildTransView(segments, transSegByGid) {
+  const ranges = segments.map((p) => ({
+    start: parseToMs(p.start),
+    end: parseToMs(p.end),
+  }));
+  const passageSylIds = new Set();
+  segments.forEach((p) => (p.syl_uuids || []).forEach((u) => passageSylIds.add(u)));
+  const assigned = new Set();
+  const homeByIdx = segments.map(() => []);
+  segments.forEach((p) => {
+    (p.transcription_seg_ids || []).forEach((gid) => {
+      if (assigned.has(gid)) return;
+      const ts = transSegByGid[gid];
+      if (!ts) return;
+      let home = ranges.findIndex((r) => ts.startMs >= r.start && ts.startMs < r.end);
+      if (home === -1) home = 0;
+      homeByIdx[home].push(gid);
+      assigned.add(gid);
+    });
+  });
+  const byAnchor = {};
+  const flat = [];
+  // sylId -> passage anchor, for every passage that has a transcript block, so
+  // the reader can group each passage's syllables into a background band.
+  const passageAnchorBySyl = new Map();
+  segments.forEach((p, idx) => {
+    const anchor = (p.syl_uuids || []).slice(-1)[0];
+    if (!anchor) return;
+    const segs = homeByIdx[idx]
+      .map((gid) => transSegByGid[gid])
+      .filter(Boolean)
+      .sort((a, b) => a.startMs - b.startMs);
+    if (segs.length) {
+      byAnchor[anchor] = segs;
+      flat.push(...segs);
+      (p.syl_uuids || []).forEach((u) => passageAnchorBySyl.set(u, anchor));
+    }
+  });
+  flat.sort((a, b) => a.startMs - b.startMs);
+  return { byAnchor, passageSylIds, flat, passageAnchorBySyl };
+}
+
+/**
  * Given a Y screen coordinate, find the corresponding weight fraction
  * by locating which paragraph straddles that Y and interpolating.
  * Uses binary search on paragraph elements — O(log P) getBoundingClientRect calls.
@@ -917,47 +967,7 @@ function ReaderContent() {
     if (!transcriptionMode || !hasTranscription || activeCommentarySegments.length === 0) {
       return { byAnchor: {}, passageSylIds: new Set(), flat: [], passageAnchorBySyl: new Map() };
     }
-    const ranges = activeCommentarySegments.map((p) => ({
-      start: parseToMs(p.start),
-      end: parseToMs(p.end),
-    }));
-    const passageSylIds = new Set();
-    activeCommentarySegments.forEach((p) =>
-      (p.syl_uuids || []).forEach((u) => passageSylIds.add(u)),
-    );
-    const assigned = new Set();
-    const homeByIdx = activeCommentarySegments.map(() => []);
-    activeCommentarySegments.forEach((p) => {
-      (p.transcription_seg_ids || []).forEach((gid) => {
-        if (assigned.has(gid)) return;
-        const ts = transSegByGid[gid];
-        if (!ts) return;
-        let home = ranges.findIndex((r) => ts.startMs >= r.start && ts.startMs < r.end);
-        if (home === -1) home = 0;
-        homeByIdx[home].push(gid);
-        assigned.add(gid);
-      });
-    });
-    const byAnchor = {};
-    const flat = [];
-    // sylId -> passage anchor, for every passage that has a transcript block, so
-    // the reader can group each passage's syllables into a background band.
-    const passageAnchorBySyl = new Map();
-    activeCommentarySegments.forEach((p, idx) => {
-      const anchor = (p.syl_uuids || []).slice(-1)[0];
-      if (!anchor) return;
-      const segs = homeByIdx[idx]
-        .map((gid) => transSegByGid[gid])
-        .filter(Boolean)
-        .sort((a, b) => a.startMs - b.startMs);
-      if (segs.length) {
-        byAnchor[anchor] = segs;
-        flat.push(...segs);
-        (p.syl_uuids || []).forEach((u) => passageAnchorBySyl.set(u, anchor));
-      }
-    });
-    flat.sort((a, b) => a.startMs - b.startMs);
-    return { byAnchor, passageSylIds, flat, passageAnchorBySyl };
+    return buildTransView(activeCommentarySegments, transSegByGid);
   }, [transcriptionMode, hasTranscription, activeCommentarySegments, transSegByGid]);
 
   // Main-text syllables of the active transcript segment's passage — the only
@@ -1908,7 +1918,7 @@ function ReaderContent() {
   );
 
   const handleCommentarySelect = useCallback(
-    (commentaryId, startSegment, autoPlay = true) => {
+    (commentaryId, startSegment, autoPlay = true, opts = {}) => {
       setActiveCommentary(commentaryId);
       setActiveTab("player");
       setSidebarOpen(true);
@@ -1945,13 +1955,52 @@ function ReaderContent() {
       if (playlist.length > 0) {
         audio.loadPlaylist(playlist, startIdx, autoPlay);
 
-        const firstSylId = segmentsForCommentary[startIdx]?.syl_uuids?.[0];
-        if (firstSylId) {
-          setTimeout(() => scrollToSyllable(firstSylId, paragraphs), 100);
+        // A transcript-search jump owns the scroll itself (to the matched
+        // transcript syllable), so skip the default scroll-to-first-syllable.
+        if (!opts.noScroll) {
+          const firstSylId = segmentsForCommentary[startIdx]?.syl_uuids?.[0];
+          if (firstSylId) {
+            setTimeout(() => scrollToSyllable(firstSylId, paragraphs), 100);
+          }
         }
       }
     },
     [audio, sessions, preferRestored, paragraphs],
+  );
+
+  // Navigate to a transcript search match. Sessions are hidden from the user, so
+  // a match can live in a session that isn't loaded and whose transcript isn't on
+  // screen. Make sure transcription display is on, switch to the match's session
+  // (paused) if needed, then scroll to the matched transcript syllable — its lazy
+  // paragraph + transcript block may not exist until the switch/render settle, so
+  // mount the root anchor first and poll for the transcript node.
+  const handleTranscriptSearchNav = useCallback(
+    ({ sessionId, sylId, anchorId }) => {
+      if (!sessionId) return;
+      setTranscriptionMode(true);
+      setTranscriptOptOut(false);
+
+      if (sessionId !== activeCommentary) {
+        const startSegment = sessions.find(
+          (s) =>
+            s.source_session === sessionId && (s.syl_uuids || []).includes(anchorId),
+        );
+        handleCommentarySelect(sessionId, startSegment, false, { noScroll: true });
+      }
+
+      // Mount + scroll to the root anchor (triggers its paragraph + transcript
+      // block to render), then poll for the exact transcript syllable.
+      if (anchorId) scrollToSyllable(anchorId, paragraphs, true);
+      let attempts = 0;
+      const check = setInterval(() => {
+        const el = document.getElementById(sylId);
+        if (el || ++attempts > 60) {
+          clearInterval(check);
+          if (el) scrollElToReadAnchor(el, "smooth");
+        }
+      }, 50);
+    },
+    [activeCommentary, sessions, handleCommentarySelect, paragraphs],
   );
 
   // Collapsing the player sidebar (desktop toggle) returns the reader to its
@@ -2164,20 +2213,38 @@ function ReaderContent() {
     setTransAllMatchSet(allSet);
   }, []);
 
-  // Displayed transcription syllables, flat + document-ordered, for the
-  // in-reader transcript search. Each carries its segment gid and the passage
-  // anchor syllable so SearchBar can highlight/order/scroll to it.
-  const transcriptSyllables = useMemo(() => {
+  // Whole-instance transcription syllables for the in-reader transcript search.
+  // Sessions are hidden from the user, so search must span every session's
+  // transcript (not just the active one). We group all root segments by session,
+  // build each session's passage→transcript layout the same way the on-screen
+  // view does, and emit a flat list tagged with each syllable's segment gid,
+  // home passage anchor, and source session so SearchBar can order, highlight,
+  // and (across sessions) navigate to it. SearchBar re-sorts by the anchor's
+  // text position, giving top-to-bottom order across sessions.
+  const allTranscriptSyllables = useMemo(() => {
+    if (!hasTranscription) return [];
+    const bySession = new Map();
+    sessions.forEach((seg) => {
+      if (!seg.source_session) return;
+      if (!bySession.has(seg.source_session)) bySession.set(seg.source_session, []);
+      bySession.get(seg.source_session).push(seg);
+    });
     const out = [];
-    for (const [anchorId, segs] of Object.entries(transcriptionView.byAnchor)) {
-      for (const s of segs) {
-        for (const syl of transSegSylsByGid[s.gid] || []) {
-          out.push({ id: syl.id, text: syl.text, gid: s.gid, anchorId });
+    for (const sessionId of allCommentaryIds) {
+      const segs = (bySession.get(sessionId) || []).sort(
+        (a, b) => parseToMs(a.start) - parseToMs(b.start),
+      );
+      const { byAnchor } = buildTransView(segs, transSegByGid);
+      for (const [anchorId, tsegs] of Object.entries(byAnchor)) {
+        for (const s of tsegs) {
+          for (const syl of transSegSylsByGid[s.gid] || []) {
+            out.push({ id: syl.id, text: syl.text, gid: s.gid, anchorId, sessionId });
+          }
         }
       }
     }
     return out;
-  }, [transcriptionView, transSegSylsByGid]);
+  }, [hasTranscription, sessions, allCommentaryIds, transSegByGid, transSegSylsByGid]);
 
   const onToggleCollapse = useCallback((id) => {
     setCollapsedIds((prev) => {
@@ -2401,8 +2468,9 @@ function ReaderContent() {
             manifest={manifest}
             onMatchSetsChange={handleMatchSetsChange}
             onTransMatchSetsChange={handleTransMatchSetsChange}
-            transcriptActive={transcriptionMode && hasTranscription}
-            transcriptSyllables={transcriptSyllables}
+            transcriptAvailable={hasTranscription}
+            transcriptSyllables={allTranscriptSyllables}
+            onTranscriptNavigate={handleTranscriptSearchNav}
             initialQuery={urlQ || ""}
           />
         }
