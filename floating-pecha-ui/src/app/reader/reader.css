@@ -337,21 +337,14 @@
 .r-study-overlay { position:fixed; inset:0; z-index:100; display:flex; flex-direction:column;
   background:var(--reader-bg-primary, #F9F9F7); outline:none; }
 /* Desktop: a centered floating panel — the reader page shows on the left/right,
-   the side gaps growing with screen size. (Mobile keeps the full-screen rule.) */
-@media (min-width: 768px) {
+   the side gaps growing with screen size. Desktop only (≥1025px) — phones and
+   tablets keep the full-screen rule, matching useIsMobile (≤1024px = mobile). */
+@media (min-width: 1025px) {
   .r-study-overlay {
     inset:auto; top:0; bottom:1.5rem; left:0; right:0;
     width:min(900px, 92vw); margin-inline:auto;
     border:1px solid #e0dccf; border-radius:12px;
     box-shadow:0 24px 64px rgba(0,0,0,0.22); overflow:hidden;
-  }
-}
-/* Landscape phones (wide but short) keep the study view full-screen, not the
-   desktop floating panel. Mirrors useIsMobile's landscape rule. */
-@media (max-height: 500px) and (orientation: landscape) {
-  .r-study-overlay {
-    inset:0; width:auto; margin-inline:0;
-    border:0; border-radius:0; box-shadow:none;
   }
 }
 .r-study-header { position:relative; display:flex; align-items:center; justify-content:space-between;
@@ -387,11 +380,11 @@
 .r-study-title { line-height:1.7; white-space:nowrap; flex:none; }
 .r-study-chevron { font-size:20px; width:18px; min-width:18px; }
 .r-study-row .r-toc-chevron-spacer { width:18px; min-width:18px; }
-/* Mobile: enlarge the study triangle GLYPH (font-size) so it stays in proportion
-   with the larger node text, while keeping the box tight. Must come AFTER the
-   base rules above — media queries add no specificity, so the cascade is decided
-   by source order. */
-@media (max-width: 767px) {
+/* Mobile/tablet (touch, ≤1024px): enlarge the study triangle GLYPH (font-size)
+   so it stays in proportion with the larger node text, while keeping the box
+   tight. Must come AFTER the base rules above — media queries add no specificity,
+   so the cascade is decided by source order. */
+@media (max-width: 1024px) {
   .r-study-chevron { width:22px; min-width:22px; font-size:26px; }
   .r-study-row .r-toc-chevron-spacer { width:22px; min-width:22px; }
 }
@@ -451,10 +444,11 @@
 .r-study-help-draw { width:56px; height:56px; flex:none; color:#6b6453; }
 .r-study-help-img { width:64px; height:64px; flex:none; object-fit:contain; }
 .r-study-help-label { font-size:15px; color:#423c33; }
-/* Show the variant matching the layout (mirrors the 768px panel breakpoint). */
+/* Show the variant matching the layout (desktop ≥1025px; phones+tablets get the
+   touch/gesture help, mirroring useIsMobile's 1024px line). */
 .r-study-help-mobile { display:flex; flex-direction:column; gap:18px; }
 .r-study-help-desktop { display:none; flex-direction:column; gap:18px; }
-@media (min-width: 768px) {
+@media (min-width: 1025px) {
   .r-study-help-desktop { display:flex; }
   .r-study-help-mobile { display:none; }
 }

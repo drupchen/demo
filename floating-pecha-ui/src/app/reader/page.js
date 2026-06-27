@@ -2427,6 +2427,7 @@ function ReaderContent() {
       <audio {...audio.audioProps} />
 
       <ReaderNavbar
+        isMobile={isMobile}
         onToggleSidebar={() => (sidebarOpen ? collapseSidebarToPristine() : setSidebarOpen(true))}
         sidebarOpen={sidebarOpen}
         prefs={prefs}
