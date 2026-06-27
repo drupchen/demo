@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { parseZip, buildRows } from "@/lib/archiveZip";
+import { requiredInstanceFiles, UNUSED_ARCHIVE_FILES } from "@/lib/archiveValidate";
 import { COLORS, ADMIN_CHROME } from "@/lib/theme";
 
 // Table styling shared with MembersTable: white surface card, subtle shadow,
@@ -85,6 +86,30 @@ export default function ContentUpload() {
       row.status = "publication…";
       setState((s) => ({ ...s, rows: [...rows] }));
       try {
+        // Split the bundle: validated files (manifest + compiled_sessions) go in
+        // the JSON POST; everything else the app reads (transcription layers,
+        // sapche) is streamed one file per request so no single request carries
+        // the whole 40 MB+ bundle (which OOM'd the Worker → 503). Unused pipeline
+        // byproducts are dropped entirely.
+        const required = new Set(requiredInstanceFiles(row.instanceId));
+        const postFiles = {};
+        const extras = [];
+        for (const [name, text] of Object.entries(row.files)) {
+          if (required.has(name)) postFiles[name] = text;
+          else if (!UNUSED_ARCHIVE_FILES.has(name)) extras.push([name, text]);
+        }
+        // 1) Stream each large, non-validated file straight to R2.
+        for (const [name, text] of extras) {
+          const r = await fetch(
+            `/api/admin/content/${encodeURIComponent(row.instanceId)}/file?name=${encodeURIComponent(name)}`,
+            { method: "PUT", headers: { "content-type": "application/json" }, body: text }
+          );
+          if (!r.ok) {
+            const d = await r.json().catch(() => ({}));
+            throw new Error(`${name}: ${d.error || r.status}`);
+          }
+        }
+        // 2) Validate + index + store manifest/sessions in one small POST.
         const res = await fetch("/api/admin/content", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -92,7 +117,7 @@ export default function ContentUpload() {
             instanceId: row.instanceId,
             teachingTitle: row.teachingTitle,
             accessLevel: row.accessLevel,
-            files: row.files,
+            files: postFiles,
           }),
         });
         const data = await res.json().catch(() => ({}));

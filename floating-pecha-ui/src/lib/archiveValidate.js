@@ -6,6 +6,15 @@ export const requiredInstanceFiles = (instanceId) => [
   `${instanceId}${SESSIONS_SUFFIX}`,
 ];
 
+// Pipeline byproducts that ship inside an instance ZIP but that nothing in the
+// app ever reads. They are skipped on upload so they neither inflate the publish
+// payload nor accumulate in R2.
+export const UNUSED_ARCHIVE_FILES = new Set([
+  "annotations.json",
+  "transcription_annotations.json",
+  "id_migrations.json",
+]);
+
 /**
  * Validate one instance's manifest + compiled sessions.
  * Core rule: every syl_uuid referenced by a session must exist in the manifest.
