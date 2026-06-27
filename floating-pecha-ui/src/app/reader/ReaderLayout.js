@@ -58,28 +58,8 @@ const ReaderLayout = forwardRef(function ReaderLayout(
   if (isMobile) {
     return (
       <div className="flex flex-row h-[calc(100dvh-64px)] mt-16 relative">
-        {/* Left reveal button (only when the drawer is closed). The whole
-            full-height strip is tappable; the gold icon sits directly on the bar
-            so it reads as a control rather than a decorative border. */}
-        {showLeftReveal && (
-          <button
-            type="button"
-            onClick={onRevealLeft}
-            title="Show contents"
-            aria-label="Show table of contents"
-            className="h-full w-8 flex-shrink-0 border-r r-sidebar r-text-muted active:bg-black/5 transition-colors flex items-start justify-center pt-3"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
-              fill="none" stroke="currentColor" strokeWidth="2"
-              strokeLinecap="round" strokeLinejoin="round"
-            >
-              <rect width="18" height="18" x="3" y="3" rx="2" />
-              <path d="M9 3v18" />
-              <path d="m14 9 3 3-3 3" />
-            </svg>
-          </button>
-        )}
+        {/* No left sapche sidebar/drawer on mobile — the floating tornado button
+            (in page.js) opens the fullscreen Sapche study view directly. */}
 
         {/* Main scrollable text — full width */}
         <div
@@ -90,26 +70,6 @@ const ReaderLayout = forwardRef(function ReaderLayout(
         >
           {children}
         </div>
-
-        {/* TOC drawer + backdrop */}
-        {leftOpen && leftSidebar && (
-          <div
-            className="fixed inset-0 z-[80] bg-black/40"
-            onClick={onCloseLeft}
-            aria-hidden="true"
-          />
-        )}
-        <aside
-          className="fixed top-16 bottom-0 left-0 z-[85] overflow-y-auto border-r r-sidebar"
-          style={{
-            width: 'min(85vw, 320px)',
-            transform: leftOpen && leftSidebar ? 'translateX(0)' : 'translateX(-100%)',
-            transition: 'transform .25s ease',
-            overscrollBehavior: 'contain',
-          }}
-        >
-          {leftSidebar}
-        </aside>
 
         {/* Player/Info bottom sheet + backdrop */}
         {sidebarOpen && (

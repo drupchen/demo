@@ -8,8 +8,7 @@
 import { inter, sapcheAccentFor, sapcheInk, uchen } from "@/lib/theme";
 import { collectCollapsibleIds, flattenVisibleRows } from "@/lib/sapcheStudy";
 import SapcheNumber from "./SapcheNumber";
-import TocModeIcon, { TOC_MODE_LABEL } from "./TocModeIcon";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // All rows share one uchen size (no longer depth-scaled); the reader controls it
 // with the +/- buttons in the header, clamped to [MIN, MAX].
@@ -17,6 +16,27 @@ const STUDY_FONT_DEFAULT = 24;
 const STUDY_FONT_MIN = 14;
 const STUDY_FONT_MAX = 40;
 const STUDY_FONT_STEP = 2;
+
+// Single chevron glyph for the directional pad, rotated per direction.
+function DpadChevron({ dir }) {
+  const rot = { up: 0, right: 90, down: 180, left: 270 }[dir] || 0;
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ transform: `rotate(${rot}deg)` }}
+      aria-hidden="true"
+    >
+      <polyline points="18 15 12 9 6 15" />
+    </svg>
+  );
+}
 
 function StudyRow({
   node,
@@ -76,6 +96,33 @@ function StudyRow({
         >
           {node.title}
         </span>
+        {focusedId === node.id && kids.length > 0 && (
+          <span
+            className="r-study-childcount"
+            title={`${kids.length} subsection${kids.length === 1 ? "" : "s"}`}
+            aria-label={`${kids.length} subsection${kids.length === 1 ? "" : "s"}`}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 5H2" />
+              <path d="M6 12h12" />
+              <path d="M9 19h6" />
+              <path d="M16 5h6" />
+              <path d="M19 8V2" />
+            </svg>
+            <span className="r-study-childcount-n">{kids.length}</span>
+          </span>
+        )}
         {focusedId === node.id && node.startSylId && (
           <button
             type="button"
@@ -89,8 +136,8 @@ function StudyRow({
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              width="18"
-              height="18"
+              width="24"
+              height="24"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -99,9 +146,9 @@ function StudyRow({
               strokeLinejoin="round"
               aria-hidden="true"
             >
-              <path d="M3 5v14" />
-              <path d="M21 12H7" />
-              <path d="m15 18 6-6-6-6" />
+              <path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6" />
+              <path d="m21 3-9 9" />
+              <path d="M15 3h6v6" />
             </svg>
           </button>
         )}
@@ -149,12 +196,21 @@ export default function SapcheStudyView({
   const top = useMemo(() => roots[0]?.children || [], [roots]); // skip the document root
   const [collapsed, setCollapsed] = useState(() => new Set()); // all expanded on open
   const [focusedId, setFocusedId] = useState(() => activeId || top[0]?.id || null);
-  // Outline mode for the tri-state button. "centered" (default) pins the focused
-  // level to a center band, folds the tree around it, and steps on scroll/swipe.
-  const [studyMode, setStudyMode] = useState("centered");
+  // The study view is centered-only: the focused level is pinned to a center
+  // band, the tree folds around it, and it steps on scroll/swipe/arrows.
+  const [studyMode] = useState("centered");
   // Centered mode translates the outline column so the selected row sits exactly
   // on the band (deterministic — no native scroll). px offset of `.r-study-col`.
   const [centerOffset, setCenterOffset] = useState(0);
+  // Transient overscroll nudge for the centered column: a small tug in the
+  // attempted direction that snaps back when there is no sibling (up/down) or no
+  // deeper/shallower level (left/right) to move to. { x, y } px.
+  const [bounce, setBounce] = useState({ x: 0, y: 0 });
+  // Horizontal auto-centering of the focused node (so deep indentation stays on
+  // screen), plus a manual pan offset added by a double-tap-drag.
+  const [centerOffsetX, setCenterOffsetX] = useState(0);
+  const [panX, setPanX] = useState(0);
+  const [isPanning, setIsPanning] = useState(false);
   // Uniform uchen size for every row, adjusted by the header +/- buttons.
   const [fontSize, setFontSize] = useState(STUDY_FONT_DEFAULT);
   const adjustFontSize = useCallback((delta) => {
@@ -166,26 +222,27 @@ export default function SapcheStudyView({
   // popover came from hover (closes on mouseleave) or Space (sticky, follows
   // arrow navigation until toggled off).
   const [preview, setPreview] = useState(null);
-  // Ancestor chain (root → current) of the topmost visible row — the sticky
-  // breadcrumb that answers "where am I?" deep inside an expanded subtree.
-  const [crumbs, setCrumbs] = useState([]);
+  // Transient "activated" flash for the D-pad: holds the last-acted direction
+  // ("up"/"down"/"left"/"right") for ~180ms, then reverts to the faded resting
+  // state. Driven by every nav input (keys, click, drag, wheel).
+  const [dpadFlash, setDpadFlash] = useState(null);
+  const dpadTimerRef = useRef(null);
   const previewSourceRef = useRef(null);
   const hoverTimerRef = useRef(null);
   const overlayRef = useRef(null);
   const treeRef = useRef(null);
   const bodyRef = useRef(null);
-  const breadcrumbRef = useRef(null);
+  // Latest nav fns, so the once-subscribed centered touch handler can drive them
+  // without re-subscribing mid-gesture.
+  const navLeftRef = useRef(null);
+  const navRightRef = useRef(null);
+  const centeredStepRef = useRef(null);
+  const bounceTimerRef = useRef(null);
 
   const { rows, parentOf } = useMemo(
     () => flattenVisibleRows(top, collapsed),
     [top, collapsed]
   );
-  // Latest rows for the Centered stepper, so its listeners can stay subscribed
-  // across folds (re-subscribing mid-drag would reset the gesture).
-  const rowsRef = useRef(rows);
-  useEffect(() => {
-    rowsRef.current = rows;
-  }, [rows]);
 
 
   // Full-tree maps (independent of the current collapse state) so Centered mode
@@ -204,66 +261,27 @@ export default function SapcheStudyView({
     return { nodeById: byId, fullParentOf: parent };
   }, [top]);
 
-  // Centered fold: keep only the selected node and its ancestors (up to the top)
-  // open, collapsing every other branch — mirrors the reader's centered follow.
+  // Centered fold: keep only the selected node's ANCESTORS open (the spine up to
+  // the top), collapsing every other branch — including the selected node itself,
+  // so its children never auto-expand below the band. Expanding a node's children
+  // is explicit only (chevron / Right). Re-applied on every navigation, so moving
+  // to another node minimizes whatever was expanded before.
   const computeCenteredCollapse = useCallback(
     (centerId) => {
       const open = new Set();
-      for (let n = centerId ? nodeById.get(centerId) : null; n; n = fullParentOf.get(n.id) || null) {
+      for (
+        let n = centerId ? fullParentOf.get(centerId) || null : null;
+        n;
+        n = fullParentOf.get(n.id) || null
+      ) {
         open.add(n.id);
       }
       const next = new Set();
       for (const id of collectCollapsibleIds(top)) if (!open.has(id)) next.add(id);
       return next;
     },
-    [top, nodeById, fullParentOf],
+    [top, fullParentOf],
   );
-
-  // Current section = the last row at or above the body's top edge (same
-  // convention as the reader's active-section tracking).
-  const updateCrumbs = () => {
-    const body = bodyRef.current;
-    if (!body) return;
-    const rect = body.getBoundingClientRect();
-    // In Centered mode the "current" node is the one on the center band; in the
-    // other modes it's the topmost row (offset must exceed the rows'
-    // scroll-margin-block, 80px, so a jump target counts as "current").
-    const anchorLine =
-      studyMode === "centered" ? rect.top + rect.height / 2 : rect.top + 90;
-    let current = null;
-    for (const n of rows) {
-      const el = document.getElementById(`study-${n.id}`);
-      if (!el) continue;
-      if (el.getBoundingClientRect().top <= anchorLine) current = n;
-      else break;
-    }
-    const chain = [];
-    for (let walk = current; walk; walk = parentOf.get(walk.id) || null) {
-      chain.unshift(walk);
-    }
-    setCrumbs((prev) =>
-      prev.length === chain.length && prev.every((n, i) => n.id === chain[i].id)
-        ? prev
-        : chain
-    );
-  };
-
-  // Recompute after every layout change (collapse/expand re-flows the rows);
-  // rAF waits for the DOM to reflect the new row set first.
-  useEffect(() => {
-    const raf = requestAnimationFrame(updateCrumbs);
-    return () => cancelAnimationFrame(raf);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows]);
-
-  // A deep path (root → current) can't always fit on one line. The rightmost
-  // crumb is the current section — the one that matters most — so pin the
-  // horizontal scroll to the right edge; ancestors stay reachable by scrolling
-  // left. No-op when the path already fits.
-  useEffect(() => {
-    const el = breadcrumbRef.current;
-    if (el) el.scrollLeft = el.scrollWidth;
-  }, [crumbs]);
 
   const onToggle = (id) => {
     setFocusedId(id); // chevron clicks move the focus ring too, so mouse and keyboard stay in step
@@ -274,18 +292,6 @@ export default function SapcheStudyView({
       return next;
     });
   };
-  // Three-way mode control (in the header): pick a mode directly. Expand/collapse
-  // set the collapse set; centered slides in from a known position (the fold is
-  // applied by the focusedId effect).
-  const onSetMode = (mode) => {
-    if (mode === studyMode) return;
-    setPreview(null);
-    if (mode === "expand") setCollapsed(new Set());
-    else if (mode === "collapse") setCollapsed(new Set(collectCollapsibleIds(top)));
-    else setCenterOffset(0);
-    setStudyMode(mode);
-  };
-
   // Centered mode: fold the tree around the selected (centered) level as it
   // changes — only its branch + ancestors stay open.
   useEffect(() => {
@@ -313,11 +319,18 @@ export default function SapcheStudyView({
     // Focus the tree (not the dialog): aria-activedescendant is only valid on
     // composite widget roles, and key events still reach the dialog by bubbling.
     treeRef.current?.focus();
-    const target = activeId || top[0]?.id;
-    if (target)
-      document.getElementById(`study-${target}`)?.scrollIntoView({ block: "center" });
+    // Non-centered modes use native scroll to reveal the opening row; centered
+    // mode positions via the recenter loop (its body is overflow:hidden, so
+    // scrollIntoView would be a no-op anyway).
+    if (studyMode !== "centered") {
+      const target = activeId || top[0]?.id;
+      if (target)
+        document.getElementById(`study-${target}`)?.scrollIntoView({ block: "center" });
+    }
     return () => {
       clearTimeout(hoverTimerRef.current);
+      clearTimeout(bounceTimerRef.current);
+      clearTimeout(dpadTimerRef.current);
       prevFocus?.focus?.();
     };
     // Mount-only: the view re-mounts on every open.
@@ -335,68 +348,88 @@ export default function SapcheStudyView({
 
   // Centered mode: deterministically translate the column so the selected row's
   // center lands on the band. Uses transform-independent layout (offsetTop /
-  // clientHeight), so it's exact regardless of fold reflow or timing. Re-runs on
+  // clientHeight), so it's exact regardless of the column transform. Re-runs on
   // selection/fold change and on resize.
   useEffect(() => {
     if (studyMode !== "centered") return;
-    const recenter = () => {
+    let cancelled = false;
+    let raf = 0;
+
+    // The geometry: vertical offset to drop the focused row's middle on the
+    // band, and the horizontal offset that pulls the focused node's box to a
+    // fixed left margin (cancel its indentation) so its title gets the full
+    // width no matter how deep it sits.
+    const measure = () => {
       const body = bodyRef.current;
       const col = treeRef.current;
       const row = focusedId && document.getElementById(`study-${focusedId}`);
-      if (!body || !col || !row) return;
+      if (!body || !col || !row) return null;
       const rowMid = col.offsetTop + row.offsetTop + row.offsetHeight / 2;
-      setCenterOffset(body.clientHeight / 2 - rowMid);
+      const depth = nodeById.get(focusedId)?.depth || 1;
+      const indent = 24 + (depth - 1) * 28; // body padding + per-level indent
+      const LEFT_ANCHOR = 24; // keep the focused row near the left edge
+      return { y: body.clientHeight / 2 - rowMid, x: LEFT_ANCHOR - indent };
     };
-    recenter();
-    window.addEventListener("resize", recenter);
-    return () => window.removeEventListener("resize", recenter);
-  }, [focusedId, rows, studyMode, fontSize]);
+    const apply = (m) => {
+      if (!m) return;
+      setCenterOffset(m.y);
+      setCenterOffsetX(m.x);
+    };
 
-  // Centered mode has no scroll, so derive the breadcrumb from the selected
-  // node's ancestor chain.
-  useEffect(() => {
-    if (studyMode !== "centered") return;
-    const chain = [];
-    for (let n = focusedId ? nodeById.get(focusedId) : null; n; n = fullParentOf.get(n.id) || null) {
-      chain.unshift(n);
-    }
-    setCrumbs((prev) =>
-      prev.length === chain.length && prev.every((n, i) => n.id === chain[i].id)
-        ? prev
-        : chain
-    );
-  }, [studyMode, focusedId, nodeById, fullParentOf]);
+    // Re-apply across frames until the measured geometry is stable, so async
+    // layout shifts AFTER open — the centered-fold reflow and late Uchen webfont
+    // metrics — can't leave the band parked on the wrong row. Mirrors the
+    // reader's pin-until-stable scroll pattern (see page.js handleSapcheSelect).
+    let last = null;
+    let stable = 0;
+    let frames = 0;
+    const settle = () => {
+      if (cancelled) return;
+      const m = measure();
+      if (m) {
+        apply(m);
+        if (last && Math.abs(m.y - last.y) < 0.5 && Math.abs(m.x - last.x) < 0.5)
+          stable += 1;
+        else stable = 0;
+        last = m;
+      }
+      if (stable < 3 && ++frames < 50) raf = requestAnimationFrame(settle);
+    };
+    settle();
+    setPanX(0); // navigation re-centers, dropping any manual double-tap pan
 
-  // Scrolling the tree invalidates the popover's fixed position — drop it —
-  // and moves the breadcrumb's "current" row.
+    // Webfont metrics can land after the settle loop ends; re-measure once more.
+    if (document.fonts?.ready)
+      document.fonts.ready.then(() => {
+        if (!cancelled) apply(measure());
+      });
+
+    const onResize = () => apply(measure());
+    window.addEventListener("resize", onResize);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [focusedId, rows, studyMode, fontSize, nodeById]);
+
+  // Scrolling the tree invalidates the popover's fixed position — drop it.
   const onBodyScroll = () => {
     if (preview) setPreview(null);
-    updateCrumbs();
-  };
-
-  const gotoCrumb = (node) => {
-    setFocusedId(node.id);
-    document.getElementById(`study-${node.id}`)?.scrollIntoView({ block: "start" });
   };
 
   // Centered mode steps one level at a time onto the band. Vertical wheel/drag
-  // moves the selected level; horizontal drag pans natively (touch-action:pan-x).
-  // Subscribes ONCE (reads the live spine via rowsRef) so a drag survives the
-  // per-step fold without losing its gesture anchor. The fold + recenter effects
-  // then park the new level on the band.
+  // moves the selected level (up/down); horizontal drag maps to the left/right
+  // nav actions (collapse/parent, expand/child) — same as the arrow keys.
+  // Subscribes ONCE and drives the latest nav fns via refs, so a drag survives
+  // the per-step fold without losing its gesture anchor. The fold + recenter
+  // effects then park the new level on the band.
   useEffect(() => {
     if (studyMode !== "centered") return;
     const body = bodyRef.current;
     if (!body) return;
-    const STEP_PX = 38; // vertical drag distance per level
-    const moveFocus = (delta) => {
-      setFocusedId((cur) => {
-        const r = rowsRef.current;
-        const i = r.findIndex((n) => n.id === cur);
-        const ni = Math.min(Math.max((i < 0 ? 0 : i) + delta, 0), r.length - 1);
-        return r[ni]?.id ?? cur;
-      });
-    };
+    const STEP_PX = 38; // vertical drag distance per sibling step
+    const STEP_X = 56; // horizontal drag distance per collapse/expand (deliberate)
 
     let wheelLock = false;
     const onWheel = (e) => {
@@ -404,7 +437,7 @@ export default function SapcheStudyView({
       e.preventDefault();
       if (wheelLock || Math.abs(e.deltaY) < 4) return;
       wheelLock = true;
-      moveFocus(e.deltaY > 0 ? 1 : -1);
+      centeredStepRef.current?.(e.deltaY > 0 ? 1 : -1);
       setTimeout(() => {
         wheelLock = false;
       }, 180);
@@ -412,45 +445,248 @@ export default function SapcheStudyView({
 
     // Continuous, distance-based stepping with axis lock.
     let startX = 0;
+    let startY = 0;
+    let lastX = 0;
     let lastY = 0;
     let acc = 0;
-    let axis = null; // null until decided, then "x" (native pan) or "y" (stepping)
+    let accX = 0;
+    let axis = null; // null until decided, then "x" (left/right nav) or "y" (stepping)
+    let xUsed = false; // horizontal: at most ONE level change per gesture
+    let lastTapAt = 0; // for double-tap-drag = manual pan
+    let lastTapX = 0;
+    let lastTapY = 0;
+    let panning = false; // this gesture pans the page instead of navigating
+    let pinched = false; // a 2-finger gesture is in progress (pinch-to-resize)
     const onTouchStart = (e) => {
+      if (e.touches.length >= 2) {
+        // Second finger → a pinch; abandon any single-finger nav/pan this gesture.
+        pinched = true;
+        if (panning) {
+          panning = false;
+          setIsPanning(false);
+        }
+        return;
+      }
       const t = e.touches[0];
       if (!t) return;
-      startX = t.clientX;
-      lastY = t.clientY;
+      startX = lastX = t.clientX;
+      startY = lastY = t.clientY;
       acc = 0;
+      accX = 0;
       axis = null;
+      xUsed = false;
+      const now = Date.now();
+      // Second tap landing quickly near the first → this drag pans the page.
+      panning =
+        now - lastTapAt < 320 &&
+        Math.abs(t.clientX - lastTapX) < 40 &&
+        Math.abs(t.clientY - lastTapY) < 40;
+      lastTapAt = now;
+      lastTapX = t.clientX;
+      lastTapY = t.clientY;
+      if (panning) setIsPanning(true);
+    };
+    const onTouchEnd = (e) => {
+      if (e.touches.length === 0) pinched = false; // all fingers up
+      if (panning) {
+        panning = false;
+        setIsPanning(false);
+      }
     };
     const onTouchMove = (e) => {
+      if (pinched || e.touches.length >= 2) return; // pinch owns this gesture
       const t = e.touches[0];
       if (!t) return;
+      if (panning) {
+        // Free horizontal pan, tracking the finger 1:1 (no easing while panning).
+        e.preventDefault();
+        setPanX((px) => px + (t.clientX - lastX));
+        lastX = t.clientX;
+        return;
+      }
       if (axis === null) {
         const dx = Math.abs(t.clientX - startX);
-        const dy = Math.abs(t.clientY - lastY);
+        const dy = Math.abs(t.clientY - startY);
         if (dx < 6 && dy < 6) return; // wait for a real move
         axis = dx > dy ? "x" : "y";
       }
-      if (axis === "x") return; // horizontal: let the browser pan
       e.preventDefault();
-      acc += lastY - t.clientY; // finger up => positive => next levels
-      lastY = t.clientY;
-      while (Math.abs(acc) >= STEP_PX) {
-        moveFocus(acc > 0 ? 1 : -1);
-        acc -= Math.sign(acc) * STEP_PX;
+      if (axis === "y") {
+        // Up/down moves among SIBLINGS only (snaps back at the first/last one).
+        acc += lastY - t.clientY; // finger up => positive => next sibling
+        lastY = t.clientY;
+        if (Math.abs(acc) >= STEP_PX) {
+          centeredStepRef.current?.(acc > 0 ? 1 : -1);
+          acc = 0;
+        }
+      } else {
+        // Horizontal: drag right => descend one level (open + first child),
+        // drag left => ascend to parent. At most ONE level per gesture, so a
+        // long drag never overshoots deeper than expected.
+        accX += t.clientX - lastX;
+        lastX = t.clientX;
+        if (!xUsed && Math.abs(accX) >= STEP_X) {
+          (accX > 0 ? navRightRef : navLeftRef).current?.();
+          xUsed = true;
+        }
       }
     };
 
     body.addEventListener("wheel", onWheel, { passive: false });
     body.addEventListener("touchstart", onTouchStart, { passive: true });
     body.addEventListener("touchmove", onTouchMove, { passive: false });
+    body.addEventListener("touchend", onTouchEnd, { passive: true });
+    body.addEventListener("touchcancel", onTouchEnd, { passive: true });
     return () => {
       body.removeEventListener("wheel", onWheel);
       body.removeEventListener("touchstart", onTouchStart);
       body.removeEventListener("touchmove", onTouchMove);
+      body.removeEventListener("touchend", onTouchEnd);
+      body.removeEventListener("touchcancel", onTouchEnd);
     };
   }, [studyMode]);
+
+  // Pinch to resize: a two-finger spread/squeeze drives the same font adjustment
+  // as the header +/- buttons. Works in every mode (subscribes once to the body,
+  // which persists across mode changes).
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+    const PINCH_STEP = 26; // change in finger spread (px) per one font step
+    const spread = (e) =>
+      Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY,
+      );
+    let base = null;
+    const onStart = (e) => {
+      if (e.touches.length === 2) base = spread(e);
+    };
+    const onMove = (e) => {
+      if (e.touches.length !== 2) return;
+      e.preventDefault();
+      const d = spread(e);
+      if (base == null) {
+        base = d;
+        return;
+      }
+      while (d - base >= PINCH_STEP) {
+        adjustFontSize(STUDY_FONT_STEP); // spread out → larger
+        base += PINCH_STEP;
+      }
+      while (base - d >= PINCH_STEP) {
+        adjustFontSize(-STUDY_FONT_STEP); // squeeze → smaller
+        base -= PINCH_STEP;
+      }
+    };
+    const onEnd = (e) => {
+      if (e.touches.length < 2) base = null;
+    };
+    body.addEventListener("touchstart", onStart, { passive: true });
+    body.addEventListener("touchmove", onMove, { passive: false });
+    body.addEventListener("touchend", onEnd, { passive: true });
+    body.addEventListener("touchcancel", onEnd, { passive: true });
+    return () => {
+      body.removeEventListener("touchstart", onStart);
+      body.removeEventListener("touchmove", onMove);
+      body.removeEventListener("touchend", onEnd);
+      body.removeEventListener("touchcancel", onEnd);
+    };
+  }, [adjustFontSize]);
+
+  // Briefly light the D-pad (and the acted direction) as if it had been pressed,
+  // then revert to faded. Any nav input calls this, so keys/click/drag/wheel all
+  // get the same momentary feedback.
+  const pulseDpad = useCallback((dir) => {
+    setDpadFlash(dir);
+    clearTimeout(dpadTimerRef.current);
+    dpadTimerRef.current = setTimeout(() => setDpadFlash(null), 180);
+  }, []);
+
+  // Directional navigation, shared by the arrow keys and the on-screen D-pad so
+  // both stay in lock-step. Mode-agnostic: the focus/recenter effects keep the
+  // focused row in view in every mode.
+  const focusRowAt = (i) => {
+    const t = rows[Math.min(Math.max(i, 0), rows.length - 1)];
+    if (t) setFocusedId(t.id);
+  };
+  // Transient overscroll tug that snaps back (centered mode only): the column
+  // nudges in the attempted direction, then the CSS transition eases it home.
+  const BOUNCE_PX = 16;
+  const triggerBounce = (axis, sign) => {
+    if (studyMode !== "centered") return;
+    setBounce(axis === "y" ? { x: 0, y: sign * BOUNCE_PX } : { x: sign * BOUNCE_PX, y: 0 });
+    clearTimeout(bounceTimerRef.current);
+    bounceTimerRef.current = setTimeout(() => setBounce({ x: 0, y: 0 }), 160);
+  };
+
+  // Centered mode: up/down moves among the focused node's SIBLINGS only; at the
+  // first/last sibling it bounces instead of crossing into another branch (use
+  // left/right to change level).
+  const centeredStep = (delta) => {
+    pulseDpad(delta > 0 ? "down" : "up");
+    const parent = fullParentOf.get(focusedId);
+    const sibs = parent ? parent.children || [] : top;
+    const i = sibs.findIndex((n) => n.id === focusedId);
+    if (i < 0) return;
+    const ni = i + delta;
+    if (ni < 0 || ni >= sibs.length) {
+      triggerBounce("y", delta < 0 ? 1 : -1);
+      return;
+    }
+    setFocusedId(sibs[ni].id);
+  };
+
+  const navUp = () => {
+    pulseDpad("up");
+    if (studyMode === "centered") return centeredStep(-1);
+    const idx = rows.findIndex((n) => n.id === focusedId);
+    focusRowAt(idx < 0 ? 0 : idx - 1);
+  };
+  const navDown = () => {
+    pulseDpad("down");
+    if (studyMode === "centered") return centeredStep(1);
+    const idx = rows.findIndex((n) => n.id === focusedId);
+    focusRowAt(idx < 0 ? 0 : idx + 1);
+  };
+  const navLeft = () => {
+    pulseDpad("left");
+    const node = rows.find((n) => n.id === focusedId);
+    if (studyMode === "centered") {
+      // Ascend exactly one level to the parent; snap back at the top level.
+      const parent = node && fullParentOf.get(node.id);
+      if (parent) setFocusedId(parent.id);
+      else triggerBounce("x", 1);
+      return;
+    }
+    const kids = node?.children || [];
+    if (node && kids.length && !collapsed.has(node.id)) onToggle(node.id);
+    else if (node && parentOf.get(node.id)) setFocusedId(parentOf.get(node.id).id);
+  };
+  const navRight = () => {
+    pulseDpad("right");
+    const node = rows.find((n) => n.id === focusedId);
+    const kids = node?.children || [];
+    if (studyMode === "centered") {
+      // Descend exactly one level: open the node if needed AND move onto its
+      // first child in a single step; snap back on a leaf (right-most).
+      if (kids.length) {
+        if (collapsed.has(node.id)) onToggle(node.id);
+        setFocusedId(kids[0].id);
+      } else {
+        triggerBounce("x", -1);
+      }
+      return;
+    }
+    if (node && kids.length) {
+      if (collapsed.has(node.id)) onToggle(node.id);
+      else setFocusedId(kids[0].id);
+    }
+  };
+  // Keep the refs the centered touch handler reads pointed at the latest fns.
+  navLeftRef.current = navLeft;
+  navRightRef.current = navRight;
+  centeredStepRef.current = centeredStep;
 
   const onKeyDown = (e) => {
     if (e.key === "Escape") {
@@ -479,37 +715,25 @@ export default function SapcheStudyView({
       e.stopPropagation();
       return;
     }
-    const idx = rows.findIndex((n) => n.id === focusedId);
-    const node = idx >= 0 ? rows[idx] : null;
-    const focusRow = (i) => {
-      const t = rows[Math.min(Math.max(i, 0), rows.length - 1)];
-      if (t) setFocusedId(t.id);
-    };
     switch (e.key) {
       case "ArrowDown":
-        focusRow(idx < 0 ? 0 : idx + 1);
+        navDown();
         break;
       case "ArrowUp":
-        focusRow(idx < 0 ? 0 : idx - 1);
+        navUp();
         break;
-      case "ArrowLeft": {
-        const kids = node?.children || [];
-        if (node && kids.length && !collapsed.has(node.id)) onToggle(node.id);
-        else if (node && parentOf.get(node.id)) setFocusedId(parentOf.get(node.id).id);
+      case "ArrowLeft":
+        navLeft();
         break;
-      }
-      case "ArrowRight": {
-        const kids = node?.children || [];
-        if (node && kids.length) {
-          if (collapsed.has(node.id)) onToggle(node.id);
-          else setFocusedId(kids[0].id);
-        }
+      case "ArrowRight":
+        navRight();
         break;
-      }
-      case "Enter":
+      case "Enter": {
         // Open the selected section in the reader (same as its arrow button).
+        const node = rows.find((n) => n.id === focusedId);
         if (node) onSelect(node);
         break;
+      }
       case " ":
         // Preview removed; swallow Space so it doesn't scroll the overlay.
         break;
@@ -519,6 +743,9 @@ export default function SapcheStudyView({
     e.preventDefault();
     e.stopPropagation();
   };
+
+  // Keep tree focus when tapping the D-pad so arrow keys keep working after.
+  const keepFocus = (e) => e.preventDefault();
 
   return (
     <div
@@ -533,22 +760,6 @@ export default function SapcheStudyView({
       <div className={`${inter.className} r-study-header`}>
         <span className="uppercase tracking-[0.12em] text-[11px]" style={{ color: "#9a8f76" }}>
           Sapche view
-        </span>
-        {/* Three-way mode switch, centered in the bar; the active mode is sunken. */}
-        <span className="r-study-modes" role="group" aria-label="Outline mode">
-          {["expand", "collapse", "centered"].map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              className={`r-toc-iconbtn ${studyMode === mode ? "r-text-accent r-icon-pressed" : ""}`}
-              onClick={() => onSetMode(mode)}
-              title={TOC_MODE_LABEL[mode]}
-              aria-label={TOC_MODE_LABEL[mode]}
-              aria-pressed={studyMode === mode}
-            >
-              <TocModeIcon mode={mode} />
-            </button>
-          ))}
         </span>
         <span className="flex items-center gap-1">
           <button
@@ -587,30 +798,6 @@ export default function SapcheStudyView({
           </button>
         </span>
       </div>
-      <nav
-        ref={breadcrumbRef}
-        className="r-study-breadcrumb"
-        aria-label="Current section path"
-      >
-        {crumbs.map((n, i) => (
-          <Fragment key={n.id}>
-            {i > 0 && <span className="r-study-crumb-sep">›</span>}
-            <button
-              type="button"
-              className={`${uchen.className} r-study-crumb`}
-              onClick={() => gotoCrumb(n)}
-              title={n.title}
-            >
-              <span
-                className="r-study-crumb-dot"
-                style={{ backgroundColor: sapcheAccentFor(n.depth) }}
-                aria-hidden="true"
-              />
-              <span className="r-study-crumb-txt">{n.title}</span>
-            </button>
-          </Fragment>
-        ))}
-      </nav>
       <div className="r-study-body-wrap">
         {studyMode === "centered" && (
           <div className="r-study-centerband" aria-hidden="true" />
@@ -622,7 +809,7 @@ export default function SapcheStudyView({
         >
           <div
             ref={treeRef}
-            className="r-study-col"
+            className={`r-study-col ${isPanning ? "r-study-col-panning" : ""}`}
             role="tree"
             aria-label="Sapche outline"
             aria-activedescendant={focusedId ? `study-${focusedId}` : undefined}
@@ -630,7 +817,9 @@ export default function SapcheStudyView({
             style={{
               outline: "none",
               transform:
-                studyMode === "centered" ? `translateY(${centerOffset}px)` : undefined,
+                studyMode === "centered"
+                  ? `translate(${centerOffsetX + panX + bounce.x}px, ${centerOffset + bounce.y}px)`
+                  : undefined,
             }}
           >
             {top.map((n) => (
@@ -650,6 +839,55 @@ export default function SapcheStudyView({
               />
             ))}
           </div>
+        </div>
+
+        {/* Ghost directional pad — mirrors the arrow keys, works in all modes.
+            Faint at rest; each nav input briefly flashes it (see reader.css). */}
+        <div
+          className={`r-study-dpad ${dpadFlash ? "r-study-dpad-pulse" : ""}`}
+          role="group"
+          aria-label="Navigate outline"
+        >
+          <button
+            type="button"
+            className={`r-study-dpad-btn r-study-dpad-up ${dpadFlash === "up" ? "r-study-dpad-btn-active" : ""}`}
+            onMouseDown={keepFocus}
+            onClick={navUp}
+            tabIndex={-1}
+            aria-label="Previous line"
+          >
+            <DpadChevron dir="up" />
+          </button>
+          <button
+            type="button"
+            className={`r-study-dpad-btn r-study-dpad-left ${dpadFlash === "left" ? "r-study-dpad-btn-active" : ""}`}
+            onMouseDown={keepFocus}
+            onClick={navLeft}
+            tabIndex={-1}
+            aria-label="Collapse or go to parent"
+          >
+            <DpadChevron dir="left" />
+          </button>
+          <button
+            type="button"
+            className={`r-study-dpad-btn r-study-dpad-right ${dpadFlash === "right" ? "r-study-dpad-btn-active" : ""}`}
+            onMouseDown={keepFocus}
+            onClick={navRight}
+            tabIndex={-1}
+            aria-label="Expand or go to first child"
+          >
+            <DpadChevron dir="right" />
+          </button>
+          <button
+            type="button"
+            className={`r-study-dpad-btn r-study-dpad-down ${dpadFlash === "down" ? "r-study-dpad-btn-active" : ""}`}
+            onMouseDown={keepFocus}
+            onClick={navDown}
+            tabIndex={-1}
+            aria-label="Next line"
+          >
+            <DpadChevron dir="down" />
+          </button>
         </div>
       </div>
     </div>

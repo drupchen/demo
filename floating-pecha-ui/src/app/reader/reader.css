@@ -347,21 +347,28 @@
     box-shadow:0 24px 64px rgba(0,0,0,0.22); overflow:hidden;
   }
 }
+/* Landscape phones (wide but short) keep the study view full-screen, not the
+   desktop floating panel. Mirrors useIsMobile's landscape rule. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .r-study-overlay {
+    inset:0; width:auto; margin-inline:0;
+    border:0; border-radius:0; box-shadow:none;
+  }
+}
 .r-study-header { position:relative; display:flex; align-items:center; justify-content:space-between;
   padding:14px 24px; background:#F2EFE8; border-bottom:1px solid #e0dccf; }
-/* Three-way mode switch, centered in the header bar (over the title/close row). */
-.r-study-modes { position:absolute; left:50%; transform:translateX(-50%);
-  display:flex; align-items:center; gap:6px; }
 /* Body wrapper: the center band is fixed to the body's middle while the body
    scrolls inside it (Centered mode). */
 .r-study-body-wrap { position:relative; flex:1; display:flex; }
-.r-study-body { position:absolute; inset:0; overflow:auto; overscroll-behavior:contain; padding:40px 24px 30vh; }
-/* Centered mode snaps one level at a time onto the band. Vertical is driven by the
-   column transform (no native Y scroll); horizontal scrolls natively for wide,
-   deeply-indented trees. touch-action:pan-x lets the browser own horizontal
-   panning while JS owns vertical (the level stepper). */
-.r-study-body-centered { overflow-x:auto; overflow-y:hidden; touch-action:pan-x; padding:0 24px; }
+.r-study-body { position:absolute; inset:0; overflow:auto; overscroll-behavior:contain; padding:40px 24px 30vh; touch-action:pan-y; }
+/* Centered mode snaps one level at a time onto the band. Both axes are driven by
+   the column transform (no native scroll): vertical = the level stepper,
+   horizontal = auto-centering the focused node so deep indentation stays on
+   screen. Manual panning is a deliberate double-tap-drag. */
+.r-study-body-centered { overflow:hidden; touch-action:none; padding:0 24px; }
 .r-study-body-centered .r-study-col { transition:transform 0.25s ease; will-change:transform; }
+/* No easing while actively panning (double-tap-drag), so it tracks the finger. */
+.r-study-body-centered .r-study-col.r-study-col-panning { transition:none; }
 /* Full-width gray band marking the center line; text scrolls over it. */
 .r-study-centerband { position:absolute; left:0; right:0; top:50%; transform:translateY(-50%);
   height:64px; background:#F4F4F5; pointer-events:none; z-index:0; }
@@ -385,23 +392,38 @@
 .r-study-accent { width:5px; align-self:stretch; border-radius:3px; flex:none; min-height:1.6em; }
 /* "Open in reader" affordance, shown right after the selected node's title. */
 .r-study-goto { flex:none; display:inline-flex; align-items:center;
-  padding:4px 6px; color:#9a8f76; background:none; border:0; cursor:pointer; border-radius:4px; }
-.r-study-goto:hover { color:var(--reader-accent, #D4AF37); background:rgba(0,0,0,0.05); }
-/* Sticky breadcrumb under the header: ancestor path of the topmost visible row */
-.r-study-breadcrumb { display:flex; align-items:center; gap:4px; overflow-x:auto;
-  padding:6px 24px; min-height:38px; background:#FBF9F3; border-bottom:1px solid #e0dccf;
-  /* Stays scrollable, but the bar is hidden: a classic x-scrollbar that
-     appears/disappears as the path depth changes reflows the body and
-     glitches the scroll. */
-  scrollbar-width:none; -ms-overflow-style:none; }
-.r-study-breadcrumb::-webkit-scrollbar { display:none; }
-.r-study-crumb { display:inline-flex; align-items:center; gap:7px; max-width:240px;
-  background:none; border:0; cursor:pointer; padding:3px 6px; border-radius:4px;
-  font-size:15px; line-height:1.6; color:#423c33; }
-.r-study-crumb:hover { color:#8B1D1D; background:rgba(0,0,0,0.04); }
-.r-study-crumb-txt { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.r-study-crumb-dot { width:8px; height:8px; border-radius:2px; flex:none; }
-.r-study-crumb-sep { color:#9a8f76; font-size:12px; flex:none; }
+  padding:4px 6px; color:var(--reader-accent, #D4AF37); background:none; border:0;
+  cursor:pointer; border-radius:4px; }
+.r-study-goto:hover { color:var(--reader-accent, #D4AF37); background:rgba(212,175,55,0.14); }
+/* list-tree icon + subsection count, shown left of the goto on the focused row */
+.r-study-childcount { flex:none; display:inline-flex; align-items:center; gap:3px;
+  padding:2px 5px; color:#9a8f76; font-size:12px; line-height:1; }
+.r-study-childcount-n { font-weight:600; font-variant-numeric:tabular-nums; }
+/* Ghost directional pad: four chevrons in a dashed ring, floating over the tree
+   pane. Nearly invisible until hover/focus; mirrors the arrow keys in all modes. */
+.r-study-dpad { position:absolute; right:36px; top:48px; z-index:60;
+  width:104px; height:104px; display:grid;
+  grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr);
+  border:1px dashed rgba(120,110,90,0.6); border-radius:50%;
+  opacity:0.4; transition:opacity 160ms ease; }
+/* Mouse-only reveal (guarded so it never sticks after a tap on touch devices). */
+@media (hover: hover) {
+  .r-study-dpad:hover, .r-study-dpad:focus-within { opacity:1; }
+  .r-study-dpad-btn:hover { color:var(--reader-accent, #D4AF37); background:rgba(0,0,0,0.06); }
+}
+/* Transient "activated" flash, driven from JS on every nav input (keys, click,
+   drag, wheel); reverts to the faded resting state after ~180ms. Compound
+   selectors so they outrank the mobile opacity rule below. */
+.r-study-dpad.r-study-dpad-pulse { opacity:1; }
+.r-study-dpad-btn.r-study-dpad-btn-active { color:var(--reader-accent, #D4AF37); background:rgba(0,0,0,0.06); }
+.r-study-dpad-btn { display:inline-flex; align-items:center; justify-content:center;
+  width:30px; height:30px; padding:0; background:none; border:0; cursor:pointer;
+  color:#6b6453; border-radius:6px; place-self:center;
+  transition:background 160ms ease, color 160ms ease; }
+.r-study-dpad-up { grid-column:2; grid-row:1; }
+.r-study-dpad-left { grid-column:1; grid-row:2; }
+.r-study-dpad-right { grid-column:3; grid-row:2; }
+.r-study-dpad-down { grid-column:2; grid-row:3; }
 /* Section-text preview popover (fixed-positioned next to the hovered/focused row) */
 .r-study-preview { position:fixed; z-index:110; max-width:560px; padding:14px 18px;
   background:#FFFDF8; border:1px solid #e0dccf; border-radius:8px;
@@ -410,10 +432,10 @@
 @media (max-width: 640px) {
   .r-study-body { padding:24px 10px 30vh; }
   .r-study-num { min-width:36px; }
-  /* Tighter breadcrumb so the pinned-right current section keeps room for a
-     glimpse of its parent on narrow screens. */
-  .r-study-breadcrumb { padding:6px 12px; }
-  .r-study-crumb { max-width:180px; }
+  /* Touch has no hover: keep the D-pad faintly visible with larger hit targets,
+     in thumb reach at the bottom-right. */
+  .r-study-dpad { opacity:0.5; width:116px; height:116px; right:24px; top:36px; }
+  .r-study-dpad-btn { width:38px; height:38px; }
 }
 
 /* --- Playback speed slider --- */

@@ -2639,6 +2639,31 @@ function ReaderContent() {
         />
       )}
 
+      {/* Mobile: floating tornado opens the fullscreen Sapche study view (replaces
+          the sapche sidebar/drawer). Sits below the fixed h-16 (64px) navbar with
+          a 12px gap, matching its 12px gap from the left edge (left-3). */}
+      {isMobile && sapche && !studyOpen && !sidebarOpen && (
+        <button
+          type="button"
+          onClick={() => setStudyOpen(true)}
+          title="Sapche view"
+          aria-label="Open Sapche view"
+          className="fixed top-[76px] left-3 z-[75] p-2 rounded-full r-sidebar border r-border r-text-accent shadow-md active:bg-black/5"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" strokeWidth="2"
+            strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+          >
+            <path d="M21 4H3" />
+            <path d="M18 8H6" />
+            <path d="M19 12H9" />
+            <path d="M16 16h-6" />
+            <path d="M11 20H9" />
+          </svg>
+        </button>
+      )}
+
       {/* Mobile: thumb-zone audio bar (only when audio is loaded). */}
       {isMobile && !sidebarOpen && (
         <MobileAudioBar
