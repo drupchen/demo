@@ -16,6 +16,9 @@ const STUDY_FONT_DEFAULT = 24;
 const STUDY_FONT_MIN = 14;
 const STUDY_FONT_MAX = 40;
 const STUDY_FONT_STEP = 2;
+// Horizontal pan moves the text faster than the finger so a long title's overflow
+// is reachable in one swipe.
+const PAN_GAIN = 3.4;
 
 // Single chevron glyph for the directional pad, rotated per direction.
 function DpadChevron({ dir }) {
@@ -46,7 +49,6 @@ function StudyRow({
   centered,
   fontSize,
   onToggle,
-  onSelect,
   onFocusNode,
   onRowEnter,
   onRowLeave,
@@ -123,35 +125,6 @@ function StudyRow({
             <span className="r-study-childcount-n">{kids.length}</span>
           </span>
         )}
-        {focusedId === node.id && node.startSylId && (
-          <button
-            type="button"
-            className="r-study-goto"
-            title="Open in reader"
-            aria-label="Open this section in the reader"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect(node);
-            }}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6" />
-              <path d="m21 3-9 9" />
-              <path d="M15 3h6v6" />
-            </svg>
-          </button>
-        )}
       </div>
       {!isCollapsed &&
         kids.map((c) => (
@@ -164,7 +137,6 @@ function StudyRow({
             centered={centered}
             fontSize={fontSize}
             onToggle={onToggle}
-            onSelect={onSelect}
             onFocusNode={onFocusNode}
             onRowEnter={onRowEnter}
             onRowLeave={onRowLeave}
@@ -232,6 +204,7 @@ export default function SapcheStudyView({
   const overlayRef = useRef(null);
   const treeRef = useRef(null);
   const bodyRef = useRef(null);
+  const bandRef = useRef(null);
   // Latest nav fns, so the once-subscribed centered touch handler can drive them
   // without re-subscribing mid-gesture.
   const navLeftRef = useRef(null);
@@ -318,7 +291,10 @@ export default function SapcheStudyView({
     const prevFocus = document.activeElement;
     // Focus the tree (not the dialog): aria-activedescendant is only valid on
     // composite widget roles, and key events still reach the dialog by bubbling.
-    treeRef.current?.focus();
+    // preventScroll: focusing the column would otherwise make the browser scroll
+    // the (overflow:hidden) centered body to reveal it, leaving body.scrollTop > 0
+    // and shifting the transform-positioned row off the center band.
+    treeRef.current?.focus({ preventScroll: true });
     // Non-centered modes use native scroll to reveal the opening row; centered
     // mode positions via the recenter loop (its body is overflow:hidden, so
     // scrollIntoView would be a no-op anyway).
@@ -365,51 +341,67 @@ export default function SapcheStudyView({
       const row = focusedId && document.getElementById(`study-${focusedId}`);
       if (!body || !col || !row) return null;
       const rowMid = col.offsetTop + row.offsetTop + row.offsetHeight / 2;
+      // Target the band's REAL center, not clientHeight/2: on mobile the centered
+      // body carries a top padding (see reader.css max-width:640px), so the band
+      // (CSS top:50%) no longer sits at clientHeight/2. The band isn't moved by
+      // the column transform, so its rect is a stable target; measure it in the
+      // same body-relative frame as rowMid (both from the body's top).
+      const bodyRect = body.getBoundingClientRect();
+      const band = bandRef.current?.getBoundingClientRect();
+      const bandCenter = band
+        ? band.top + band.height / 2 - bodyRect.top
+        : body.clientHeight / 2;
       const depth = nodeById.get(focusedId)?.depth || 1;
-      const indent = 24 + (depth - 1) * 28; // body padding + per-level indent
-      const LEFT_ANCHOR = 24; // keep the focused row near the left edge
-      return { y: body.clientHeight / 2 - rowMid, x: LEFT_ANCHOR - indent };
+      const indent = 24 + (depth - 1) * 28; // col padding-left + per-level row indent
+      // Land the focused node's accent bar a quarter of the panel width in from
+      // its left edge (both mobile and desktop), so the text reads more toward
+      // center. Convert that target into the column's frame by subtracting the
+      // body's left padding and the row's indentation (padding read live so it's
+      // exact across breakpoints).
+      const targetFromPanel = bodyRect.width / 4;
+      const bodyPadL = parseFloat(getComputedStyle(body).paddingLeft) || 0;
+      const x = targetFromPanel - bodyPadL - indent;
+      return { y: bandCenter - rowMid, x };
     };
-    const apply = (m) => {
-      if (!m) return;
-      setCenterOffset(m.y);
-      setCenterOffsetX(m.x);
-    };
-
-    // Re-apply across frames until the measured geometry is stable, so async
-    // layout shifts AFTER open — the centered-fold reflow and late Uchen webfont
-    // metrics — can't leave the band parked on the wrong row. Mirrors the
-    // reader's pin-until-stable scroll pattern (see page.js handleSapcheSelect).
-    let last = null;
-    let stable = 0;
-    let frames = 0;
-    const settle = () => {
+    const apply = () => {
       if (cancelled) return;
+      // Centered mode is transform-driven and must never carry a native scroll;
+      // a stray scrollTop (e.g. from focus/scrollIntoView revealing the column)
+      // would offset every transform-positioned row off the band. Keep it at 0.
+      const body = bodyRef.current;
+      if (body) {
+        body.scrollTop = 0;
+        body.scrollLeft = 0;
+      }
       const m = measure();
       if (m) {
-        apply(m);
-        if (last && Math.abs(m.y - last.y) < 0.5 && Math.abs(m.x - last.x) < 0.5)
-          stable += 1;
-        else stable = 0;
-        last = m;
+        setCenterOffset(m.y);
+        setCenterOffsetX(m.x);
       }
-      if (stable < 3 && ++frames < 50) raf = requestAnimationFrame(settle);
     };
-    settle();
+
+    apply();
     setPanX(0); // navigation re-centers, dropping any manual double-tap pan
+    // Re-pin after the synchronous fold reflow settles (next two frames).
+    raf = requestAnimationFrame(() => requestAnimationFrame(apply));
 
-    // Webfont metrics can land after the settle loop ends; re-measure once more.
-    if (document.fonts?.ready)
-      document.fonts.ready.then(() => {
-        if (!cancelled) apply(measure());
-      });
+    // Re-pin whenever the layout actually changes SIZE — the centered-fold
+    // collapse re-flowing the column, late Uchen webfont metrics, or a mobile
+    // viewport/chrome change resizing the body. This is what makes the on-open
+    // position reliable on mobile, where that settling reflow can land after the
+    // initial frames. Re-pinning sets a transform (not a size), so it can't
+    // feed back into the observer.
+    const ro = new ResizeObserver(apply);
+    if (bodyRef.current) ro.observe(bodyRef.current);
+    if (treeRef.current) ro.observe(treeRef.current);
+    if (document.fonts?.ready) document.fonts.ready.then(apply);
 
-    const onResize = () => apply(measure());
-    window.addEventListener("resize", onResize);
+    window.addEventListener("resize", apply);
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf);
-      window.removeEventListener("resize", onResize);
+      ro.disconnect();
+      window.removeEventListener("resize", apply);
     };
   }, [focusedId, rows, studyMode, fontSize, nodeById]);
 
@@ -498,9 +490,10 @@ export default function SapcheStudyView({
       const t = e.touches[0];
       if (!t) return;
       if (panning) {
-        // Free horizontal pan, tracking the finger 1:1 (no easing while panning).
+        // Free horizontal pan (no easing while panning), amplified so a long
+        // title's overflow is reachable in one swipe.
         e.preventDefault();
-        setPanX((px) => px + (t.clientX - lastX));
+        setPanX((px) => px + (t.clientX - lastX) * PAN_GAIN);
         lastX = t.clientX;
         return;
       }
@@ -546,41 +539,72 @@ export default function SapcheStudyView({
     };
   }, [studyMode]);
 
-  // Pinch to resize: a two-finger spread/squeeze drives the same font adjustment
-  // as the header +/- buttons. Works in every mode (subscribes once to the body,
-  // which persists across mode changes).
+  // Two-finger gestures, locked to one intent per gesture:
+  //  - spread/squeeze  → font resize (same as the header +/- buttons)
+  //  - drag together   → horizontal pan, to reveal a title that overflows the
+  //                      panel's right edge (feeds the same panX as double-tap-drag)
+  // Disambiguated by which crosses its threshold first, so the pan no longer gets
+  // swallowed by pinch. Works in every mode (panX only affects centered).
   useEffect(() => {
     const body = bodyRef.current;
     if (!body) return;
     const PINCH_STEP = 26; // change in finger spread (px) per one font step
+    const PINCH_TRIGGER = 12; // spread change (px) that locks the gesture to pinch
+    const PAN_TRIGGER = 10; // centroid shift (px) that locks the gesture to pan
     const spread = (e) =>
       Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY,
       );
-    let base = null;
+    const centroidX = (e) => (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    let base = null; // baseline finger spread
+    let startCx = 0; // centroid X at gesture start (pan threshold ref)
+    let lastCx = 0; // last centroid X (pan delta)
+    let mode = null; // null until decided, then "pinch" or "pan"
     const onStart = (e) => {
-      if (e.touches.length === 2) base = spread(e);
+      if (e.touches.length === 2) {
+        base = spread(e);
+        startCx = lastCx = centroidX(e);
+        mode = null;
+      }
     };
     const onMove = (e) => {
       if (e.touches.length !== 2) return;
       e.preventDefault();
       const d = spread(e);
+      const cx = centroidX(e);
       if (base == null) {
         base = d;
+        startCx = lastCx = cx;
         return;
       }
-      while (d - base >= PINCH_STEP) {
-        adjustFontSize(STUDY_FONT_STEP); // spread out → larger
-        base += PINCH_STEP;
+      if (mode === null) {
+        if (Math.abs(d - base) >= PINCH_TRIGGER) mode = "pinch";
+        else if (Math.abs(cx - startCx) >= PAN_TRIGGER) {
+          mode = "pan";
+          setIsPanning(true); // 1:1 tracking, no transition easing while panning
+        } else return; // not enough movement yet to tell pinch from pan
       }
-      while (base - d >= PINCH_STEP) {
-        adjustFontSize(-STUDY_FONT_STEP); // squeeze → smaller
-        base -= PINCH_STEP;
+      if (mode === "pinch") {
+        while (d - base >= PINCH_STEP) {
+          adjustFontSize(STUDY_FONT_STEP); // spread out → larger
+          base += PINCH_STEP;
+        }
+        while (base - d >= PINCH_STEP) {
+          adjustFontSize(-STUDY_FONT_STEP); // squeeze → smaller
+          base -= PINCH_STEP;
+        }
+      } else {
+        setPanX((px) => px + (cx - lastCx) * PAN_GAIN);
+        lastCx = cx;
       }
     };
     const onEnd = (e) => {
-      if (e.touches.length < 2) base = null;
+      if (e.touches.length < 2) {
+        base = null;
+        if (mode === "pan") setIsPanning(false);
+        mode = null;
+      }
     };
     body.addEventListener("touchstart", onStart, { passive: true });
     body.addEventListener("touchmove", onMove, { passive: false });
@@ -747,6 +771,9 @@ export default function SapcheStudyView({
   // Keep tree focus when tapping the D-pad so arrow keys keep working after.
   const keepFocus = (e) => e.preventDefault();
 
+  // The currently-centered node, for the floating "open in reader" button.
+  const focusedNode = nodeById.get(focusedId);
+
   return (
     <div
       ref={overlayRef}
@@ -800,7 +827,7 @@ export default function SapcheStudyView({
       </div>
       <div className="r-study-body-wrap">
         {studyMode === "centered" && (
-          <div className="r-study-centerband" aria-hidden="true" />
+          <div ref={bandRef} className="r-study-centerband" aria-hidden="true" />
         )}
         <div
           ref={bodyRef}
@@ -816,9 +843,12 @@ export default function SapcheStudyView({
             tabIndex={-1}
             style={{
               outline: "none",
+              // Round to whole pixels: the column is a promoted (will-change)
+              // layer, and a sub-pixel translate makes its rasterized text blurry
+              // on 1× displays. State stays precise; only the paint is rounded.
               transform:
                 studyMode === "centered"
-                  ? `translate(${centerOffsetX + panX + bounce.x}px, ${centerOffset + bounce.y}px)`
+                  ? `translate(${Math.round(centerOffsetX + panX + bounce.x)}px, ${Math.round(centerOffset + bounce.y)}px)`
                   : undefined,
             }}
           >
@@ -832,7 +862,6 @@ export default function SapcheStudyView({
                 centered={studyMode === "centered"}
                 fontSize={fontSize}
                 onToggle={onToggle}
-                onSelect={onSelect}
                 onFocusNode={setFocusedId}
                 onRowEnter={onRowEnter}
                 onRowLeave={onRowLeave}
@@ -840,6 +869,37 @@ export default function SapcheStudyView({
             ))}
           </div>
         </div>
+
+        {/* "Open in reader" for the focused node — pinned to the panel's right
+            edge on the center band (the focused row always sits there), overlaid
+            on the text so it's reachable even when a long title would push an
+            inline button off-screen. */}
+        {focusedNode?.startSylId && (
+          <button
+            type="button"
+            className="r-study-goto-float"
+            title="Open in reader"
+            aria-label="Open this section in the reader"
+            onClick={() => onSelect(focusedNode)}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6" />
+              <path d="m21 3-9 9" />
+              <path d="M15 3h6v6" />
+            </svg>
+          </button>
+        )}
 
         {/* Ghost directional pad — mirrors the arrow keys, works in all modes.
             Faint at rest; each nav input briefly flashes it (see reader.css). */}

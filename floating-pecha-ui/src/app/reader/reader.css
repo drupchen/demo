@@ -317,6 +317,8 @@
 .r-toc-iconbtn:hover { color:var(--reader-accent, #D4AF37); background:rgba(0,0,0,0.05); }
 .r-toc-iconbtn:disabled { opacity:0.35; cursor:default; }
 .r-toc-iconbtn:disabled:hover { color:#9a8f76; background:none; }
+/* Plain variant: color-only hover, no background box (matches the other-side icons). */
+.r-toc-iconbtn-plain:hover { background:none; }
 /* Smaller text-size steppers, nudged left so they read apart from the ✕ close. */
 .r-study-fontbtn { padding:2px 4px; }
 .r-study-fontbtn svg { width:14px; height:14px; }
@@ -328,9 +330,6 @@
 @media (max-width: 767px) {
   .r-toc-chevron { width:28px; min-width:28px; font-size:20px; }
   .r-toc-chevron-spacer { width:28px; min-width:28px; }
-  /* Study rows have larger type, so their triangles need to be bigger still. */
-  .r-study-chevron { width:32px; min-width:32px; font-size:26px; }
-  .r-study-row .r-toc-chevron-spacer { width:32px; min-width:32px; }
 }
 
 /* --- Sapche study view (fullscreen) --- */
@@ -377,24 +376,35 @@
    comfortable margin so they don't sit flush against the panel edge. */
 .r-study-col { width:max-content; min-width:100%; margin:0; padding-left:1.5rem;
   position:relative; z-index:1; }
-.r-study-row { display:flex; align-items:center; gap:12px; padding:8px 12px; cursor:pointer;
+.r-study-row { display:flex; align-items:center; gap:2px; padding:8px 12px; cursor:pointer;
   border-radius:6px; scroll-margin-block:80px; }
 .r-study-row:hover { background:rgba(0,0,0,0.04); }
 /* Centered popup view: no hover background on nodes. */
 .r-study-body-centered .r-study-row:hover { background:transparent; }
 .r-study-row-active { background:rgba(139,29,29,0.07); box-shadow:inset 3px 0 0 #8B1D1D; }
 .r-study-row-focused { outline:2px solid rgba(139,29,29,0.45); outline-offset:-2px; }
-.r-study-num { font-size:13px; color:#9a8f76; min-width:52px; text-align:right; }
+.r-study-num { font-size:13px; color:#9a8f76; min-width:0; text-align:left; }
 .r-study-title { line-height:1.7; white-space:nowrap; flex:none; }
-.r-study-chevron { font-size:20px; width:26px; min-width:26px; }
-.r-study-row .r-toc-chevron-spacer { width:26px; min-width:26px; }
+.r-study-chevron { font-size:20px; width:18px; min-width:18px; }
+.r-study-row .r-toc-chevron-spacer { width:18px; min-width:18px; }
+/* Mobile: enlarge the study triangle GLYPH (font-size) so it stays in proportion
+   with the larger node text, while keeping the box tight. Must come AFTER the
+   base rules above — media queries add no specificity, so the cascade is decided
+   by source order. */
+@media (max-width: 767px) {
+  .r-study-chevron { width:22px; min-width:22px; font-size:26px; }
+  .r-study-row .r-toc-chevron-spacer { width:22px; min-width:22px; }
+}
 /* Depth-accent bar (full strength here — no commentary colors in the study view) */
 .r-study-accent { width:5px; align-self:stretch; border-radius:3px; flex:none; min-height:1.6em; }
-/* "Open in reader" affordance, shown right after the selected node's title. */
-.r-study-goto { flex:none; display:inline-flex; align-items:center;
-  padding:4px 6px; color:var(--reader-accent, #D4AF37); background:none; border:0;
-  cursor:pointer; border-radius:4px; }
-.r-study-goto:hover { color:var(--reader-accent, #D4AF37); background:rgba(212,175,55,0.14); }
+/* "Open in reader" for the focused node — pinned to the panel's right edge on the
+   center band and overlaid on the text, so it's always one tap away even when a
+   long title would otherwise push an inline button off-screen. */
+.r-study-goto-float { position:absolute; left:14px; top:50%; transform:translateY(-50%);
+  z-index:65; display:inline-flex; align-items:center; justify-content:center;
+  width:40px; height:40px; border:0; border-radius:9px; cursor:pointer;
+  color:#9a8f76; background:none; }
+.r-study-goto-float:hover { background:rgba(0,0,0,0.06); }
 /* list-tree icon + subsection count, shown left of the goto on the focused row */
 .r-study-childcount { flex:none; display:inline-flex; align-items:center; gap:3px;
   padding:2px 5px; color:#9a8f76; font-size:12px; line-height:1; }
@@ -431,7 +441,7 @@
 .r-study-preview-num { font-size:11px; color:#9a8f76; margin-bottom:6px; }
 @media (max-width: 640px) {
   .r-study-body { padding:24px 10px 30vh; }
-  .r-study-num { min-width:36px; }
+  .r-study-num { min-width:0; }
   /* Touch has no hover: keep the D-pad faintly visible with larger hit targets,
      in thumb reach at the bottom-right. */
   .r-study-dpad { opacity:0.5; width:116px; height:116px; right:24px; top:36px; }

@@ -695,10 +695,6 @@ function ReaderContent() {
   const [studyOpen, setStudyOpen] = useState(false);
   const [tocWidth, setTocWidth] = useState(280);
   const [collapsedIds, setCollapsedIds] = useState(new Set());
-  // TOC outline mode for the single tri-state button: "centered" (default —
-  // follow the active section, folding the tree around it), "expand" (all open),
-  // "collapse" (all closed). Reader scrolling resets it to "centered".
-  const [tocMode, setTocMode] = useState("centered");
   const [activeSectionId, setActiveSectionId] = useState(null);
   // While a sapche click is settling the scroll, ignore scroll-driven active
   // updates so the highlighted row doesn't flicker to intermediate sections.
@@ -1407,9 +1403,8 @@ function ReaderContent() {
   );
 
   // Follow the active section with minimal hierarchy: keep only the active node
-  // and its ancestors open, collapsing every other branch behind us. Because the
-  // active section changes as the reader scrolls, this also resets the tri-state
-  // button back to "centered" (its default mode + icon).
+  // and its ancestors open, collapsing every other branch behind us. The sidebar
+  // is always in this centered mode (the tri-state control was removed).
   useEffect(() => {
     if (!activeSectionId || !idToNode.get(activeSectionId)) return;
     setCollapsedIds((prev) => {
@@ -1420,7 +1415,6 @@ function ReaderContent() {
       }
       return next;
     });
-    setTocMode("centered");
   }, [activeSectionId, idToNode, computeCenteredCollapse]);
 
   // ----------------------------------------
@@ -2253,26 +2247,6 @@ function ReaderContent() {
       return next;
     });
   }, []);
-  const onCollapseAll = useCallback(() => {
-    const ids = new Set();
-    const walk = (n) => { if ((n.children||[]).length) { ids.add(n.id); n.children.forEach(walk); } };
-    (sapche?.roots?.[0]?.children || []).forEach(walk);
-    setCollapsedIds(ids);
-  }, [sapche]);
-  const onExpandAll = useCallback(() => setCollapsedIds(new Set()), []);
-
-  // Single tri-state outline button. Cycles expand -> collapse -> centered and
-  // applies that mode. (Scrolling the reader independently resets it to
-  // "centered" via the follow effect above.)
-  const onCycleTocMode = useCallback(() => {
-    const next =
-      tocMode === "centered" ? "expand" : tocMode === "expand" ? "collapse" : "centered";
-    if (next === "expand") onExpandAll();
-    else if (next === "collapse") onCollapseAll();
-    else setCollapsedIds(computeCenteredCollapse(activeSectionId));
-    setTocMode(next);
-  }, [tocMode, onExpandAll, onCollapseAll, computeCenteredCollapse, activeSectionId]);
-
   const handleSapcheSelect = useCallback((node) => {
     if (!node.startSylId) return;
     // On mobile the TOC is an overlay drawer — close it so the navigated text is
@@ -2492,7 +2466,7 @@ function ReaderContent() {
         leftSidebar={sapche ? (
           <SapcheSidebar roots={sapche.roots} activeId={activeSectionId}
             collapsedIds={collapsedIds} onToggleCollapse={onToggleCollapse}
-            onSelect={handleSapcheSelect} tocMode={tocMode} onCycleTocMode={onCycleTocMode}
+            onSelect={handleSapcheSelect}
             onHide={() => setTocOpen(false)}
             onExpand={() => setStudyOpen(true)} />
         ) : null}

@@ -1,7 +1,6 @@
 "use client";
 import { inter, sapcheAccentFor, sapcheInk, uchen } from "@/lib/theme";
 import SapcheNumber from "./SapcheNumber";
-import TocModeIcon, { TOC_MODE_LABEL } from "./TocModeIcon";
 import { useEffect, useRef } from "react";
 
 function Row({ node, activeId, collapsed, onToggleCollapse, onSelect }) {
@@ -69,13 +68,10 @@ export default function SapcheSidebar({
   collapsedIds,
   onToggleCollapse,
   onSelect,
-  tocMode,
-  onCycleTocMode,
   onHide,
   onExpand,
 }) {
   const top = roots[0]?.children || []; // skip the document root node
-  const modeLabel = TOC_MODE_LABEL[tocMode] || TOC_MODE_LABEL.centered;
   return (
     <div className="flex flex-col h-full">
       <div
@@ -90,7 +86,7 @@ export default function SapcheSidebar({
         <span className="flex items-center gap-0.5">
           <button
             type="button"
-            className="r-toc-iconbtn"
+            className="r-toc-iconbtn r-toc-iconbtn-plain"
             onClick={onExpand}
             title="Sapche view"
             aria-label="Open Sapche view"
@@ -107,27 +103,17 @@ export default function SapcheSidebar({
               strokeLinejoin="round"
               aria-hidden="true"
             >
-              <path d="M3 7V5a2 2 0 0 1 2-2h2" />
-              <path d="M17 3h2a2 2 0 0 1 2 2v2" />
-              <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
-              <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
-              <rect width="10" height="8" x="7" y="8" rx="1" />
+              <path d="M21 4H3" />
+              <path d="M18 8H6" />
+              <path d="M19 12H9" />
+              <path d="M16 16h-6" />
+              <path d="M11 20H9" />
             </svg>
           </button>
           <button
             type="button"
-            className="r-toc-iconbtn"
-            onClick={onCycleTocMode}
-            title={modeLabel}
-            aria-label={`Outline: ${modeLabel} (click to change)`}
-          >
-            <TocModeIcon mode={tocMode} />
-          </button>
-          <button
-            type="button"
-            className="r-toc-iconbtn"
+            className="r-toc-iconbtn r-toc-iconbtn-plain"
             onClick={onHide}
-            title="Hide contents"
             aria-label="Hide contents"
           >
             <svg
