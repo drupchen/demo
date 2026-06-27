@@ -57,11 +57,6 @@ export async function POST(request) {
   } catch {
     return NextResponse.json({ error: "JSON invalide dans manifest/sessions" }, { status: 400 });
   }
-  // Optional files just need to parse if present.
-  for (const [name, text] of Object.entries(files)) {
-    try { JSON.parse(text); }
-    catch { return NextResponse.json({ error: `JSON invalide: ${name}` }, { status: 400 }); }
-  }
   const v = validateInstanceBundle({ instanceId, manifest, sessions });
   if (!v.ok) return NextResponse.json({ error: "Validation échouée", details: v.errors }, { status: 400 });
 
@@ -81,7 +76,10 @@ export async function POST(request) {
     if (!teachingTitle) teachingTitle = m ? m.teachingTitle : "";
   }
 
-  // Write every provided file to R2 (preserve exact text).
+  // Write the validated files to R2 (preserve exact text). Only manifest +
+  // compiled_sessions arrive here now; large non-validated files (transcription
+  // layers, sapche) are streamed separately via PUT [instance]/file to keep this
+  // request small. See ContentUpload.publish().
   for (const [name, text] of Object.entries(files)) {
     await putArchiveText(env, instanceId, name, text);
   }
