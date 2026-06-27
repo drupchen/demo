@@ -383,7 +383,7 @@
 .r-study-body-centered .r-study-row:hover { background:transparent; }
 .r-study-row-active { background:rgba(139,29,29,0.07); box-shadow:inset 3px 0 0 #8B1D1D; }
 .r-study-row-focused { outline:2px solid rgba(139,29,29,0.45); outline-offset:-2px; }
-.r-study-num { font-size:13px; color:#9a8f76; min-width:0; text-align:left; }
+.r-study-num { font-size:13px; color:#9a8f76; min-width:0; text-align:left; margin-inline-end:6px; }
 .r-study-title { line-height:1.7; white-space:nowrap; flex:none; }
 .r-study-chevron { font-size:20px; width:18px; min-width:18px; }
 .r-study-row .r-toc-chevron-spacer { width:18px; min-width:18px; }
@@ -420,6 +420,7 @@
 @media (hover: hover) {
   .r-study-dpad:hover, .r-study-dpad:focus-within { opacity:1; }
   .r-study-dpad-btn:hover { color:var(--reader-accent, #D4AF37); background:rgba(0,0,0,0.06); }
+  .r-study-dpad-info:hover { color:var(--reader-accent, #D4AF37); background:rgba(0,0,0,0.06); }
 }
 /* Transient "activated" flash, driven from JS on every nav input (keys, click,
    drag, wheel); reverts to the faded resting state after ~180ms. Compound
@@ -434,6 +435,29 @@
 .r-study-dpad-left { grid-column:1; grid-row:2; }
 .r-study-dpad-right { grid-column:3; grid-row:2; }
 .r-study-dpad-down { grid-column:2; grid-row:3; }
+/* Info button in the d-pad's empty center cell: opens the navigation help card. */
+.r-study-dpad-info { grid-column:2; grid-row:2; place-self:center;
+  display:inline-flex; align-items:center; justify-content:center;
+  width:26px; height:26px; padding:0; background:none; border:0; cursor:pointer;
+  color:#6b6453; border-radius:50%; transition:background 160ms ease, color 160ms ease; }
+
+/* Navigation help card (opened from the d-pad info button) */
+.r-study-help-backdrop { position:absolute; inset:0; z-index:80;
+  display:grid; place-items:center; background:rgba(42,38,32,0.18); }
+.r-study-help { background:var(--reader-bg-primary, #F9F9F7);
+  border:1px solid #e0dccf; border-radius:12px; box-shadow:0 18px 48px rgba(42,38,32,0.28);
+  padding:20px 24px; display:flex; flex-direction:column; gap:18px; max-width:88%; }
+.r-study-help-row { display:flex; align-items:center; gap:16px; }
+.r-study-help-draw { width:56px; height:56px; flex:none; color:#6b6453; }
+.r-study-help-img { width:64px; height:64px; flex:none; object-fit:contain; }
+.r-study-help-label { font-size:15px; color:#423c33; }
+/* Show the variant matching the layout (mirrors the 768px panel breakpoint). */
+.r-study-help-mobile { display:flex; flex-direction:column; gap:18px; }
+.r-study-help-desktop { display:none; flex-direction:column; gap:18px; }
+@media (min-width: 768px) {
+  .r-study-help-desktop { display:flex; }
+  .r-study-help-mobile { display:none; }
+}
 /* Section-text preview popover (fixed-positioned next to the hovered/focused row) */
 .r-study-preview { position:fixed; z-index:110; max-width:560px; padding:14px 18px;
   background:#FFFDF8; border:1px solid #e0dccf; border-radius:8px;

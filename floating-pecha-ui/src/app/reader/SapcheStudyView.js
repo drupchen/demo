@@ -8,6 +8,7 @@
 import { inter, sapcheAccentFor, sapcheInk, uchen } from "@/lib/theme";
 import { collectCollapsibleIds, flattenVisibleRows } from "@/lib/sapcheStudy";
 import SapcheNumber from "./SapcheNumber";
+import SapcheStudyHelp from "./SapcheStudyHelp";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // All rows share one uchen size (no longer depth-scaled); the reader controls it
@@ -199,6 +200,8 @@ export default function SapcheStudyView({
   // state. Driven by every nav input (keys, click, drag, wheel).
   const [dpadFlash, setDpadFlash] = useState(null);
   const dpadTimerRef = useRef(null);
+  // Navigation help card, opened from the d-pad's center info button.
+  const [helpOpen, setHelpOpen] = useState(false);
   const previewSourceRef = useRef(null);
   const hoverTimerRef = useRef(null);
   const overlayRef = useRef(null);
@@ -716,7 +719,8 @@ export default function SapcheStudyView({
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
-      onClose();
+      if (helpOpen) setHelpOpen(false); // close the help card first
+      else onClose();
       return;
     }
     if (e.key === "Tab") {
@@ -948,7 +952,34 @@ export default function SapcheStudyView({
           >
             <DpadChevron dir="down" />
           </button>
+          <button
+            type="button"
+            className="r-study-dpad-info"
+            onMouseDown={keepFocus}
+            onClick={() => setHelpOpen(true)}
+            tabIndex={-1}
+            aria-label="Navigation help"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4" />
+              <path d="M12 8h.01" />
+            </svg>
+          </button>
         </div>
+
+        <SapcheStudyHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
       </div>
     </div>
   );
