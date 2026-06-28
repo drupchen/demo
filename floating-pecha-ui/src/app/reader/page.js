@@ -2100,9 +2100,19 @@ function ReaderContent() {
         (a, b) => a.localeCompare(b),
       )[0];
       const startSegment = opts.find((o) => o.source_session === firstSession);
-      handleCommentarySelect(firstSession, startSegment, false);
+      if (transcriptionMode) {
+        // Read-along: navigate to the clicked location but keep the view on the
+        // clicked syllable — don't scroll to the segment's first syllable, and
+        // anchor the root text so the read-along follow effect doesn't yank it
+        // back to the transcript. Loads paused; press Play to hear it, just like
+        // a fresh click when the text is first opened.
+        setRootTextScrolledAt(Date.now());
+        handleCommentarySelect(firstSession, startSegment, false, { noScroll: true });
+      } else {
+        handleCommentarySelect(firstSession, startSegment, false);
+      }
     },
-    [annotateMode, activeSylId, syllableMediaMap, handleCommentarySelect],
+    [annotateMode, activeSylId, syllableMediaMap, handleCommentarySelect, transcriptionMode],
   );
 
   // Fires once when playback actually starts (rising edge of isPlaying):
