@@ -544,7 +544,12 @@ const LazyParagraph = React.memo(function LazyParagraph({
             {run.map(renderSyl)}
           </div>,
         );
-        out.push(renderTransBlock(transBlocksByAnchor[runAnchor], runAnchor));
+        // Only the fragment holding the passage's anchor (last) syllable renders
+        // the transcript block, so a sapche section boundary that splits a passage
+        // across items doesn't emit the block twice.
+        if (run.some((s) => s.id === runAnchor)) {
+          out.push(renderTransBlock(transBlocksByAnchor[runAnchor], runAnchor));
+        }
       } else {
         run.forEach((s) => out.push(renderSyl(s)));
       }
