@@ -16,3 +16,5 @@ prepare_data/test_sapche_align.py
 IGNORE/
 docs/superpowers/
 rabsal-dawa/
+# Source/staging SVGs — the app serves its copies from floating-pecha-ui/public/icons
+icons/
