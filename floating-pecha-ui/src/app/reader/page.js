@@ -315,9 +315,20 @@ const LazyParagraph = React.memo(function LazyParagraph({
     const mediaOptions = syllableMediaMap[syl.id] || [];
     const hasMedia = mediaOptions.length > 0;
     const baseSize = sizes[syl.size?.toUpperCase()] || sizes.DEFAULT;
+
+    // In transcription mode only the syllables of passages that actually carry a
+    // transcript get the secondary-layer treatment (smaller, recolored,
+    // un-clickable). Passages before/after with no transcript stay full main text
+    // so the reader can still click to navigate the player there.
+    const passageAnchor = transcriptionMode
+      ? (passageAnchorBySyl?.get(syl.id) ?? null)
+      : null;
+    const sylTransMode =
+      transcriptionMode && passageAnchor != null && !!transBlocksByAnchor?.[passageAnchor];
+
     // In transcription mode the root text is the secondary layer — render it
     // slightly smaller than the prominent transcript below it.
-    const sizeStyle = transcriptionMode
+    const sizeStyle = sylTransMode
       ? { ...baseSize, fontSize: `calc(${baseSize.fontSize} * 0.78)` }
       : baseSize;
 
@@ -338,7 +349,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
     // In transcription mode the transcript is the body; the root text is shown
     // in a distinct vermilion (not dimmed by audio coverage).
     let colorClass;
-    if (transcriptionMode) {
+    if (sylTransMode) {
       colorClass = "r-text-root";
     } else {
       colorClass = isCoveredByFilter ? "r-text" : "r-text-disabled r-syl-dimmed";
@@ -347,7 +358,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
     let bgClass = "";
     let extraClass = "";
 
-    if (isSelected && !transcriptionMode) {
+    if (isSelected && !sylTransMode) {
       colorClass = "r-text-accent";
       extraClass = "font-bold";
     }
@@ -399,7 +410,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
         onClick={
           annotateMode
             ? (isNoted ? () => onNoteSylClick?.(syl.id) : undefined)
-            : (hasMedia && !transcriptionMode ? () => handleSyllableClick(syl.id) : undefined)
+            : (hasMedia && !sylTransMode ? () => handleSyllableClick(syl.id) : undefined)
         }
         onMouseEnter={
           annotateMode && isNoted ? () => onNoteSylHover?.(syl.id) : undefined
@@ -410,7 +421,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
         className={`${fontClass} r-syl r-snap inline relative ${colorClass} ${bgClass} ${extraClass} ${noteWholeClass} ${
           isInPassage ? "r-syl-passage" : ""
         } ${
-          !annotateMode && !transcriptionMode && hasMedia && !isSelected
+          !annotateMode && !sylTransMode && hasMedia && !isSelected
             ? "cursor-pointer r-hover-red"
             : ""
         } ${annotateMode && isNoted ? "cursor-pointer" : ""} ${isInPlayingSegment || isHoveredSegment ? "rounded-sm" : ""}`}
