@@ -32,6 +32,10 @@ export default function PlayerTab({
   sidebarSizes,
   preferRestored,
   onTogglePreferRestored,
+  studyMode,
+  onToggleStudyMode,
+  studyAvailable,
+  onTogglePlay,
   getCommentaryGroup,
   noSessionMessage,
   instanceId,
@@ -389,6 +393,31 @@ export default function PlayerTab({
             Current session: {shortSessionId}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {studyAvailable && onToggleStudyMode && (
+              <button
+                onClick={onToggleStudyMode}
+                title="Study segment — loop one transcript segment"
+                aria-pressed={studyMode}
+                className={`flex items-center justify-center rounded-md border r-border p-1.5 transition-all ${
+                  studyMode ? "r-btn-active" : "r-text-secondary"
+                }`}
+              >
+                {/* lucide iteration-ccw — active: bordeaux icon; inactive: gray */}
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke={studyMode ? "var(--theme-hover-red, #8B1D1D)" : "currentColor"}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M20 10c0-4.4-3.6-8-8-8s-8 3.6-8 8 3.6 8 8 8h8" />
+                  <path d="m16 14 4 4-4 4" />
+                </svg>
+              </button>
+            )}
             {hasRestored && onTogglePreferRestored && (
               <div className="flex rounded-md overflow-hidden border r-border">
                 <button
@@ -416,7 +445,7 @@ export default function PlayerTab({
             with the play button. */}
         <div className="flex items-center gap-4 mb-3">
           <button
-            onClick={audio.togglePlay}
+            onClick={onTogglePlay || audio.togglePlay}
             className="w-11 h-11 rounded-full text-white flex items-center justify-center transition-colors flex-shrink-0 r-bg-accent"
             aria-label={audio.isPlaying ? "Pause" : "Play"}
           >

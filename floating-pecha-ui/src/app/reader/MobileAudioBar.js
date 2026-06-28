@@ -20,6 +20,10 @@ export default function MobileAudioBar({
   title,
   onPrevSegment,
   onNextSegment,
+  studyMode,
+  onToggleStudyMode,
+  studyAvailable,
+  onTogglePlay,
   onExpand,
 }) {
   const { isPlaying, currentTimeMs, durationMs, audioSrc } = audio;
@@ -69,23 +73,50 @@ export default function MobileAudioBar({
           </span>
         </button>
 
-        {/* Previous segment */}
-        <button
-          type="button"
-          onClick={onPrevSegment}
-          className={btn}
-          aria-label="Previous segment"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="11 19 4 12 11 5" />
-            <polyline points="20 19 13 12 20 5" />
-          </svg>
-        </button>
+        {/* Study segment (loop one segment) — only while the read-along is shown */}
+        {studyAvailable && onToggleStudyMode && (
+          <button
+            type="button"
+            onClick={onToggleStudyMode}
+            className={btn}
+            aria-label="Study segment — loop one transcript segment"
+            aria-pressed={studyMode}
+          >
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={studyMode ? "var(--theme-hover-red, #8B1D1D)" : "currentColor"}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M20 10c0-4.4-3.6-8-8-8s-8 3.6-8 8 3.6 8 8 8h8" />
+              <path d="m16 14 4 4-4 4" />
+            </svg>
+          </button>
+        )}
+
+        {/* Previous segment — hidden in loop mode (stepping makes no sense) */}
+        {!studyMode && (
+          <button
+            type="button"
+            onClick={onPrevSegment}
+            className={btn}
+            aria-label="Previous segment"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="11 19 4 12 11 5" />
+              <polyline points="20 19 13 12 20 5" />
+            </svg>
+          </button>
+        )}
 
         {/* Play / Pause */}
         <button
           type="button"
-          onClick={audio.togglePlay}
+          onClick={onTogglePlay || audio.togglePlay}
           className="flex items-center justify-center w-11 h-11 flex-shrink-0 rounded-full text-white r-bg-accent active:opacity-90 transition-opacity"
           aria-label={isPlaying ? "Pause" : "Play"}
         >
@@ -101,18 +132,24 @@ export default function MobileAudioBar({
           )}
         </button>
 
-        {/* Next segment */}
-        <button
-          type="button"
-          onClick={onNextSegment}
-          className={btn}
-          aria-label="Next segment"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="13 19 20 12 13 5" />
-            <polyline points="4 19 11 12 4 5" />
-          </svg>
-        </button>
+        {/* Loop mode hides the next-segment arrow; this spacer fills its slot so
+            the play button stays put instead of sliding to the edge. */}
+        {studyMode && <div className="w-11 flex-shrink-0" aria-hidden="true" />}
+
+        {/* Next segment — hidden in loop mode (stepping makes no sense) */}
+        {!studyMode && (
+          <button
+            type="button"
+            onClick={onNextSegment}
+            className={btn}
+            aria-label="Next segment"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="13 19 20 12 13 5" />
+              <polyline points="4 19 11 12 4 5" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Edge-to-edge progress / seek bar */}

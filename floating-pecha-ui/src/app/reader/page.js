@@ -719,6 +719,14 @@ function ReaderContent() {
   // The transcript segment currently under the playhead / selected. Drives the
   // active transcript highlight and the shaded root-text passage.
   const [activeTransGid, setActiveTransGid] = useState(null);
+  // "Study segment" loop mode: a transcript segment plays from start to end, then
+  // stops and resets to its start (no auto-advance). Only usable/visible while the
+  // read-along is displayed. The ref lets the read-along RAF loop read it live.
+  const [studyMode, setStudyMode] = useState(false);
+  const studyModeRef = useRef(false);
+  useEffect(() => {
+    studyModeRef.current = studyMode;
+  }, [studyMode]);
   const [activeTab, setActiveTab] = useState("player");
   const [activeSylId, setActiveSylId] = useState(null);
   const [activeCommentary, setActiveCommentary] = useState(null);
@@ -967,6 +975,14 @@ function ReaderContent() {
     setTranscriptOptOut(!next); // off => opted out (sticky); on => opted back in
   }, [transcriptionMode]);
 
+  // Study mode is a subset of the read-along: turning the transcription display
+  // off also exits study mode (and hides its sidebar button).
+  useEffect(() => {
+    if (!transcriptionMode) setStudyMode(false);
+  }, [transcriptionMode]);
+
+  const handleToggleStudyMode = useCallback(() => setStudyMode((p) => !p), []);
+
   // For the active session: each commented passage's last syllable → its
   // transcription segments (de-duped to a single home passage by start-time),
   // plus the set of passage syllables to mark, and a flat time-sorted list.
@@ -997,6 +1013,8 @@ function ReaderContent() {
     const flat = transcriptionView.flat;
     if (!transcriptionMode || flat.length === 0) return;
     const getTime = audio.getCurrentTimeMs;
+    const segByGid = {};
+    flat.forEach((s) => (segByGid[s.gid] = s));
     let raf = 0;
     let curGid = null;
     const setActive = (gid) => {
@@ -1011,6 +1029,18 @@ function ReaderContent() {
     };
     const tick = () => {
       const t = getTime();
+      // Study mode: loop the current transcript segment — when the playhead
+      // reaches its end, stop and reset to its start instead of flowing on. The
+      // selection stays pinned (curGid unchanged) so Play replays the same one.
+      if (studyModeRef.current && curGid) {
+        const cur = segByGid[curGid];
+        if (cur && t >= cur.endMs - 40) {
+          audio.pause();
+          audio.seekTo(cur.startMs);
+          raf = requestAnimationFrame(tick);
+          return;
+        }
+      }
       const seg =
         flat.find((s) => t >= s.startMs && t < s.endMs) ||
         [...flat].reverse().find((s) => s.startMs <= t);
@@ -1918,9 +1948,31 @@ function ReaderContent() {
       // Seek only: a playing element keeps playing from here (plays this
       // segment); a paused one just moves the selection here, awaiting Play.
       audio.seekTo(seg.startMs);
+      // Study mode: a click is how the user advances — start this segment now
+      // (it then stops at its own end via the read-along loop).
+      if (studyModeRef.current) audio.play();
     },
     [transSegByGid, audio],
   );
+
+  // Play/pause for the sidebar button. In study mode it replays the selected
+  // transcript segment from its start (or pauses if already playing); otherwise
+  // it is the plain play/pause toggle.
+  const handleTogglePlay = useCallback(() => {
+    if (studyMode) {
+      if (audio.isPlaying) {
+        audio.pause();
+        return;
+      }
+      const seg = activeTransGid ? transSegByGid[activeTransGid] : null;
+      if (seg) {
+        audio.seekTo(seg.startMs);
+        audio.play();
+        return;
+      }
+    }
+    audio.togglePlay();
+  }, [studyMode, audio, activeTransGid, transSegByGid]);
 
   const handleCommentarySelect = useCallback(
     (commentaryId, startSegment, autoPlay = true, opts = {}) => {
@@ -2387,6 +2439,10 @@ function ReaderContent() {
             sidebarSizes={sidebarSizes}
             preferRestored={preferRestored}
             onTogglePreferRestored={() => setPreferRestored((prev) => !prev)}
+            studyMode={studyMode}
+            onToggleStudyMode={handleToggleStudyMode}
+            studyAvailable={transcriptionMode}
+            onTogglePlay={handleTogglePlay}
             getCommentaryGroup={getCommentaryGroup}
             noSessionMessage={noSessionMessage}
             instanceId={instanceId}
@@ -2533,7 +2589,7 @@ function ReaderContent() {
 
         <div
           ref={rootTextRef}
-          className="max-w-4xl mx-auto"
+          className={`max-w-4xl mx-auto ${studyMode ? "r-study-mode" : ""}`}
           style={{ padding: isMobile ? "1.25rem 1rem 5rem" : "3rem" }}
         >
           <div className={`${uchen.className} text-justify`}>
@@ -2657,6 +2713,10 @@ function ReaderContent() {
           title={teachingTitle || activeCommentary}
           onPrevSegment={() => handleStepSegment(-1)}
           onNextSegment={() => handleStepSegment(1)}
+          studyMode={studyMode}
+          onToggleStudyMode={handleToggleStudyMode}
+          studyAvailable={transcriptionMode}
+          onTogglePlay={handleTogglePlay}
           onExpand={() => {
             setActiveTab("player");
             setSidebarOpen(true);

@@ -630,6 +630,13 @@
   background-color: #F4F4F5;
   box-shadow: 0 0 0 2px #F4F4F5;
 }
+/* Study mode: the looped (current) segment is shaded a faded bordeaux instead of
+   gray. The tint is light enough that the original transcript text stays legible
+   (no white-text override needed). */
+.r-study-mode .r-tseg-active {
+  background-color: rgba(139, 29, 29, 0.12);
+  box-shadow: 0 0 0 2px rgba(139, 29, 29, 0.12);
+}
 /* In transcription mode the segments are the interactive target. */
 .r-tseg-clickable { cursor: pointer; }
 .r-tseg-clickable:hover {
