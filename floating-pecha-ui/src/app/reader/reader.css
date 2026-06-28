@@ -626,9 +626,10 @@
 }
 .r-tseg-active {
   color: var(--reader-trans-blue, #1E3A8A);
-  /* Same gray as the main-text passage band (.r-passage-band). */
-  background-color: #F4F4F5;
-  box-shadow: 0 0 0 2px #F4F4F5;
+  /* A touch darker than the passage band (.r-passage-band #F4F4F5) so the
+     current segment reads clearly against the surrounding transcript. */
+  background-color: #E4E4E7;
+  box-shadow: 0 0 0 2px #E4E4E7;
 }
 /* Study mode: the looped (current) segment is shaded a faded bordeaux instead of
    gray. The tint is light enough that the original transcript text stays legible

@@ -408,9 +408,15 @@ const LazyParagraph = React.memo(function LazyParagraph({
         key={syl.id}
         id={syl.id}
         onClick={
-          annotateMode
-            ? (isNoted ? () => onNoteSylClick?.(syl.id) : undefined)
-            : (hasMedia && !sylTransMode ? () => handleSyllableClick(syl.id) : undefined)
+          // A syllable that carries a note opens the note (note takes
+          // precedence, no playback). Otherwise a media-linked syllable
+          // navigates to the player — even in annotate mode, where text
+          // selection (not a click) is what creates a new note.
+          annotateMode && isNoted
+            ? () => onNoteSylClick?.(syl.id)
+            : hasMedia && !sylTransMode
+              ? () => handleSyllableClick(syl.id)
+              : undefined
         }
         onMouseEnter={
           annotateMode && isNoted ? () => onNoteSylHover?.(syl.id) : undefined
@@ -421,7 +427,7 @@ const LazyParagraph = React.memo(function LazyParagraph({
         className={`${fontClass} r-syl r-snap inline relative ${colorClass} ${bgClass} ${extraClass} ${noteWholeClass} ${
           isInPassage ? "r-syl-passage" : ""
         } ${
-          !annotateMode && !sylTransMode && hasMedia && !isSelected
+          !(annotateMode && isNoted) && !sylTransMode && hasMedia && !isSelected
             ? "cursor-pointer r-hover-red"
             : ""
         } ${annotateMode && isNoted ? "cursor-pointer" : ""} ${isInPlayingSegment || isHoveredSegment ? "rounded-sm" : ""}`}
