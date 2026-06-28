@@ -3,19 +3,24 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { inter } from '@/lib/theme';
 
-const STRIP = /[ \n\r\t ་།]/g;
-const STRIP_TEST = /[ \n\r\t ་།]/;
 const MAX_MATCHES = 500;
 
-// Compress text the same way for the main and transcript indices: drop spaces,
-// newlines, tsek (་) and shad (།), lowercase the rest.
-function compress(text) {
-  let out = '';
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (!STRIP_TEST.test(ch)) out += ch.toLowerCase();
-  }
-  return out;
+// One syllable's text → its single comparison token: tsek (་), shad (།) and
+// whitespace (incl. the non-breaking space U+00A0) removed, lowercased.
+// Returns '' for punctuation-only syllables.
+function sylToken(text) {
+  return text.replace(/[ \n\r\t ་།]/g, '').toLowerCase();
+}
+
+// Query → array of syllable tokens. Split on tsek/shad (the syllable boundaries
+// the user types), strip intra-syllable whitespace, drop empties. A trailing
+// tsek yields no extra token, so `གར་` and `གར` tokenize identically. Matching
+// is then exact, whole-syllable and contiguous — it never crosses a tsek.
+function queryTokens(q) {
+  return q
+    .split(/[་།]/)
+    .map((s) => s.replace(/[ \n\r\t ]/g, '').toLowerCase())
+    .filter(Boolean);
 }
 
 export default function SearchBar({
@@ -40,47 +45,31 @@ export default function SearchBar({
     if (!transcriptAvailable && scope !== 'main') setScope('main');
   }, [transcriptAvailable, scope]);
 
-  // Main-text index: compressed text + per-char syllable id, plus id→position.
+  // Main-text index: one token per manifest syllable, in document order. Every
+  // syllable is kept (punctuation gets an empty token) so a multi-syllable query
+  // cannot silently span a shad/punctuation. Plus id→position for ordering.
   const mainIndex = useMemo(() => {
-    let compressedText = '';
-    const charIndexToUuid = [];
+    const tokens = []; // [{ token, id, pos }]
     const idToPos = new Map();
     manifest.forEach((syl, pos) => {
-      if (!idToPos.has(syl?.id)) idToPos.set(syl?.id, pos);
-      if (syl && syl.text) {
-        for (let i = 0; i < syl.text.length; i++) {
-          const char = syl.text[i];
-          if (!STRIP_TEST.test(char)) {
-            compressedText += char.toLowerCase();
-            charIndexToUuid.push(syl.id);
-          }
-        }
-      }
+      if (syl?.id && !idToPos.has(syl.id)) idToPos.set(syl.id, pos);
+      tokens.push({ token: syl?.text ? sylToken(syl.text) : '', id: syl?.id, pos });
     });
-    return { compressedText, charIndexToUuid, idToPos };
+    return { tokens, idToPos };
   }, [manifest]);
 
   // Transcript index, built like the main index but over the displayed
   // transcription syllables (so matches are syllable-level, not whole-segment).
   const transIndex = useMemo(() => {
-    let compressedText = '';
-    const charIndexToUuid = [];
+    const tokens = []; // [{ token, id }]
     const uuidToAnchor = new Map();
     const uuidToSession = new Map();
     (transcriptSyllables || []).forEach((syl) => {
       uuidToAnchor.set(syl.id, syl.anchorId);
       uuidToSession.set(syl.id, syl.sessionId);
-      if (syl.text) {
-        for (let i = 0; i < syl.text.length; i++) {
-          const char = syl.text[i];
-          if (!STRIP_TEST.test(char)) {
-            compressedText += char.toLowerCase();
-            charIndexToUuid.push(syl.id);
-          }
-        }
-      }
+      tokens.push({ token: syl?.text ? sylToken(syl.text) : '', id: syl?.id });
     });
-    return { compressedText, charIndexToUuid, uuidToAnchor, uuidToSession };
+    return { tokens, uuidToAnchor, uuidToSession };
   }, [transcriptSyllables]);
 
   const scrollToEntry = useCallback((entry) => {
@@ -109,52 +98,49 @@ export default function SearchBar({
     scrollToEntryRef.current = scrollToEntry;
   }, [scrollToEntry]);
 
-  // Recompute matches on query / scope / index change.
+  // Recompute matches on query / scope / index change. A match is a contiguous
+  // run of syllables whose tokens exactly equal the query's syllable tokens —
+  // 100% matches only, never partial and never across a tsek/punctuation.
   useEffect(() => {
-    const cleanQuery = localQuery.replace(STRIP, '').toLowerCase();
-    if (!cleanQuery) {
+    const q = queryTokens(localQuery);
+    if (!q.length) {
       setMatches([]);
       setActiveMatchIdx(-1);
       return;
     }
+    const k = q.length;
 
     const result = [];
 
     if (scope === 'main' || scope === 'both') {
-      const { compressedText, charIndexToUuid, idToPos } = mainIndex;
-      let from = 0;
-      let at = compressedText.indexOf(cleanQuery, from);
-      while (at !== -1 && result.length < MAX_MATCHES) {
+      const { tokens, idToPos } = mainIndex;
+      for (let i = 0; i + k <= tokens.length && result.length < MAX_MATCHES; i++) {
+        let ok = true;
+        for (let j = 0; j < k; j++) {
+          if (tokens[i + j].token !== q[j]) { ok = false; break; }
+        }
+        if (!ok) continue;
         const ids = [];
-        const seen = new Set();
-        for (let i = at; i < at + cleanQuery.length; i++) {
-          const id = charIndexToUuid[i];
-          if (id && !seen.has(id)) {
-            seen.add(id);
-            ids.push(id);
-          }
+        for (let j = 0; j < k; j++) {
+          if (tokens[i + j].id) ids.push(tokens[i + j].id);
         }
         if (ids.length) {
-          result.push({ type: 'main', ids, pos: idToPos.get(ids[0]) ?? 0 });
+          result.push({ type: 'main', ids, pos: idToPos.get(ids[0]) ?? tokens[i].pos });
         }
-        from = at + cleanQuery.length;
-        at = compressedText.indexOf(cleanQuery, from);
       }
     }
 
     if ((scope === 'transcript' || scope === 'both') && transcriptAvailable) {
-      const { compressedText, charIndexToUuid, uuidToAnchor, uuidToSession } = transIndex;
-      let from = 0;
-      let at = compressedText.indexOf(cleanQuery, from);
-      while (at !== -1 && result.length < MAX_MATCHES) {
+      const { tokens, uuidToAnchor, uuidToSession } = transIndex;
+      for (let i = 0; i + k <= tokens.length && result.length < MAX_MATCHES; i++) {
+        let ok = true;
+        for (let j = 0; j < k; j++) {
+          if (tokens[i + j].token !== q[j]) { ok = false; break; }
+        }
+        if (!ok) continue;
         const ids = [];
-        const seen = new Set();
-        for (let i = at; i < at + cleanQuery.length; i++) {
-          const id = charIndexToUuid[i];
-          if (id && !seen.has(id)) {
-            seen.add(id);
-            ids.push(id);
-          }
+        for (let j = 0; j < k; j++) {
+          if (tokens[i + j].id) ids.push(tokens[i + j].id);
         }
         if (ids.length) {
           const anchorId = uuidToAnchor.get(ids[0]);
@@ -166,8 +152,6 @@ export default function SearchBar({
             pos: mainIndex.idToPos.get(anchorId) ?? 0,
           });
         }
-        from = at + cleanQuery.length;
-        at = compressedText.indexOf(cleanQuery, from);
       }
     }
 
